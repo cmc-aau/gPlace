@@ -1,0 +1,39 @@
+FAQ
+===
+
+**Are the results really identical to pplacer's?**
+  Yes, for the WAG + CAT reference packages used by GTDB-Tk. On 127,343 genomes (8 GTDB-Tk R226
+  class-level trees) every placement matched GTDB-Tk's jplace files: edges, likelihoods,
+  like-weight ratios and branch lengths, with every printed number textually identical.
+  ``gplace test`` repeats this check on bundled data.
+
+**How was identity established?**
+  By comparing against GTDB-Tk's own jplace files and against fresh runs of GTDB-Tk's pplacer
+  binary, and, where results differed, by tracing that binary under gdb (it is statically linked
+  and ships debug symbols) and comparing every likelihood evaluation bit for bit. The scripts are
+  in ``scripts/validation``.
+
+**Why does gPlace build its own GSL?**
+  pplacer's binary contains GSL 1.16. GSL 2.x computes the WAG eigenvectors differently in the
+  last bits, which is enough to change some secondary placements.
+
+**Which CPUs are supported?**
+  x86-64 CPUs with AVX2 and FMA. ``gplace check_install`` verifies the engine on your machine.
+
+**How many CPUs should I use?**
+  Run ``gplace benchmark`` once per machine type, or use ``--cpus auto``. Placement is limited
+  by memory bandwidth and shared cache: on a 64-vCPU AMD EPYC server 32-40 worker processes were
+  fastest and more made every evaluation slower. Memory barely grows with ``--cpus``.
+
+**How much memory is needed?**
+  ``gplace benchmark --refpkg <refpkg> --queries <N>`` prints the estimate (about
+  *2 x internal nodes x sites x 168 bytes + edges x queries x 8 bytes*, plus a little per
+  worker): 43.8 GiB peak for GTDB-Tk R226 class-level tree 2 with 22,061 queries.
+
+**Can I place other kinds of data?**
+  No. gPlace reproduces the WAG + FastTree CAT protein refpkgs used by GTDB-Tk. Other models
+  (e.g. GTR, empirical frequencies, gamma rates) are rejected.
+
+**Does the output file look exactly like pplacer's?**
+  Every value and the tree string are identical. JSON whitespace, key order and the order of the
+  query records can differ, which JSON readers (including GTDB-Tk) ignore.

@@ -1,0 +1,3 @@
+/* Wider content and wrapped tables for command help and result tables. */
+.wy-nav-content { max-width: 1000px; }
+.wy-table-responsive table td, .wy-table-responsive table th { white-space: normal; }

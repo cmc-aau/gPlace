@@ -1,0 +1,21 @@
+{
+    "metadata": {
+        "format_version": "1.1",
+        "locus": "gPlace test clade of gtdbtk.package.8.refpkg"
+    },
+    "files": {
+        "phylo_model": "phylo_model.json",
+        "aln_fasta": "mini_msa.fa",
+        "tree": "mini_tree.tree"
+    },
+    "md5": {
+        "phylo_model": "422ca6d5ea6ad199ac59b4be9e0309bf",
+        "aln_fasta": "9f8ffc7f4f8bec9d5e6f367e337a736c",
+        "tree": "cc990b0730e567f43e43ede2d29966d0"
+    },
+    "log": [
+        "gPlace scripts/make_test_refpkg.py"
+    ],
+    "rollback": null,
+    "rollforward": null
+}

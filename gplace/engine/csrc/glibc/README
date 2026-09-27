@@ -1,0 +1,7 @@
+e_hypot.c is sysdeps/ieee754/dbl-64/e_hypot.c from GNU C Library 2.19 (unmodified; the
+fdlibm-derived implementation, Copyright (C) 1993 Sun Microsystems, freely redistributable
+with its notice preserved). GTDB-Tk's pplacer v1.1.alpha19 is statically linked with glibc 2.19;
+GSL 1.16's Householder/Givens code calls libm hypot(), and glibc >= 2.35 ships a different
+hypot(), which changes the WAG eigendecomposition in its last bits. math_private.h is a minimal
+shim providing the word-access macros e_hypot.c needs; the file is compiled with
+-D__ieee754_hypot=hypot so GSL links against it.

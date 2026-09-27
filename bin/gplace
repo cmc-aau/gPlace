@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+# Run the gPlace Python package from a source checkout.
+
+# Resolve the script's directory (works even if called via symlink)
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+
+# Run the Python module, forwarding all arguments
+PYTHONPATH="$SCRIPT_DIR/..${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m gplace "$@"

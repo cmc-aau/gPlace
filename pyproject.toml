@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gtdb-gplace"
+# Version is the ONLY dynamic field
+dynamic = ["version"]
+
+description = "Exact, memory-bounded re-implementation of the pplacer placements used by GTDB-Tk."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "GPL-3.0-only"
+
+authors = [
+  {name = "Pierre-Alain Chaumeil"}
+]
+
+urls = {repository = "https://github.com/cmc-aau/gPlace"}
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: C",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+dependencies = [
+    "numpy >= 1.26",
+    "tqdm ~= 4.67",
+]
+
+[project.scripts]
+gplace = "gplace.__main__:main"
+
+[tool.setuptools.dynamic]
+# Only the version is pulled from __init__.py
+version = {attr = "gplace.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gplace*"]
+
+[tool.setuptools.package-data]
+gplace = [
+    "engine/csrc/*.c",
+    "engine/csrc/core-math/*",
+    "engine/csrc/glibc/*",
+    "engine/data/*",
+    "tests/data/*",
+    "tests/data/mini.refpkg/*",
+]
+
+[tool.cibuildwheel]
+# One py3-none wheel (the engine is loaded with ctypes), built in the manylinux2014 container
+# (glibc 2.17) so it runs on any x86-64 Linux distribution from the last decade.
+build = "cp312-manylinux_x86_64"
+archs = ["x86_64"]
+manylinux-x86_64-image = "manylinux2014"
+# The container's compiler differs from a developer machine's: the wheel is only accepted if
+# the compiled engine is bit-exact and reproduces pplacer on the bundled genomes.
+test-command = "gplace check_install && gplace test --cpus 2"
+
+[tool.cibuildwheel.linux]
+environment = { GPLACE_BUILD_JOBS = "4", GPLACE_BUILD_DIR = "/tmp/gplace_build" }
+repair-wheel-command = "auditwheel repair --plat manylinux2014_x86_64 -w {dest_dir} {wheel}"
