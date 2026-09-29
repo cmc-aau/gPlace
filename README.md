@@ -10,6 +10,7 @@
 
 * **Drop-in placement:** `gplace place` takes the same inputs as pplacer (aligned queries + refpkg) and writes the same jplace.
 * **Pooled batches:** `gplace place_batch` places many alignments at once; alignments sharing a reference package are placed in a single pass.
+* **Memory limits and huge trees:** `--max_memory 64G` keeps a run within a memory limit. gPlace places without tiles when that fits, and otherwise tile by tile, with the largest tiles that fit, and identical results. This places genomes on the full GTDB bacterial tree (273,290 nodes), which would need ~490 GiB untiled. `--tile_edges N` sets the tile size directly.
 * **Self-verifying installation:** `gplace check_install` checks the compiled engine bit for bit against values taken from GTDB-Tk's pplacer binary; `gplace test` places bundled genomes and compares them with pplacer's own output.
 
 ## Documentation
@@ -95,6 +96,23 @@ gplace benchmark --refpkg gtdbtk.package.2.refpkg --queries 50000
 ```
 `--cpus auto` uses the value saved by `gplace benchmark` on this machine; without one, it measures a few worker counts on the first part of the run and keeps the fastest. Under SLURM it stays within the CPUs allocated to the job.
 
+### Memory limits and the full GTDB tree
+```bash
+# stay within 64 GB: untiled if it fits, otherwise tile by tile (identical results)
+gplace place --msa_file gtdbtk.bac120.user_msa.fasta --refpkg gtdb_r226_bac120.refpkg \
+             --out_file gplace.jplace --cpus 40 --max_memory 64G
+
+# or choose the tile size: tiles of at most 20,000 edges
+gplace place ... --tile_edges 20000
+
+# which tile size --max_memory would pick, without placing anything
+gplace benchmark --refpkg gtdb_r226_bac120.refpkg --queries 127343 --max_memory 64G
+
+# fastest --cpus and time estimate for the tiled job (benchmarks tile by tile, within 64 GB)
+gplace benchmark --refpkg gtdb_r226_bac120.refpkg --msa_file user_msa_file.fasta --queries 127343 --max_memory 64G
+```
+With `--max_memory`, gPlace estimates the peak memory from the reference tree and the number of queries, keeps 5% of the limit as headroom, and uses the largest tiles that fit (larger tiles are faster). With `place_batch` the choice is made per reference package. Tiled placement rebuilds each tile in every pass, so it takes 1.7-2.5x longer than untiled placement on a tree that fits in memory.
+
 ## Testing
 
 Check that gPlace is installed correctly and reproduces pplacer with the `check_install` and `test` subcommands:
@@ -127,7 +145,9 @@ See the documentation for the full list of rules that had to be matched.
 
 ## Validation
 
-On the 127,343 GlobDB genomes classified with GTDB-Tk R226, across the 8 bacterial class-level reference packages, gPlace reproduces GTDB-Tk's jplace files for **127,343 / 127,343 genomes (100%)**: best edge, full placement list and every printed value, with all 112 tree strings byte-identical. One `place_batch` run took 28 min 25 s with 40 processes under a 64 GB limit (peak 43.8 GiB). See the documentation's validation page.
+On the 127,343 GlobDB genomes classified with GTDB-Tk R226, across the 8 bacterial class-level reference packages, gPlace reproduces GTDB-Tk's jplace files for **127,343 / 127,343 genomes (100%)**: best edge, full placement list and every printed value, with all 112 tree strings byte-identical. One `place_batch` run took 28 min 25 s with 40 processes under a 64 GB limit (peak 43.8 GiB).
+
+On the full GTDB R226 bacterial tree (273,290 nodes), `--max_memory 64G` placed all 127,343 genomes tile by tile in 2 h 19 min (6 tiles, peak 59.2 GiB; untiled would need ~490 GiB). Every genome that is also in GTDB-Tk's full-tree classification tree (3,459) lands on the same edge with the same branch lengths. Tiled runs on the class-level trees are identical to GTDB-Tk's jplace files in every printed value. See the documentation's validation page.
 
 ## Citing gPlace
 

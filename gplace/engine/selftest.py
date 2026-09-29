@@ -96,11 +96,14 @@ def check_kernels(seed=7):
         if not np.array_equal(_bits(a), _bits(b)):
             fails.append(f'evolve bl={bl!r}')
     nc = 24
-    for trial in range(4):
+    # exponent ranges: class-level trees; the full GTDB bacterial tree (~2^18 per site, totals
+    # beyond int32); beyond the SIMD path's per-site bound (exact scalar fallback)
+    se_ranges = [(-60, 1)] * 4 + [(-(1 << 21), -(1 << 17))] * 2 + [(-(1 << 24), 1)]
+    for trial, (se_lo, se_hi) in enumerate(se_ranges):
         Q = int(rng.integers(1, 200)); ne = int(rng.integers(1, 9))
         qevtab = rng.random((nr, nc, NS)) * 0.2 + 1e-3
         sn8 = rng.random((8, S, NS)) ** rng.uniform(1, 8) * 1e-3
-        se8 = rng.integers(-60, 1, (8, S)).astype(np.int64)
+        se8 = rng.integers(se_lo, se_hi, (8, S)).astype(np.int64)
         codes255 = rng.integers(0, nc, (Q, S)).astype(np.uint8)
         gaps = rng.random((Q, S)) < 0.3
         codes255[gaps] = 255
@@ -114,4 +117,4 @@ def check_kernels(seed=7):
             L.xp_edge_scores(P(ref), 1, P(sn), P(se), P(qevtab), P(cats), S, nc, P(codes255), Q, P(W))
             if not np.array_equal(_bits(out8[:, 2 + lane]), _bits(ref)):
                 fails.append(f'edge_scores8 trial {trial} lane {lane}')
-    return len(bls) * 2 + 4, fails
+    return len(bls) * 2 + len(se_ranges), fails

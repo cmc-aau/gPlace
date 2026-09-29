@@ -74,6 +74,51 @@ def _place_chunk(qis):
     return [(qi,) + tuple(_PLACER.place_query(qi)) for qi in qis]
 
 
+class Baseball(object):
+    """pplacer's stopping rule for the first-stage optimisations ("baseball"), fed one location at
+    a time in ranked order: stop after MAX_STRIKES locations more than STRIKE_BOX log-units below
+    the best so far, or after MAX_PITCHES locations."""
+
+    def __init__(self):
+        self.results, self.warns = [], []
+        self.like_record, self.n_strikes = -math.inf, 0
+
+    def add(self, loc, r, st):
+        """Record one location's result (r = (like, pend, dist), or None with GSL status st);
+        returns False when pplacer tries no further locations."""
+        if r is None:
+            self.warns.append((loc, st))
+            return True
+        like = r[0]; prev = len(self.results); self.results.append((loc, r))
+        if prev >= core.MAX_PITCHES:
+            return False
+        elif like > self.like_record:
+            self.like_record = like
+        elif like < self.like_record - core.STRIKE_BOX:
+            if self.n_strikes + 1 >= core.MAX_STRIKES:
+                return False
+            self.n_strikes += 1
+        return True
+
+    def kept(self, lib):
+        """Locations refined at the final tolerance: up to KEEP_AT_MOST within log(KEEP_FACTOR)
+        of the best, best first."""
+        srt = sorted(self.results, key=lambda x: -x[1][0])
+        best = srt[0][1][0]
+        lkf = lib.xp_log(core.KEEP_FACTOR)
+        return [x for i, x in enumerate(srt) if i < core.KEEP_AT_MOST and x[1][0] >= lkf + best]
+
+
+def weighted_placements(lib, refined):
+    """Like-weight ratios and pplacer's placement order for [(loc, (like, pend, dist))];
+    returns [[distal_length, edge_num, like_weight_ratio, likelihood, pendant_length]]."""
+    lls = [r[0] for _, r in refined]
+    lwr = [1. / sum(lib.xp_exp(o - ll) for o in lls) for ll in lls]
+    pl = [[r[2], loc, w, r[0], r[1]] for (loc, r), w in zip(refined, lwr)]
+    pl.sort(key=lambda p: -p[2])            # make_ml_sorted (stable)
+    return pl
+
+
 def load_refpkg(refpkg_dir):
     """Read CONTENTS.json and return (tree text, reference alignment, phylo_model dict)."""
     cpath = os.path.join(refpkg_dir, 'CONTENTS.json')
@@ -342,10 +387,9 @@ class Placer(object):
             raise errs[0]
 
     # ---------------------------------------------------------------- prefilter --
-    def prefilter(self):
-        """Score every query against every edge (pplacer's h_ranking scores), 8 edges per call."""
-        global _PLACER
-        S, Qn = self.nsites, len(self.query_names)
+    def _query_tables(self):
+        """Prefilter inputs: every query character evolved by START_PEND under every rate
+        (qevtab), and the queries as character codes."""
         ten = np.zeros((self.nrates, NS, NS))
         self.lib.xp_multi_exp(P(ten), P(self.x), P(self.l), P(self.xit), P(self.rates),
                               self.nrates, P(self.occupied), core.START_PEND)
@@ -361,6 +405,11 @@ class Placer(object):
                 self.lib.xp_evolve(P(outv), P(one), 1, P(cc), P(ten))
                 self.qevtab[c, k] = outv[0]
         self.codes = np.ascontiguousarray(core.CODE_OF[self.QM])
+
+    def prefilter(self):
+        """Score every query against every edge (pplacer's h_ranking scores), 8 edges per call."""
+        self._query_tables()
+        Qn = len(self.query_names)
         self.locs = np.array([v for v in range(self.nnodes) if v != self.root])
         E = len(self.locs)
         self.scores = shared_zeros((Qn, E))
@@ -427,9 +476,11 @@ class Placer(object):
                          f' -> using {self.workers} of {n} CPUs.')
         return start
 
-    def _prefilter_group(self, g):
-        i0, i1 = g
-        S, Qn, E, nc = self.nsites, len(self.query_names), self.scores.shape[1], len(core.CODES)
+    def _supernodes8(self, i0, i1):
+        """Supernode vectors of the edges locs[i0:i1] (at most 8) as pplacer's prefilter builds
+        them (distal and proximal evolved by half the branch length, times the frequencies);
+        returns the thread's scratch buffers holding them."""
+        S = self.nsites
         t = self.tl()
         if not hasattr(t, 'sn8'):
             t.sn8 = np.empty((8, S, NS)); t.se8 = np.zeros((8, S), np.int64)
@@ -440,6 +491,12 @@ class Placer(object):
             self.evolve_t(t.b[3], t.b[1], self.bl[v] / 2., t.tensor)
             self.lib.xp_statd_pairwise(P(t.sn8[lane]), P(t.se8[lane]), P(self.statd), P(t.b[2]),
                                        P(t.e[0]), P(t.b[3]), P(t.e[1]), S)
+        return t
+
+    def _prefilter_group(self, g):
+        i0, i1 = g
+        S, Qn, E, nc = self.nsites, len(self.query_names), self.scores.shape[1], len(core.CODES)
+        t = self._supernodes8(i0, i1)
         st = self.lib.xp_edge_scores8(P(self.scores), E, i0, i1 - i0, P(t.sn8), P(t.se8),
                                       P(self.qevtab), P(self.cats), S, nc, P(self.codes), Qn)
         if st != 0:
@@ -462,8 +519,11 @@ class Placer(object):
                 yield int(self.locs[k])
 
     # ---------------------------------------------------------------- placement --
-    def place_query(self, qi):
-        """Baseball + three-taxon optimisation + keep/refine + LWR (core.ml)."""
+    def _query_evaluator(self, qi):
+        """(evaluate, free) for query qi. evaluate(loc, pend, dist, tol) sets the three-taxon tree
+        on edge loc with starting branch lengths pend/dist and optimises it as pplacer's
+        safe_ml_optimize_location does (after a GSL error: retry from the default lengths);
+        it returns ((like, pend, dist), None), or (None, status) if the location failed."""
         L = self.lib
         t = self.tl()
         name = self.query_names[qi]
@@ -492,48 +552,42 @@ class Placer(object):
                 return (float(res[0]), float(res[1]), float(res[2])), None
             return None, st
 
-        def safe_opt(loc, tol):                 # safe_ml_optimize_location
+        def evaluate(loc, pend, dist, tol):     # safe_ml_optimize_location
+            set_edges(loc, pend, dist)
             r, st = optimize(tol)
             if st == core.XP_GSL:
                 set_edges(loc, core.START_PEND, self.bl[loc] / 2.)
                 r, st = optimize(tol)
             return r, st
 
-        try:
-            results, like_record, n_strikes, warns = [], -math.inf, 0, []
-            for loc in self.ranking(qi):
-                set_edges(loc, core.START_PEND, self.bl[loc] / 2.)
-                r, st = safe_opt(loc, core.INITIAL_TOL)
-                if r is None:
-                    warns.append((loc, st))
-                    continue
-                like = r[0]; prev = len(results); results.append((loc, r))
-                if prev >= core.MAX_PITCHES:
-                    break
-                elif like > like_record:
-                    like_record = like
-                elif like < like_record - core.STRIKE_BOX:
-                    if n_strikes + 1 >= core.MAX_STRIKES:
-                        break
-                    n_strikes += 1
-            if not results:
-                raise GPlaceException(f'empty results for {name}!')
-            srt = sorted(results, key=lambda x: -x[1][0])
-            best = srt[0][1][0]
-            lkf = L.xp_log(core.KEEP_FACTOR)
-            keep = [x for i, x in enumerate(srt) if i < core.KEEP_AT_MOST and x[1][0] >= lkf + best]
-            refined = []
-            for loc, (lk, pend, dist) in keep:
-                set_edges(loc, pend, dist)
-                r, st = safe_opt(loc, core.FINAL_TOL)
-                refined.append((loc, r if r is not None else (lk, pend, dist)))
-            lls = [r[0] for _, r in refined]
-            lwr = [1. / sum(L.xp_exp(o - ll) for o in lls) for ll in lls]
-            pl = [[r[2], loc, w, r[0], r[1]] for (loc, r), w in zip(refined, lwr)]
-            pl.sort(key=lambda p: -p[2])            # make_ml_sorted (stable)
-        finally:
+        arrays = [qm, catm]                     # the engine holds pointers into these until freed
+
+        def free():
             L.xp_tt_free(tt)
-        return name, pl, warns
+            arrays.clear()
+
+        return evaluate, free
+
+    def place_query(self, qi):
+        """Baseball + three-taxon optimisation + keep/refine + LWR (core.ml)."""
+        name = self.query_names[qi]
+        evaluate, free = self._query_evaluator(qi)
+        try:
+            bb = Baseball()
+            for loc in self.ranking(qi):
+                r, st = evaluate(loc, core.START_PEND, self.bl[loc] / 2., core.INITIAL_TOL)
+                if not bb.add(loc, r, st):
+                    break
+            if not bb.results:
+                raise GPlaceException(f'empty results for {name}!')
+            refined = []
+            for loc, (lk, pend, dist) in bb.kept(self.lib):
+                r, _ = evaluate(loc, pend, dist, core.FINAL_TOL)
+                refined.append((loc, r if r is not None else (lk, pend, dist)))
+            pl = weighted_placements(self.lib, refined)
+        finally:
+            free()
+        return name, pl, bb.warns
 
     def place_all(self, workers=None):
         """Place every query; returns [(name, placements, warnings)] in input order.

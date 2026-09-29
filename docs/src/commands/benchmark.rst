@@ -18,6 +18,50 @@ calibrated on GTDB-Tk R226 class-level tree 2 (22,061 queries: estimated 44.2 Gi
 6 min, measured 43.8 GiB and 5.7 min). With ``--refpkg`` and ``--queries`` only, gPlace prints the memory estimate
 without placing anything.
 
+With ``--max_memory`` or ``--tile_edges``, the estimate is for what :ref:`place <commands/place>`
+would run with that option: untiled if it fits, otherwise the tile size gPlace picks, and the
+suggested ``--mem`` is the ``--max_memory`` limit.
+
+When the job is tiled, the benchmark is tiled too, with the same tile size, so it runs in the
+memory of the job itself (on the full GTDB bacterial tree an untiled benchmark would need about
+230 GiB). The sample is placed tile by tile once, timing every phase; each tile is also scored
+for a quarter of the sample, which separates the prefilter's fixed cost from its cost per
+query. The worker counts are then compared on one tile, rebuilt once, by replaying its recorded
+optimisations, so the tree is not rebuilt for every count. Finally that tile is scored with the
+sample repeated to the job's batch size (up to 20,000 queries): at that size the queries no
+longer fit in the CPU caches, and scoring each query costs more than in the small sample. The
+job's time is the sample's fixed costs (tile rebuilds, pool start-ups, one supernode sweep per
+20,000 queries, the baseball rounds) plus its per-query costs scaled to the job, and is printed
+per phase. Without ``--max_memory``/``--tile_edges``, ``benchmark`` stops with a message if the
+untiled benchmark would not fit in the memory available.
+
+Predicted and measured times of tiled jobs (40 workers, 64-vCPU AMD EPYC):
+
+.. list-table::
+   :widths: 30 16 18 16 12
+   :header-rows: 1
+
+   * - Job
+     - Benchmark took
+     - Predicted
+     - Measured
+     - Error
+   * - class-level tree 2, 22,061 queries, ``--max_memory 12G``
+     - 4 min
+     - 11 min
+     - 11 min 51 s
+     - -7%
+   * - full bacterial tree, 4,040 queries, ``--max_memory 60G``
+     - 20 min
+     - 18 min
+     - 19 min 35 s
+     - -8%
+   * - full bacterial tree, 127,343 queries, ``--max_memory 64G``
+     - 20 min
+     - 2 h 34 min
+     - 2 h 19 min
+     - +11%
+
 ``--cpus auto`` without a saved benchmark measures the speed of a few worker counts on the first
 part of the prefilter (the work is real, so nothing is repeated) and keeps the fastest; small
 jobs use 5/8 of the available CPUs. The CPUs available are those the process may use, so under
@@ -68,3 +112,17 @@ Memory only:
 .. code-block:: bash
 
     gplace benchmark --refpkg gtdbtk.package.2.refpkg --queries 50000 --cpus 32
+
+Tile size for the full GTDB bacterial tree in a 64 GB job:
+
+.. code-block:: bash
+
+    gplace benchmark --refpkg gtdb_r226_bac120.refpkg --queries 127343 --cpus 40 --max_memory 64G
+
+.. code-block:: text
+
+    INFO: --max_memory 64.0 GiB: the untiled placement would need about 490.1 GiB; using --tile_edges 56,726 (estimated peak 60.3 GiB).
+    INFO: Reference package: 273,290 nodes, 5,036 informative sites (upper bound).
+    INFO: Estimated peak memory for 127,343 queries with 40 workers: 60.3 GiB (tiled: 6 tiles of up to 55,595 edges)
+    INFO:   #SBATCH --cpus-per-task=40
+    INFO:   #SBATCH --mem=64G

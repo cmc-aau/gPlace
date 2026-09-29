@@ -11,3 +11,6 @@ gPlace 0.1.0
   class-level tree.
 * The C engine is compiled automatically by ``pip install``; verify it with
   ``gplace check_install`` and ``gplace test``.
+* Trees too large for memory, such as the full GTDB bacterial tree, can be placed tile by tile
+  with identical results: give ``--max_memory`` (e.g. ``64G``) and gPlace picks the tile size,
+  or set it with ``--tile_edges``.

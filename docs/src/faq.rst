@@ -28,7 +28,17 @@ FAQ
 **How much memory is needed?**
   ``gplace benchmark --refpkg <refpkg> --queries <N>`` prints the estimate (about
   *2 x internal nodes x sites x 168 bytes + edges x queries x 8 bytes*, plus a little per
-  worker): 43.8 GiB peak for GTDB-Tk R226 class-level tree 2 with 22,061 queries.
+  worker): 43.8 GiB peak for GTDB-Tk R226 class-level tree 2 with 22,061 queries. To stay within
+  a limit, pass ``--max_memory`` (e.g. ``64G``): gPlace places untiled if the estimate fits, and
+  tile by tile otherwise, with identical results.
+
+**Can gPlace place on the full GTDB bacterial tree?**
+  Yes, with ``--max_memory`` or ``--tile_edges``. Untiled, the R226 bacterial tree (273,290 nodes)
+  would need about 490 GiB for 127,343 genomes (pplacer: about 615 GiB). With ``--max_memory 64G``
+  gPlace placed all 127,343 GlobDB genomes in 2 h 19 min (6 tiles, 59.2 GiB peak) and matched
+  GTDB-Tk's full-tree classification tree for every genome it contains (edge, pendant and distal
+  lengths). A lower limit gives smaller tiles: tiles of at most 14,000 edges need about 20 GiB.
+  See :ref:`validation` and :ref:`how_it_works`.
 
 **Can I place other kinds of data?**
   No. gPlace reproduces the WAG + FastTree CAT protein refpkgs used by GTDB-Tk. Other models

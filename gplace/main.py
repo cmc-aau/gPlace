@@ -55,15 +55,56 @@ class OptionsParser(object):
         if not path or not os.path.isfile(os.path.join(path, 'CONTENTS.json')):
             raise FileNotFound(f'Not a reference package (no CONTENTS.json): {path}')
 
-    def _place_group(self, refpkg, queries, cpus):
+    @staticmethod
+    def _tiling_options(options):
+        """(tile_edges, max_memory in bytes) from --tile_edges / --max_memory (None if unset)."""
+        from gplace.engine import resources
+        tile_edges = getattr(options, 'tile_edges', None)
+        raw = getattr(options, 'max_memory', None)
+        if tile_edges is not None and tile_edges < 2:
+            raise GPlaceExit('--tile_edges must be at least 2.')
+        try:
+            max_memory = None if raw is None else resources.parse_memory(raw)
+        except ValueError as e:
+            raise GPlaceExit(f'--max_memory: {e}')
+        return tile_edges, max_memory
+
+    def _log_plan(self, plan, max_memory):
+        """Report how --max_memory was applied (see tiled.plan_tiling)."""
+        GiB = 2 ** 30
+        if max_memory is None:
+            return
+        if plan.tile_edges is None:
+            self.logger.info(f'--max_memory {max_memory / GiB:.1f} GiB: the untiled placement fits '
+                             f'(estimated peak {plan.untiled_memory / GiB:.1f} GiB); no tiles needed.')
+        else:
+            self.logger.info(f'--max_memory {max_memory / GiB:.1f} GiB: the untiled placement would need '
+                             f'about {plan.untiled_memory / GiB:.1f} GiB; using --tile_edges '
+                             f'{plan.tile_edges:,} (estimated peak {plan.memory / GiB:.1f} GiB).')
+
+    def _place_group(self, refpkg, queries, cpus, tile_edges=None, max_memory=None):
         """Run the engine on one reference package; returns (Placer, results, seconds)."""
+        from gplace.engine import resources
         from gplace.engine.placer import Placer
+        from gplace.engine.tiled import TiledPlacer, plan_for_placer
         t0 = time.time()
         placer = Placer(refpkg, queries, cpus)
+        plan = plan_for_placer(placer, tile_edges, max_memory)
+        self._log_plan(plan, max_memory)
+        if plan.tile_edges is not None:
+            placer = TiledPlacer.from_placer(placer, plan.tile_edges)
         cpu_txt = f'{placer.workers} CPUs' if placer.workers else f'--cpus auto on {placer.cpus} CPUs'
+        tile_txt = (f'{len(placer.tiles):,} tiles of up to {placer.max_edges:,} edges; '
+                    if plan.tile_edges is not None else '')
+        mem = placer.memory_estimate()
         self.logger.info(f'Placing {len(placer.query_names):,} queries on {refpkg} '
-                         f'({placer.nnodes:,} nodes, {placer.nsites:,} sites, {cpu_txt}; '
-                         f'estimated peak memory {placer.memory_estimate() / 2 ** 30:.1f} GiB).')
+                         f'({placer.nnodes:,} nodes, {placer.nsites:,} sites, {cpu_txt}; {tile_txt}'
+                         f'estimated peak memory {mem / 2 ** 30:.1f} GiB).')
+        avail = resources.available_memory() if tile_edges is None and max_memory is None else None
+        if avail and mem > avail:
+            self.logger.warning(f'The estimated peak memory ({mem / 2 ** 30:.1f} GiB) is more than the '
+                                f'{avail / 2 ** 30:.1f} GiB available; use --max_memory to place tile by '
+                                f'tile within a memory limit.')
         results = placer.run()
         n_warn = sum(1 for _, _, w in results if w)
         if n_warn:
@@ -74,13 +115,14 @@ class OptionsParser(object):
         """Place the queries of one alignment on one reference package."""
         from gplace.engine.core import read_fasta
         from gplace.engine.jplace import write_jplace
+        tiling = self._tiling_options(options)
         self._check_file(options.msa_file, 'Query alignment')
         self._check_refpkg(options.refpkg)
         out_dir = os.path.dirname(os.path.abspath(options.out_file))
         make_sure_path_exists(out_dir)
         queries = read_fasta(options.msa_file)
         self.logger.info(f'Read {len(queries):,} sequences from {options.msa_file}')
-        placer, results, secs = self._place_group(options.refpkg, queries, options.cpus)
+        placer, results, secs = self._place_group(options.refpkg, queries, options.cpus, *tiling)
         write_jplace(options.out_file, placer.jplace_tree(), results, ' '.join(sys.argv))
         self.logger.info(f'Wrote {len(results):,} placements to {options.out_file} ({secs:.1f} s).')
 
@@ -88,6 +130,7 @@ class OptionsParser(object):
         """Place many alignments; queries sharing a reference package are placed in one pass."""
         from gplace.engine.core import read_fasta
         from gplace.engine.jplace import write_jplace
+        tiling = self._tiling_options(options)
         self._check_file(options.batchfile, 'Batchfile')
         rows = []
         for i, line in enumerate(open(options.batchfile), 1):
@@ -118,7 +161,7 @@ class OptionsParser(object):
                                                  f'{entries[0][1]}; names must be unique per reference package.')
                     owner[nm] = out
                     pooled.append((nm, seq))
-            placer, results, secs = self._place_group(entries[0][1], pooled, options.cpus)
+            placer, results, secs = self._place_group(entries[0][1], pooled, options.cpus, *tiling)
             tree = placer.jplace_tree()
             by_out = OrderedDict((out, []) for _, _, out in entries)
             for r in results:
@@ -162,16 +205,27 @@ class OptionsParser(object):
         import numpy as np
         from gplace.engine import resources
         from gplace.engine.core import read_fasta, informative
+        from gplace.engine.tiled import plan_tiling, load_tree
         self._check_refpkg(options.refpkg)
+        tile_edges, max_memory = self._tiling_options(options)
         n_avail = resources.available_cpus()
         GiB = 2 ** 30
 
         def slurm(mem_bytes, workers, seconds):
-            lines = [f'#SBATCH --cpus-per-task={workers}',
-                     f'#SBATCH --mem={math.ceil(mem_bytes * 1.10 / GiB)}G']
+            mem_gib = math.ceil(max_memory / GiB) if max_memory else math.ceil(mem_bytes * 1.10 / GiB)
+            lines = [f'#SBATCH --cpus-per-task={workers}', f'#SBATCH --mem={mem_gib}G']
             if seconds is not None:
                 lines.append(f'#SBATCH --time={resources.slurm_time(seconds * 1.5 + 600)}')
             return lines
+
+        def job_plan(sites, n_queries, n_leaves, L, workers, log=True):
+            plan = plan_tiling(load_tree(options.refpkg), sites, n_queries, n_leaves, L, workers,
+                               tile_edges, max_memory)
+            if log:
+                self._log_plan(plan, max_memory)
+            txt = (f' (tiled: {plan.n_tiles:,} tiles of up to {plan.max_edges:,} edges)'
+                   if plan.tile_edges is not None else '')
+            return plan, txt
 
         if options.msa_file is None:
             if not options.queries:
@@ -179,11 +233,11 @@ class OptionsParser(object):
             nn, ni, nl, L, sites = resources.refpkg_dimensions(options.refpkg)
             c = resources.parse_cpus(options.cpus)
             w = (resources.load_tuned_cpus() or resources.heuristic_cpus(n_avail)) if c == 'auto' else c
-            mem = resources.estimate_memory(nn, ni, sites, options.queries, nl, L, w)
+            plan, txt = job_plan(sites, options.queries, nl, L, w)
             self.logger.info(f'Reference package: {nn:,} nodes, {sites:,} informative sites (upper bound).')
             self.logger.info(f'Estimated peak memory for {options.queries:,} queries with {w} workers: '
-                             f'{mem / GiB:.1f} GiB')
-            for line in slurm(mem, w, None):
+                             f'{plan.memory / GiB:.1f} GiB{txt}')
+            for line in slurm(plan.memory, w, None):
                 self.logger.info(f'  {line}')
             return
 
@@ -195,41 +249,40 @@ class OptionsParser(object):
         cands = sorted({int(x) for x in options.cpus_list.split(',')}) if options.cpus_list \
             else resources.default_candidates(n_avail)
         cands = [c for c in cands if 1 <= c <= n_avail] or [1]
-        self.logger.info(f'Benchmarking on {len(sample):,} of {len(queries):,} queries; worker counts '
-                         f'{", ".join(map(str, cands))} ({n_avail} CPUs available).')
-        from gplace.engine.placer import Placer
-        placer = Placer(options.refpkg, sample, resources.heuristic_cpus(n_avail))
-        placer.cpus = max(cands)
-        t0 = time.time(); placer.cache(); t_cache = time.time() - t0
-        # prefilter time = fixed per-edge work + work per query: fit from two sweeps
-        n1, n2 = len(sample), max(1, len(sample) // 4)
         w_pref = resources.heuristic_cpus(n_avail)
-        t2 = placer.prefilter_seconds(n2, w_pref)
-        t1 = placer.prefilter_seconds(n1, w_pref)          # leaves the full sample's scores in place
-        per_q = max(0.0, (t1 - t2) / max(n1 - n2, 1))
-        t_pref_full = max(t1 - per_q * n1, 0.0) + per_q * q_full
-        rows = []
-        for c in cands:
-            t0 = time.time(); placer.place_all(workers=c); dt = time.time() - t0
-            rows.append((c, dt, len(sample) / dt))
-            self.logger.info(f'  {c:>4} workers: {dt:7.1f} s  ({len(sample) / dt:6.2f} queries/s)')
-        top = max(r[2] for r in rows)                  # differences under 3% are noise:
-        best, _, best_rate = min((r for r in rows if r[2] >= 0.97 * top), key=lambda r: r[0])
 
-        # full-job estimates: informative sites of the whole alignment, Q-proportional prefilter
-        L = placer.aln_len
+        # the full job: the informative sites of the whole alignment set its memory and tiling
+        L = len(queries[0][1])
         qa = np.frombuffer(''.join(s.upper() for _, s in queries).encode(), np.uint8).reshape(len(queries), L)
         full_mask = informative(qa).any(axis=0)
+        del qa
         nn, ni, nl, _, _ = resources.refpkg_dimensions(options.refpkg)
         sites_full = int((full_mask & self._ref_informative(options.refpkg, L)).sum())
-        mem = resources.estimate_memory(nn, ni, sites_full, q_full, nl, L, best)
-        t_full = t_cache + t_pref_full + q_full / best_rate
-        placer.release()
+        plan, _ = job_plan(sites_full, q_full, nl, L, w_pref)
+        if plan.tile_edges is None and tile_edges is None and max_memory is None:
+            need = resources.estimate_memory(nn, ni, sites_full, len(sample), nl, L, w_pref)
+            avail = resources.available_memory()
+            if avail and need > avail:
+                raise GPlaceExit(f'Benchmarking this reference package untiled needs about {need / GiB:.1f} GiB, '
+                                 f'more than the {avail / GiB:.1f} GiB available; give --max_memory to '
+                                 f'benchmark the tiled placement.')
+        self.logger.info(f'Benchmarking on {len(sample):,} of {len(queries):,} queries; worker counts '
+                         f'{", ".join(map(str, cands))} ({n_avail} CPUs available).')
+        if plan.tile_edges is None:
+            rows, seconds = self._time_untiled(options.refpkg, sample, q_full, cands, w_pref)
+        else:
+            rows, seconds = self._time_tiled(options.refpkg, sample, q_full, cands, w_pref, plan.tile_edges)
+        top = max(r[2] for r in rows)                  # differences under 3% are noise:
+        best, _, best_rate = min((r for r in rows if r[2] >= 0.97 * top), key=lambda r: r[0])
+        t_full, detail = seconds(best_rate)
         self.logger.info(f'Fastest: --cpus {best} ({best_rate:.2f} queries/s; '
                          f'{best_rate / max(r[2] for r in rows if r[0] == max(cands)):.2f}x the speed with {max(cands)}).')
-        self.logger.info(f'Estimated for {q_full:,} queries: peak memory {mem / GiB:.1f} GiB, '
-                         f'time about {t_full / 60:.0f} min.')
-        self.logger.info('Suggested SLURM request (+10% memory, +50% time margin):')
+        plan, txt = job_plan(sites_full, q_full, nl, L, best, log=False)
+        mem = plan.memory
+        self.logger.info(f'Estimated for {q_full:,} queries: peak memory {mem / GiB:.1f} GiB{txt}, '
+                         f'time about {t_full / 60:.0f} min{detail}.')
+        self.logger.info('Suggested SLURM request (' + ('--max_memory' if max_memory else '+10% memory')
+                         + ', +50% time margin):')
         for line in slurm(mem, best, t_full):
             self.logger.info(f'  {line}')
         if options.out_dir:
@@ -242,6 +295,62 @@ class OptionsParser(object):
             path = resources.save_tuned_cpus(best, {'refpkg': os.path.abspath(options.refpkg),
                                                     'queries_per_second': round(best_rate, 4)})
             self.logger.info(f'Saved: --cpus auto will use {best} on this machine ({path}).')
+
+    def _time_untiled(self, refpkg, sample, q_full, cands, w_pref):
+        """Untiled benchmark: cache the sample's vectors, time the prefilter at two sample sizes
+        and the placement at each worker count. Returns (rows, seconds(queries_per_second))."""
+        from gplace.engine.placer import Placer
+        placer = Placer(refpkg, sample, w_pref)
+        placer.cpus = max(cands)
+        t0 = time.time(); placer.cache(); t_cache = time.time() - t0
+        # prefilter time = fixed per-edge work + work per query: fit from two sweeps
+        n1, n2 = len(sample), max(1, len(sample) // 4)
+        t2 = placer.prefilter_seconds(n2, w_pref)
+        t1 = placer.prefilter_seconds(n1, w_pref)          # leaves the full sample's scores in place
+        per_q = max(0.0, (t1 - t2) / max(n1 - n2, 1))
+        t_pref_full = max(t1 - per_q * n1, 0.0) + per_q * q_full
+        rows = []
+        for c in cands:
+            t0 = time.time(); placer.place_all(workers=c); dt = time.time() - t0
+            rows.append((c, dt, len(sample) / dt))
+            self.logger.info(f'  {c:>4} workers: {dt:7.1f} s  ({len(sample) / dt:6.2f} queries/s)')
+        placer.release()
+        return rows, lambda rate: (t_cache + t_pref_full + q_full / rate, '')
+
+    def _time_tiled(self, refpkg, sample, q_full, cands, w_pref, tile_edges):
+        """Tiled benchmark: place the sample tile by tile once, timing every phase, then time the
+        optimisations of one rebuilt tile at each worker count, so the tree is not rebuilt for
+        every count. The rates in rows are placement-only queries/s. Returns (rows,
+        seconds(queries_per_second)); see TiledPlacer.job_seconds for the time model."""
+        from gplace.engine.placer import Placer
+        from gplace.engine.tiled import TiledPlacer
+        tp = TiledPlacer.from_placer(Placer(refpkg, sample, w_pref), tile_edges)
+        tp.cpus = max(cands)
+        tp.record_work = True
+        self.logger.info(f'Placing the sample tile by tile ({len(tp.tiles):,} tiles of up to '
+                         f'{tp.max_edges:,} edges), timing each phase.')
+        probe = len(sample) // 4 if len(sample) >= 8 else 0
+        tp.cache()
+        tp.prefilter(probe=probe)
+        tp.place_all()
+        ti, n_ev, rates = tp.eval_rates(cands)
+        epq = tp.evals_per_query()
+        batch = min(q_full, tp.query_batch)
+        score_s = (tp.scoring_seconds(batch, max(1, probe), 16 * tp.workers)
+                   if batch > max(1, probe) and batch > len(sample) else None)
+        tp.release()
+        self.logger.info(f'Timing the placement optimisations at each worker count ({n_ev:,} optimisations '
+                         f'on tile {ti + 1}; {epq:.1f} per query):')
+        rows = []
+        for w, dt, eps in rates:
+            rows.append((w, dt, eps / epq))
+            self.logger.info(f'  {w:>4} workers: {dt:7.1f} s  ({eps / epq:6.2f} queries/s)')
+
+        def seconds(rate):
+            total, boundary, pref, place = tp.job_seconds(q_full, rate * epq, score_s)
+            return total, (f' (boundary pass {boundary / 60:.0f} min, prefilter {pref / 60:.0f} min, '
+                           f'placement {place / 60:.0f} min)')
+        return rows, seconds
 
     @staticmethod
     def _ref_informative(refpkg, L):
@@ -262,7 +371,7 @@ class OptionsParser(object):
         refpkg = os.path.join(TEST_DATA, 'mini.refpkg')
         queries = read_fasta(os.path.join(TEST_DATA, 'queries.fasta'))
         expected = os.path.join(TEST_DATA, 'expected_pplacer.jplace')
-        placer, results, secs = self._place_group(refpkg, queries, options.cpus)
+        placer, results, secs = self._place_group(refpkg, queries, options.cpus, *self._tiling_options(options))
         out = os.path.join(out_dir, PATH_TEST_JPLACE)
         write_jplace(out, placer.jplace_tree(), results, ' '.join(sys.argv))
         r = compare_jplace(out, expected)

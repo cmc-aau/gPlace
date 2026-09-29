@@ -83,6 +83,19 @@ def __cpus(group):
                             'memory-bandwidth bound, so the fastest value is often below the CPU count)')
 
 
+def __tiling(parser):
+    with mutex_group(parser, required=False) as grp:
+        grp.add_argument('--tile_edges', type=int, default=None,
+                         help='place tile by tile, holding one tile of at most this many edges in '
+                              'memory at a time (exact; for reference trees too large for memory, such '
+                              'as the full GTDB bacterial tree). Default: no tiling')
+        grp.add_argument('--max_memory', type=str, default=None,
+                         help='memory gPlace may use, e.g. 64G or 500M (a plain number is GiB). If the '
+                              'estimated peak fits, gPlace places without tiles; otherwise it picks the '
+                              'largest tile size that fits, from the reference tree and the number of '
+                              'queries (chosen separately for each reference package)')
+
+
 def __queries(group):
     group.add_argument('--queries', type=int, default=None,
                        help='number of queries to plan for (default: all sequences in --msa_file); '
@@ -159,6 +172,7 @@ def get_main_parser():
             __cpus(grp)
             __temp_dir(grp)
             __help(grp)
+        __tiling(parser)
 
     with subparser(sub_parsers, 'place_batch', 'Place many alignments, pooling the queries of each '
                                                'reference package into one pass.') as parser:
@@ -169,6 +183,7 @@ def get_main_parser():
             __cpus(grp)
             __temp_dir(grp)
             __help(grp)
+        __tiling(parser)
 
     with subparser(sub_parsers, 'compare', 'Compare two jplace files placement by placement.') as parser:
         with arg_group(parser, 'required named arguments') as grp:
@@ -190,6 +205,7 @@ def get_main_parser():
             __out_dir(grp, required=False)
             __no_save(grp)
             __help(grp)
+        __tiling(parser)
 
     with subparser(sub_parsers, 'test', 'Place the bundled test genomes and check the output is '
                                         'identical to GTDB-Tk\'s pplacer.') as parser:
@@ -197,6 +213,7 @@ def get_main_parser():
             __out_dir(grp, required=False)
             __cpus(grp)
             __help(grp)
+        __tiling(parser)
 
     with subparser(sub_parsers, 'check_install', 'Check the engine is installed and bit-exact.') as parser:
         with arg_group(parser, 'optional arguments') as grp:

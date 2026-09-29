@@ -40,6 +40,42 @@ Only what is stored and when it is computed:
 The memory needed drops from *3 x nodes x sites x 20 x 8 bytes* to about
 *2 x internal nodes x sites x 20 x 8 bytes* plus the prefilter scores.
 
+Tiled placement
+---------------
+
+For trees whose vectors still do not fit (``--tile_edges``, ``--max_memory``), the tree is cut
+into connected **tiles** of at most N edges. A tile touches the rest of the tree only through
+the edge above its root and the roots of the tiles below it, and everything it needs from the
+outside passes through those points:
+
+* the *distal* vector of a tile root depends only on the tree below it: a bottom-up pass builds
+  the tiles one at a time and stores the distal vector of each tile root;
+* the *proximal* vector of a tile root depends only on the tree outside it: a top-down pass
+  stores the proximal vector of each tile root.
+
+With those boundary vectors (two per tile), a tile's vectors are rebuilt with the same
+operations, operands and order as the untiled cache, so every value is bit-identical, and
+every edge's likelihood is a full-tree likelihood, comparable across tiles. Only one tile is in
+memory at a time. The cut: walking up the tree, the part of a node's subtree not yet in a tile
+stays whole while it has at most N nodes; beyond that, its internal children with the largest
+parts become tile roots (leaves never root a tile).
+
+pplacer's algorithm is unchanged; only the order of the work is:
+
+1. **Prefilter**, tile by tile and in batches of 20,000 queries: each query keeps its 160 best
+   edges in pplacer's ranking order (score descending, ties by ascending edge number), which is
+   pplacer's global ranking without a *queries x edges* score table.
+2. **Baseball in rounds**: each first-stage optimisation starts from pplacer's default branch
+   lengths, so its result does not depend on the edges tried before. The next 8 ranked edges of
+   every query still searching are optimised, grouped by tile, and pplacer's stopping rule is
+   replayed on the stored results; a few extra edges are evaluated and discarded. pplacer's
+   search needs at most 41 successful edges; a query with many failed optimisations that runs
+   out of candidates is re-ranked with more.
+3. **Refinement** of the kept edges at 1e-5, tile by tile, then the like-weight ratios.
+
+Each pass rebuilds the tiles, so tiled placement is 1.7-2.5x slower than untiled placement on a
+tree that fits in memory; ``--max_memory`` therefore places untiled whenever it can.
+
 Exactness rules
 ---------------
 

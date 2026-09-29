@@ -322,8 +322,19 @@ void xp_edge_scores(double *out, long stride, const double *snode, const int64_t
  * codes[q*nsites+s] in 0..ncode-1, or ncode for a gap ('-' or '?').
  * out[q*ldo + col0 + lane] receives the score for lane < ne.
  * Site blocks keep the W block in L2; 4 queries are interleaved to overlap the add latency.
+ * Exponents are summed in int32 lanes within one 128-site block, then added into int64 totals:
+ * on very large trees (the full GTDB bacterial tree) per-site exponents reach ~2^18, which the
+ * int32 totals of earlier versions could not hold. Integer addition is exact in any order, so
+ * the result equals the scalar int64 sum.
  * Returns 0, or -1 on bad arguments. */
 #define XP_EB 8
+/* add 8 int32 lane sums into 8 int64 totals (exact) */
+#define ADD64(E, e) do { \
+    __m256i lo_ = _mm256_cvtepi32_epi64(_mm256_castsi256_si128(e)); \
+    __m256i hi_ = _mm256_cvtepi32_epi64(_mm256_extracti128_si256(e, 1)); \
+    _mm256_storeu_si256((__m256i *)(E), _mm256_add_epi64(_mm256_loadu_si256((const __m256i *)(E)), lo_)); \
+    _mm256_storeu_si256((__m256i *)((E) + 4), _mm256_add_epi64(_mm256_loadu_si256((const __m256i *)((E) + 4)), hi_)); \
+  } while (0)
 static void es8_scalar(double *out, long ldo, long col0, int ne, const double *W,
                        const int64_t *se8, int nsites, int ncode, const uint8_t *codes, int nq)
 {
@@ -350,9 +361,9 @@ int xp_edge_scores8(double *out, long ldo, long col0, int ne,
   double *W = (double *)aligned_alloc(64, sizeof(double) * (size_t)nsites * NC * XP_EB);
   int32_t *SE = (int32_t *)aligned_alloc(64, sizeof(int32_t) * (size_t)nsites * 2 * XP_EB);
   double *accD = (double *)aligned_alloc(64, sizeof(double) * ((size_t)nq * XP_EB + 8));
-  int32_t *accE = (int32_t *)aligned_alloc(64, sizeof(int32_t) * ((size_t)nq * XP_EB + 16));
+  int64_t *accE = (int64_t *)aligned_alloc(64, sizeof(int64_t) * ((size_t)nq * XP_EB + 8));
   if (!W || !SE || !accD || !accE) { free(W); free(SE); free(accD); free(accE); return -1; }
-  int small = 1;                                   /* int32 lane sums cannot overflow */
+  int small = 1;       /* int32 sums over one 128-site block cannot overflow (|se| <= 2^23) */
   for (int s = 0; s < nsites; s++) {
     const double *qt = qevtab + (size_t)cat[s] * ncode * NS;
     double *Ws = W + (size_t)s * NC * XP_EB;
@@ -371,16 +382,16 @@ int xp_edge_scores8(double *out, long ldo, long col0, int ne,
     int32_t *SEs = SE + (size_t)s * 2 * XP_EB;
     for (int lane = 0; lane < XP_EB; lane++) {
       int64_t v = lane < ne ? se8[(size_t)lane * nsites + s] : 0;
-      if (v > (1 << 18) || v < -(1 << 18)) small = 0;
+      if (v > (1 << 23) || v < -(1 << 23)) small = 0;
       SEs[lane] = 0; SEs[XP_EB + lane] = (int32_t)v;
     }
   }
-  if (!small) {                                    /* exact int64 fallback (never seen in practice) */
+  if (!small) {                                    /* exact scalar fallback (|se| > 2^23) */
     es8_scalar(out, ldo, col0, ne, W, se8, nsites, ncode, codes, nq);
     free(W); free(SE); free(accD); free(accE); return 0;
   }
   memset(accD, 0, sizeof(double) * (size_t)nq * XP_EB);      /* +0.0 */
-  memset(accE, 0, sizeof(int32_t) * (size_t)nq * XP_EB);
+  memset(accE, 0, sizeof(int64_t) * (size_t)nq * XP_EB);
   const unsigned GAP = (unsigned)ncode;
   const int BS = 128;
   for (int s0 = 0; s0 < nsites; s0 += BS) {
@@ -388,13 +399,12 @@ int xp_edge_scores8(double *out, long ldo, long col0, int ne,
     int q = 0;
     for (; q + 4 <= nq; q += 4) {
       double *A0 = accD + (size_t)q * XP_EB, *A1 = A0 + XP_EB, *A2 = A1 + XP_EB, *A3 = A2 + XP_EB;
-      int32_t *E0 = accE + (size_t)q * XP_EB, *E1 = E0 + XP_EB, *E2 = E1 + XP_EB, *E3 = E2 + XP_EB;
+      int64_t *E0 = accE + (size_t)q * XP_EB, *E1 = E0 + XP_EB, *E2 = E1 + XP_EB, *E3 = E2 + XP_EB;
       __m256d a0l = _mm256_loadu_pd(A0), a0h = _mm256_loadu_pd(A0 + 4);
       __m256d a1l = _mm256_loadu_pd(A1), a1h = _mm256_loadu_pd(A1 + 4);
       __m256d a2l = _mm256_loadu_pd(A2), a2h = _mm256_loadu_pd(A2 + 4);
       __m256d a3l = _mm256_loadu_pd(A3), a3h = _mm256_loadu_pd(A3 + 4);
-      __m256i e0 = _mm256_loadu_si256((const __m256i *)E0), e1 = _mm256_loadu_si256((const __m256i *)E1);
-      __m256i e2 = _mm256_loadu_si256((const __m256i *)E2), e3 = _mm256_loadu_si256((const __m256i *)E3);
+      __m256i e0 = _mm256_setzero_si256(), e1 = e0, e2 = e0, e3 = e0;   /* block partial sums */
       const uint8_t *c0 = codes + (size_t)q * nsites, *c1 = c0 + nsites, *c2 = c1 + nsites, *c3 = c2 + nsites;
       for (int s = s0; s < s1; s++) {
         const double *Ws = W + (size_t)s * NC * XP_EB;
@@ -412,13 +422,12 @@ int xp_edge_scores8(double *out, long ldo, long col0, int ne,
       }
       _mm256_storeu_pd(A0, a0l); _mm256_storeu_pd(A0 + 4, a0h); _mm256_storeu_pd(A1, a1l); _mm256_storeu_pd(A1 + 4, a1h);
       _mm256_storeu_pd(A2, a2l); _mm256_storeu_pd(A2 + 4, a2h); _mm256_storeu_pd(A3, a3l); _mm256_storeu_pd(A3 + 4, a3h);
-      _mm256_storeu_si256((__m256i *)E0, e0); _mm256_storeu_si256((__m256i *)E1, e1);
-      _mm256_storeu_si256((__m256i *)E2, e2); _mm256_storeu_si256((__m256i *)E3, e3);
+      ADD64(E0, e0); ADD64(E1, e1); ADD64(E2, e2); ADD64(E3, e3);
     }
     for (; q < nq; q++) {
-      double *A0 = accD + (size_t)q * XP_EB; int32_t *E0 = accE + (size_t)q * XP_EB;
+      double *A0 = accD + (size_t)q * XP_EB; int64_t *E0 = accE + (size_t)q * XP_EB;
       __m256d a0l = _mm256_loadu_pd(A0), a0h = _mm256_loadu_pd(A0 + 4);
-      __m256i e0 = _mm256_loadu_si256((const __m256i *)E0);
+      __m256i e0 = _mm256_setzero_si256();
       const uint8_t *c0 = codes + (size_t)q * nsites;
       for (int s = s0; s < s1; s++) {
         const double *w0 = W + ((size_t)s * NC + c0[s]) * XP_EB;
@@ -426,7 +435,7 @@ int xp_edge_scores8(double *out, long ldo, long col0, int ne,
         a0l = _mm256_add_pd(a0l, _mm256_loadu_pd(w0)); a0h = _mm256_add_pd(a0h, _mm256_loadu_pd(w0 + 4));
         e0 = _mm256_add_epi32(e0, _mm256_loadu_si256((const __m256i *)(SEs + (c0[s] != GAP) * XP_EB)));
       }
-      _mm256_storeu_pd(A0, a0l); _mm256_storeu_pd(A0 + 4, a0h); _mm256_storeu_si256((__m256i *)E0, e0);
+      _mm256_storeu_pd(A0, a0l); _mm256_storeu_pd(A0 + 4, a0h); ADD64(E0, e0);
     }
   }
   for (int q = 0; q < nq; q++)

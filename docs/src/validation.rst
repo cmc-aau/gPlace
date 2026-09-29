@@ -101,6 +101,65 @@ files written by GTDB-Tk's pplacer v1.1.alpha19.
 * *Earlier exact build*: the first bit-exact version (scalar C kernels, 64 threads), before the
   SIMD kernels, the process pool and the memory-lean three-taxon kernel.
 
+Tiled placement
+---------------
+
+Tiled runs (``--tile_edges`` / ``--max_memory``) on the same machine, 40 worker processes, each
+under a hard 64 GB limit. Peak memory is the whole process group (cgroup peak).
+
+.. list-table::
+   :widths: 16 10 18 22 14 12 12
+   :header-rows: 1
+
+   * - Tree
+     - Genomes
+     - Option (tiles)
+     - Compared with
+     - Result
+     - Peak memory (estimate)
+     - Time (untiled)
+   * - class-level 8
+     - 5,428
+     - ``--tile_edges 3000`` (5 tiles)
+     - GTDB-Tk jplace files
+     - all printed values identical
+     - 4.0 GiB (5.1)
+     - 2 min 47 s (1 min 48 s)
+   * - class-level 2
+     - 22,061
+     - ``--max_memory 12G`` (6 tiles)
+     - GTDB-Tk jplace files
+     - all printed values identical
+     - 10.0 GiB (11.1)
+     - 11 min 51 s (5 min 41 s)
+   * - full bacterial
+     - 4,040
+     - ``--max_memory 60G`` (5 tiles)
+     - GTDB-Tk full-tree classification tree
+     - same edge, pendant and distal lengths
+     - 54.3 GiB (56.1)
+     - 19 min 35 s (needs ~232 GiB)
+   * - full bacterial
+     - 127,343
+     - ``--max_memory 64G`` (6 tiles)
+     - GTDB-Tk full-tree classification tree (3,459 genomes in common)
+     - same edge, pendant and distal lengths
+     - 59.2 GiB (60.3)
+     - 2 h 19 min (needs ~490 GiB)
+
+* The full R226 bacterial tree (273,290 nodes) is not split by GTDB-Tk; its reference is the
+  classification tree GTDB-Tk writes for a full-tree run of 4,040 genomes, in which each genome is
+  grafted at its best placement. It records the edge and the pendant and distal lengths with 6
+  significant digits, but not likelihoods or secondary placements. Every genome in it is on the
+  same edge, with the same pendant length as printed and distal lengths within the printing
+  precision (largest differences 4.6e-6 and 8.4e-7).
+* The 127,343-genome run placed the 112 GTDB-Tk class-level alignment files on the full tree in
+  one ``place_batch``. Its jplace files are also identical, in every printed value, to those of
+  the independent tiling prototype that preceded this implementation (24 tiles of up to 13,889
+  edges, 19.9 GiB peak, 2 h 38 min).
+* *Time (untiled)*: the untiled run of the same job, where it fits in memory (tree 8 rerun
+  alone; tree 2 from the table above).
+
 How exactness was established
 -----------------------------
 

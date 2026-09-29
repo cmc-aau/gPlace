@@ -15,6 +15,31 @@ Arguments
    :path: place
    :nodefaultconst:
 
+Memory limits and large trees
+-----------------------------
+
+By default gPlace holds the likelihood vectors of the whole reference tree in memory, which is
+the fastest way to place. For trees whose vectors do not fit, such as the full GTDB bacterial
+tree (about 490 GiB untiled for 127,343 genomes), gPlace can place **tile by tile**: the tree is
+cut into connected tiles and only one tile is held in memory at a time. The results are
+identical to untiled placement (see :ref:`how_it_works`); tiled runs take about 1.7-2.5x longer.
+
+Give at most one of:
+
+* ``--max_memory 64G``: the memory gPlace may use (``K``, ``M``, ``G``, ``T`` are binary units,
+  as in SLURM; a plain number is GiB). gPlace estimates the peak memory from the reference tree
+  and the number of queries, keeping 5% of the limit as headroom. If untiled placement fits,
+  it places without tiles; otherwise it uses the largest tiles that fit, because larger tiles
+  are faster. If even tiles of 1,000 edges do not fit, it stops and prints the limit needed.
+* ``--tile_edges 20000``: tiles of at most this many edges. Memory then depends on the tile
+  size rather than the tree size: about 8 GiB of likelihood vectors per 10,000 edges (5,036
+  sites), plus the alignments and the queries' working data.
+
+``gplace benchmark --refpkg <refpkg> --queries <N> --max_memory 64G`` prints the tile size and
+peak memory gPlace would use, without placing anything. Without either option, gPlace warns
+when the estimated peak is more than the memory available to it (the machine's memory, or a
+SLURM or cgroup limit).
+
 Files output
 ------------
 
@@ -32,6 +57,12 @@ Input
     gplace place --msa_file user_msa_file.fasta --refpkg mini.refpkg --out_file gplace.jplace --cpus 4
 
 For a GTDB-Tk class-level tree, pass e.g. ``--refpkg release226/split/class_level/pplacer/gtdbtk.package.2.refpkg``.
+On the full GTDB bacterial tree within a 64 GB job:
+
+.. code-block:: bash
+
+    gplace place --msa_file gtdbtk.bac120.user_msa.fasta --refpkg release226/pplacer/gtdb_r226_bac120.refpkg \
+        --out_file gplace.jplace --cpus 40 --max_memory 64G
 
 Output
 ^^^^^^
