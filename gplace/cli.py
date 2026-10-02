@@ -43,8 +43,8 @@ def arg_group(parser, name):
 
 def __msa_file(group, required):
     group.add_argument('--msa_file', required=required,
-                       help='FASTA file of aligned query protein sequences (e.g. GTDB-Tk '
-                            'user_msa_file.fasta for one class-level tree)')
+                       help='FASTA file of aligned query sequences, protein or DNA as the reference '
+                            'package (e.g. GTDB-Tk user_msa_file.fasta for one class-level tree)')
 
 
 def __refpkg(group, required):
@@ -94,6 +94,19 @@ def __tiling(parser):
                               'estimated peak fits, gPlace places without tiles; otherwise it picks the '
                               'largest tile size that fits, from the reference tree and the number of '
                               'queries (chosen separately for each reference package)')
+
+
+def __fix_gamma(group):
+    group.add_argument('--fix_gamma_underflow', action='store_true', default=False,
+                       help='gamma-model reference packages only: avoid pplacer\'s rescaling underflow, '
+                            'which gives likelihood -inf on large trees. Results then differ from pplacer '
+                            '(slightly where pplacer is finite). Default: reproduce pplacer exactly')
+
+
+def __test_models(group):
+    group.add_argument('--models', action='store_true', default=False,
+                       help='also place the bundled test sets for the other pplacer models (LG, JTT, '
+                            'empirical frequencies, GTR, gamma) and check them against pplacer')
 
 
 def __queries(group):
@@ -149,7 +162,7 @@ def __build_dir(group):
 
 def __engine_dir(group):
     group.add_argument('--engine_dir', default=None,
-                       help='where to write libgplace_core.so (default: $GPLACE_ENGINE_DIR or the package directory)')
+                       help='where to write the engine libraries (default: $GPLACE_ENGINE_DIR or the package directory)')
 
 
 def __jobs(group):
@@ -163,13 +176,14 @@ def get_main_parser():
     sub_parsers = main_parser.add_subparsers(title="Subcommands", help="Available subcommands", dest='subparser_name')
 
     with subparser(sub_parsers, 'place', 'Place aligned queries on a reference package '
-                                         '(bit-identical to pplacer -m WAG -c <refpkg>).') as parser:
+                                         '(bit-identical to pplacer -c <refpkg>).') as parser:
         with arg_group(parser, 'required named arguments') as grp:
             __msa_file(grp, required=True)
             __refpkg(grp, required=True)
             __out_file(grp, required=True)
         with arg_group(parser, 'optional arguments') as grp:
             __cpus(grp)
+            __fix_gamma(grp)
             __temp_dir(grp)
             __help(grp)
         __tiling(parser)
@@ -181,6 +195,7 @@ def get_main_parser():
             __out_dir(grp, required=True)
         with arg_group(parser, 'optional arguments') as grp:
             __cpus(grp)
+            __fix_gamma(grp)
             __temp_dir(grp)
             __help(grp)
         __tiling(parser)
@@ -212,6 +227,7 @@ def get_main_parser():
         with arg_group(parser, 'optional arguments') as grp:
             __out_dir(grp, required=False)
             __cpus(grp)
+            __test_models(grp)
             __help(grp)
         __tiling(parser)
 

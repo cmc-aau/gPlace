@@ -2,8 +2,10 @@
  * gPlace placement engine (libgplace_core.so).
  *
  * Exact re-implementation of the numerical core of pplacer v1.1.alpha19 (commit 807f6f3, the
- * build GTDB-Tk uses) for the Gcat (FastTree CAT) protein model: every floating-point result
- * keeps pplacer's operands, operation order and rounding, so placements are bit-identical.
+ * build GTDB-Tk uses) for its Gcat (FastTree CAT) and Gmix (discrete gamma) models, protein and
+ * DNA: every floating-point result keeps pplacer's operands, operation order and rounding, so
+ * placements are bit-identical. Built twice: NS=20 (protein, libgplace_core.so) and NS=4 (DNA,
+ * libgplace_core_nt.so).
  *
  *   - dediagonalize / multi_exp            (pplacer_src/linear_c.c, diagd.ml)
  *   - evolve_into = per-site gsl dgemv      (gcat_model.ml, gslcblas loop order)
@@ -34,8 +36,22 @@
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_min.h>
 #include <gsl/gsl_errno.h>
+#include <gsl/gsl_cdf.h>
+#include <gsl/gsl_sf_gamma.h>
+#include <limits.h>
 
+/* The number of states is a compile-time parameter (-DNS=4 for DNA). The AVX2 kernels are
+ * written for 20 states (5 registers of 4 lanes); other state counts use the scalar forms below,
+ * which perform the same operations in the same order (lanes never reorder a reduction).
+ * -DXP_FORCE_SCALAR builds a 20-state engine on the scalar forms (to check them). */
+#ifndef NS
 #define NS 20
+#endif
+#if NS == 20 && !defined(XP_FORCE_SCALAR)
+#define XP_SIMD20 1
+#else
+#define XP_SIMD20 0
+#endif
 
 /* XP_CR: use correctly-rounded exp/log (CORE-MATH). Stock pplacer is statically linked with
  * glibc 2.19, whose IBM-derived exp/log are correctly rounded; modern glibc's are not always. */
@@ -46,12 +62,29 @@ double cr_exp(double); double cr_log(double);
 #endif
 double xp_exp(double v) { return exp(v); }
 double xp_log(double v) { return log(v); }
+/* pow and sin are only used by GSL (gamma functions); the link maps GSL's exp/log/pow/sin to the
+ * correctly-rounded CORE-MATH functions (glibc 2.19's are correctly rounded): see build.py. */
+double xp_pow(double a, double b) { return pow(a, b); }
+double xp_sin(double v) { return sin(v); }
 double xp_hypot(double a, double b) { return hypot(a, b); }
-const char *xp_engine_version(void) { return "gplace-core 1: pplacer v1.1.alpha19 exact (GSL 1.16, glibc-2.19 hypot, CORE-MATH exp/log, AVX2)"; }
+#define XP_STR2(x) #x
+#define XP_STR(x) XP_STR2(x)
+const char *xp_engine_version(void) { return "gplace-core 2 (" XP_STR(NS) " states): pplacer v1.1.alpha19 exact (GSL 1.16, glibc-2.19 hypot, CORE-MATH exp/log, AVX2)"; }
+int xp_n_states(void) { return NS; }
 
 /* ------------------------------------------------------------------ model -- */
 
 int xp_init(void) { gsl_set_error_handler_off(); return 0; }
+
+/* Targets of the libm functions GSL references but gPlace never calls (build.py LIBM_TRAPS): abort
+ * instead of silently using an inexact system implementation. */
+#include <stdio.h>
+#define XP_TRAP(f) void xp_libm_trap_##f(void) { fputs("gPlace engine: unexpected call to libm " #f \
+  "; results would not be bit-exact. Please report this.\n", stderr); abort(); }
+XP_TRAP(cos) XP_TRAP(cosh) XP_TRAP(sinh) XP_TRAP(tan) XP_TRAP(tanh) XP_TRAP(log1p) XP_TRAP(sincos)
+XP_TRAP(expm1) XP_TRAP(atan) XP_TRAP(atan2) XP_TRAP(asin) XP_TRAP(acos) XP_TRAP(log10) XP_TRAP(log2)
+XP_TRAP(exp2) XP_TRAP(cbrt) XP_TRAP(erf) XP_TRAP(erfc) XP_TRAP(lgamma) XP_TRAP(tgamma) XP_TRAP(fma)
+XP_TRAP(acosh) XP_TRAP(atanh) XP_TRAP(asinh)
 
 /* Gsl_eigen.symmv: unsorted eigen-decomposition of a symmetric matrix (lower triangle used). */
 int xp_symmv(const double *m_in, double *eval, double *evec, int n)
@@ -120,7 +153,7 @@ void xp_evolve_ref(double *dst, const double *src, int nsites, const int32_t *ca
  * Lanes run over i (4 different P[i][j] at once). */
 void xp_dediag(double *dstT, const double *u, const double *lambda, const double *uit, int n)
 {
-  if (n != NS) {                                   /* generic scalar path, transposed store */
+  if (n != NS || !XP_SIMD20) {                     /* generic scalar path, transposed store */
     for (int i = 0; i < n; i++)
       for (int j = 0; j < n; j++) {
         double d = 0;
@@ -171,6 +204,14 @@ void xp_multi_exp(double *tensor, const double *x, const double *l, const double
  * Lanes run over i: 4 different y[i] per instruction. Exponents are copied by the caller. */
 static inline void evolve_site(double *yv, const double *xv, const double *PT)
 {
+#if !XP_SIMD20
+  for (int i = 0; i < NS; i++) {                   /* same as the lanes: temp = +0.0 + x[j]*P[i][j]... */
+    double temp = 0.0;
+    for (int j = 0; j < NS; j++) temp = temp + xv[j] * PT[j * NS + i];
+    yv[i] = 0.0 + temp;
+  }
+  return;
+#endif
   const __m256d z = _mm256_setzero_pd();
   __m256d a0 = z, a1 = z, a2 = z, a3 = z, a4 = z;
   for (int j = 0; j < NS; j++) {
@@ -473,7 +514,44 @@ typedef struct {
   double prox_bl, dist_bl, pend_bl;
   long n_calls;
   int assert_fail;
+  int gmix, R;           /* gamma mixture (every site under all R rates), see xp_gtt_new */
 } TT;
+
+/* Gamma mixture (Gmix_model) three-taxon passes. Glv layout here is site-major [m][R][NS]
+ * (pplacer's is rate-major [R][m][NS]); only the per-site accumulation order matters and it is
+ * pplacer's: util[s] += ((statd*x)*y)*z over rates ascending, then states ascending
+ * (ten_log_like3_c), then ll = sum_s log(util[s]) - (float)m * log((float)R). */
+static void gtt_ll_pass(TT *t)
+{
+  double ll_tot = 0;
+  const int nu = t->nu, R = t->R;
+  for (int s = 0; s < t->m; s++) {
+    double util = 0.0;
+    for (int r = 0; r < R; r++) {
+      const double *pd = t->PD + ((size_t)s * R + r) * NS;
+      const double *zz = t->QP + ((size_t)r * nu + t->qc[s]) * NS;
+      for (int st = 0; st < NS; st++) util += pd[st] * zz[st];
+    }
+    ll_tot += log(util);
+  }
+  ll_tot -= ((float) t->m) * log((float) R);
+  t->ll_core = ll_tot;
+}
+
+static void gtt_dist_pass(TT *t)
+{
+  const int R = t->R;
+  for (int s = 0; s < t->m; s++)
+    for (int r = 0; r < R; r++) {
+      double dv[NS], pv[NS];
+      const size_t o = ((size_t)s * R + r) * NS, off = (size_t)r * NS * NS;
+      evolve_site(dv, t->dist_o + o, t->tensorD + off);
+      evolve_site(pv, t->prox_o + o, t->tensorP + off);
+      double *pd = t->PD + o;
+      for (int st = 0; st < NS; st++) pd[st] = (t->statd[st] * pv[st]) * dv[st];
+    }
+  gtt_ll_pass(t);
+}
 
 void xp_tt_free(TT *t);
 
@@ -491,6 +569,7 @@ static void tt_build_QP(TT *t, double v)
 
 static void tt_ll_pass(TT *t)                   /* ll_core from PD and QP */
 {
+  if (t->gmix) { gtt_ll_pass(t); return; }
   double ll_tot = 0;
   const int nu = t->nu;
   for (int s = 0; s < t->m; s++) {
@@ -505,8 +584,25 @@ static void tt_ll_pass(TT *t)                   /* ll_core from PD and QP */
 
 static void tt_dist_pass(TT *t)                 /* PD and ll_core from dist_o/prox_o, QP */
 {
+  if (t->gmix) { gtt_dist_pass(t); return; }
   double ll_tot = 0;
   const int nu = t->nu;
+#if !XP_SIMD20
+  for (int s = 0; s < t->m; s++) {
+    double dv[NS], pv[NS];
+    const size_t off = (size_t)t->cat[s] * NS * NS;
+    evolve_site(dv, t->dist_o + (size_t)s * NS, t->tensorD + off);
+    evolve_site(pv, t->prox_o + (size_t)s * NS, t->tensorP + off);
+    double *pd = t->PD + (size_t)s * NS;
+    for (int st = 0; st < NS; st++) pd[st] = (t->statd[st] * pv[st]) * dv[st];
+    const double *zz = t->QP + ((size_t)t->cat[s] * nu + t->qc[s]) * NS;
+    double util = 0;
+    for (int st = 0; st < NS; st++) util += pd[st] * zz[st];
+    ll_tot += log(util);
+  }
+  t->ll_core = ll_tot;
+  return;
+#endif
   const __m256d s0 = _mm256_loadu_pd(t->statd + 0), s1 = _mm256_loadu_pd(t->statd + 4),
                 s2 = _mm256_loadu_pd(t->statd + 8), s3 = _mm256_loadu_pd(t->statd + 12),
                 s4 = _mm256_loadu_pd(t->statd + 16);
@@ -701,4 +797,192 @@ void xp_tt_set(TT *t, const double *darr_a, const int64_t *darr_e, const double 
 void xp_tt_results(TT *t, double *out)   /* (log_like, pend_bl, dist_bl, n_calls) */
 {
   out[0] = tt_log_like(t); out[1] = t->pend_bl; out[2] = t->dist_bl; out[3] = (double)t->n_calls;
+}
+
+/* ======================================================================================
+ * Gamma mixture model (pplacer gmix_model.ml, gamma.ml, linear_c.c "tensor" functions).
+ * Glvs are stored site-major: a[s][r][st] (pplacer: rate-major a[r][s][st]); one exponent per
+ * site shared by all rates. Every value below uses pplacer's operands and per-value order.
+ * ====================================================================================== */
+
+/* Gamma.discrete_gamma n_cat alpha (Yang 1994, mean rates), then make_mean_one. */
+static double inverse_gamma_cdf(double alpha, double beta, double y)
+{
+  const double epsilon = 1e-7;
+  beta = 1. / beta;
+  if (y < gsl_cdf_gamma_P(epsilon, alpha, beta)) return 0.;
+  return gsl_cdf_gamma_Pinv(y, alpha, beta);
+}
+
+int xp_discrete_gamma(int n_cat, double alpha, double *out)
+{
+  if (n_cat <= 0) return -1;
+  double *freq = (double *)malloc(sizeof(double) * (n_cat + 1));
+  for (int i = 0; i <= n_cat; i++) {
+    if (i == 0) freq[i] = 0.;
+    else if (i == n_cat) freq[i] = 1.;
+    else {
+      double cutpoint = inverse_gamma_cdf(alpha, 1., (double)i / (double)n_cat);
+      freq[i] = gsl_sf_gamma_inc_P(alpha + 1., cutpoint);
+    }
+  }
+  double tot = 0.;
+  for (int i = 0; i < n_cat; i++) { out[i] = freq[i + 1] - freq[i]; tot = tot + out[i]; }
+  const double f_n = (double)n_cat;
+  for (int i = 0; i < n_cat; i++) out[i] = f_n * out[i] / tot;
+  free(freq);
+  return 0;
+}
+
+/* ten_pairwise_prod + iba1_pairwise_sum */
+void xp_g_pairwise(double *dst, int64_t *de, const double *x, const int64_t *xe,
+                   const double *y, const int64_t *ye, int nsites, int R)
+{
+  size_t n = (size_t)nsites * R * NS;
+  for (size_t i = 0; i < n; i++) dst[i] = x[i] * y[i];
+  for (int s = 0; s < nsites; s++) de[s] = xe[s] + ye[s];
+}
+
+/* ten_statd_pairwise_prod: statd[st] * a * b */
+void xp_g_statd_pairwise(double *dst, int64_t *de, const double *statd, const double *a,
+                         const int64_t *ae, const double *b, const int64_t *be, int nsites, int R)
+{
+  size_t n = (size_t)nsites * R;
+  for (size_t k = 0; k < n; k++)
+    for (int st = 0; st < NS; st++) {
+      *dst = statd[st] * (*a) * (*b);
+      dst++; a++; b++;
+    }
+  for (int s = 0; s < nsites; s++) de[s] = ae[s] + be[s];
+}
+
+/* Gmix Glv.perhaps_pull_exponent: per site, the largest frexp exponent over the rates' maxima;
+ * if below min_twoexp, every rate's slice is scaled by of_twoexp(-max) = ldexp(0.5, -max+1). */
+/* Optional fix (NOT pplacer behaviour; gplace --fix_gamma_underflow): frexp(0.0) gives exponent 0,
+ * so in pplacer a rate whose values have all underflowed to 0.0 blocks rescaling of the whole site;
+ * on large trees the other rates then underflow too (site likelihood 0 -> -inf). With xp_gamma_fix
+ * set, all-zero rates are skipped when the exponent is chosen. The setting is per process (forked
+ * workers inherit it). */
+static int xp_gamma_fix = 0;
+void xp_set_gamma_fix(int on) { xp_gamma_fix = on; }
+
+void xp_g_pull_exponent(double *a, int64_t *e, int nsites, int R, int min_twoexp)
+{
+  for (int s = 0; s < nsites; s++) {
+    double *site = a + (size_t)s * R * NS;
+    int max_twoexp = -INT_MAX;
+    for (int r = 0; r < R; r++) {
+      const double *v = site + (size_t)r * NS;
+      double mx = v[0];                          /* gsl_vector_max */
+      for (int i = 1; i < NS; i++) if (v[i] > mx) mx = v[i];
+      if (xp_gamma_fix && mx == 0.0) continue;
+      int twoexp; frexp(mx, &twoexp);
+      if (twoexp > max_twoexp) max_twoexp = twoexp;
+    }
+    if (max_twoexp == -INT_MAX) continue;        /* only with the fix: the whole site is zero */
+    if (max_twoexp < min_twoexp) {
+      double f = ldexp(0.5, -max_twoexp + 1);
+      for (int i = 0; i < R * NS; i++) site[i] *= f;
+      e[s] += max_twoexp;
+    }
+  }
+}
+
+/* Gmix prefilter (Glv.masked_logdot of the evolved query and the supernode), 8 edges at once:
+ *   W[s][c] = log( util ), util = sum over r ascending, st ascending of qev[r][c][st]*sn[s][r][st]
+ *   ll = +0.0 + sum_{s informative} W[s][code]           (ten_masked_logdot_c ...)
+ *   ll = ll - (float)nused[q] * log((float)R)            (... its final subtraction)
+ *   score = ll + log2*(0 + sum_{s informative} se[s])    (masked_total_twoexp, query e = 0)
+ * sn8: 8 x nsites x R x NS; se8: 8 x nsites; qevtab: R x ncode x NS; codes as xp_edge_scores8. */
+int xp_g_edge_scores8(double *out, long ldo, long col0, int ne, const double *sn8, const int64_t *se8,
+                      const double *qevtab, int R, int nsites, int ncode, const uint8_t *codes,
+                      const int32_t *nused, int nq)
+{
+  if (ne < 1 || ne > XP_EB || ncode < 1 || ncode > 254) return -1;
+  const int NC = ncode + 1;
+  double *W = (double *)malloc(sizeof(double) * (size_t)nsites * NC * XP_EB);
+  if (!W) return -1;
+  for (int s = 0; s < nsites; s++) {
+    double *Ws = W + (size_t)s * NC * XP_EB;
+    for (int c = 0; c < ncode; c++)
+      for (int lane = 0; lane < XP_EB; lane++) {
+        if (lane < ne) {
+          const double *sn = sn8 + ((size_t)lane * nsites + s) * R * NS;
+          double util = 0.0;
+          for (int r = 0; r < R; r++) {
+            const double *qv = qevtab + ((size_t)r * ncode + c) * NS;
+            const double *sv = sn + (size_t)r * NS;
+            for (int st = 0; st < NS; st++) util += qv[st] * sv[st];
+          }
+          Ws[c * XP_EB + lane] = log(util);
+        } else Ws[c * XP_EB + lane] = 0.0;
+      }
+  }
+  const double logR = log((float) R);
+  for (int q = 0; q < nq; q++) {
+    const uint8_t *cq = codes + (size_t)q * nsites;
+    for (int lane = 0; lane < ne; lane++) {
+      double ll = 0; long long et = 0;
+      for (int s = 0; s < nsites; s++) {
+        unsigned c = cq[s];
+        if (c != (unsigned)ncode) { ll += W[((size_t)s * NC + c) * XP_EB + lane]; et += se8[(size_t)lane * nsites + s]; }
+      }
+      ll -= ((float) nused[q]) * logR;
+      out[(size_t)q * ldo + col0 + lane] = ll + (M_LN2 * (0. + (double)et));
+    }
+  }
+  free(W);
+  return 0;
+}
+
+/* Gmix three-taxon tree: m masked sites, all R rates at every site (rmask all set). */
+TT *xp_gtt_new(int m, int R, const double *statd, const double *x, const double *l,
+               const double *xit, const double *rates, const double *query_masked)
+{
+  if (R > 64) return NULL;
+  static int32_t zero_cat[1] = {0};
+  TT *t = xp_tt_new(0, zero_cat, statd, x, l, xit, rates, R, query_masked);   /* tensors */
+  free(t->dist_o); free(t->prox_o); free(t->PD); free(t->dist_e); free(t->prox_e);
+  free(t->U); free(t->qc); free(t->QP);
+  t->gmix = 1; t->R = R; t->m = m; t->cat = NULL;
+  for (int r = 0; r < R; r++) t->rmask[r] = 1;
+  size_t n = (size_t)m * R * NS;
+  t->dist_o = malloc(sizeof(double) * (n ? n : 1)); t->prox_o = malloc(sizeof(double) * (n ? n : 1));
+  t->PD = malloc(sizeof(double) * (n ? n : 1));
+  t->dist_e = calloc(m ? m : 1, sizeof(int64_t)); t->prox_e = calloc(m ? m : 1, sizeof(int64_t));
+  t->U = malloc(sizeof(double) * 64 * NS); t->qc = malloc(m > 0 ? m : 1);
+  t->nu = 0;
+  for (int s = 0; s < m; s++) {            /* the query glv is constant across rates */
+    const double *q = query_masked + (size_t)s * NS;
+    int u = 0;
+    while (u < t->nu && memcmp(t->U + (size_t)u * NS, q, sizeof(double) * NS) != 0) u++;
+    if (u == t->nu) {
+      if (t->nu == 64) { xp_tt_free(t); return NULL; }
+      memcpy(t->U + (size_t)u * NS, q, sizeof(double) * NS); t->nu++;
+    }
+    t->qc[s] = (uint8_t)u;
+  }
+  t->QP = malloc(sizeof(double) * (size_t)R * (t->nu > 0 ? t->nu : 1) * NS);
+  return t;
+}
+
+/* xp_tt_set for gmix: full-site glvs darr/parr are nsites x R x NS */
+void xp_gtt_set(TT *t, const double *darr_a, const int64_t *darr_e, const double *parr_a,
+                const int64_t *parr_e, const int32_t *reind, double cut_bl, double pendant, double distal)
+{
+  const size_t w = (size_t)t->R * NS;
+  for (int i = 0; i < t->m; i++) {
+    memcpy(t->dist_o + (size_t)i * w, darr_a + (size_t)reind[i] * w, sizeof(double) * w);
+    memcpy(t->prox_o + (size_t)i * w, parr_a + (size_t)reind[i] * w, sizeof(double) * w);
+    t->dist_e[i] = darr_e[reind[i]];
+    t->prox_e[i] = parr_e[reind[i]];
+  }
+  t->etot = (xp_total_twoexp(t->prox_e, t->m) + xp_total_twoexp(t->dist_e, t->m)) + 0.0;
+  tt_build_QP(t, pendant);
+  t->dist_bl = distal;
+  xp_multi_exp(t->tensorD, t->x, t->l, t->xit, t->rates, t->nrates, t->rmask, distal);
+  t->prox_bl = cut_bl - distal;
+  xp_multi_exp(t->tensorP, t->x, t->l, t->xit, t->rates, t->nrates, t->rmask, cut_bl - distal);
+  tt_dist_pass(t);
+  t->assert_fail = 0;
 }

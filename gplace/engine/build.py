@@ -15,12 +15,12 @@
 #                                                                             #
 ###############################################################################
 
-"""Build libgplace_core.so.
+"""Build the engine: libgplace_core.so (20 states, protein) and libgplace_core_nt.so (4 states, DNA).
 
 Bit-identity with GTDB-Tk's pplacer requires the same numerical libraries as its statically
 linked binary: GSL 1.16 (whose eigen-solver differs from GSL 2.x in the last bits), glibc 2.19's
-hypot() (called by GSL; glibc >= 2.35 changed it) and correctly-rounded exp/log (glibc 2.19's
-are; CORE-MATH provides the same correctly-rounded results). Every object is compiled with
+hypot() (called by GSL; glibc >= 2.35 changed it) and correctly-rounded exp/log/pow/sin (glibc
+2.19's are; CORE-MATH provides the same correctly-rounded results, also for GSL's own calls). Every object is compiled with
 -ffp-contract=off so no multiply-add is fused implicitly.
 """
 
@@ -32,12 +32,22 @@ import subprocess
 import tarfile
 import urllib.request
 
-from gplace.config.common import CONFIG, ENGINE_NAME
+from gplace.config.common import CONFIG, ENGINE_NAMES
 from gplace.exceptions import GPlaceExit
 
 CSRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csrc')
 FLAGS = ['-O2', '-fPIC', '-ffp-contract=off']
 SIMD = ['-mavx2', '-mfma']          # AVX2 kernels; -mfma only for CORE-MATH's explicit fma() calls
+# GSL's own libm calls (its gamma functions use exp, log, pow, sin) must give glibc 2.19's results,
+# which are correctly rounded: bind them to CORE-MATH inside the library. The other libm functions
+# GSL's object files reference are never called by gPlace; they are bound to traps that abort, so
+# no inexact system libm function can be used silently (tests/test_engine.py checks the imports).
+LIBM_CR = {'exp': 'cr_exp', 'log': 'cr_log', 'pow': 'cr_pow', 'sin': 'cr_sin'}
+LIBM_TRAPS = ('cos', 'cosh', 'sinh', 'tan', 'tanh', 'log1p', 'sincos', 'expm1', 'atan', 'atan2', 'asin',
+              'acos', 'acosh', 'atanh', 'asinh', 'log10', 'log2', 'exp2', 'cbrt', 'erf', 'erfc', 'lgamma',
+              'tgamma', 'fma')
+LIBM_MAP = ([f'-Wl,--defsym={k}={v}' for k, v in LIBM_CR.items()]
+            + [f'-Wl,--defsym={k}=xp_libm_trap_{k}' for k in LIBM_TRAPS])
 
 
 def _say(logger, msg):
@@ -114,7 +124,8 @@ def build_gsl116(work_dir, tarball=None, jobs=8, logger=None):
 
 
 def build_engine(out_dir=None, gsl_prefix=None, gsl_tarball=None, work_dir=None, cc='gcc', jobs=8):
-    """Compile libgplace_core.so into out_dir (default: $GPLACE_ENGINE_DIR or gplace/engine/lib)."""
+    """Compile the engines into out_dir (default: $GPLACE_ENGINE_DIR or gplace/engine/lib); returns the
+    path of the protein engine."""
     logger = logging.getLogger('timestamp')
     if not cpu_has_avx2():
         raise GPlaceExit('This CPU does not report AVX2 and FMA support, which the gPlace engine requires.')
@@ -142,14 +153,21 @@ def build_engine(out_dir=None, gsl_prefix=None, gsl_tarball=None, work_dir=None,
     gl = os.path.join(CSRC, 'glibc')
     _run([cc] + FLAGS + SIMD + ['-c', '-o', os.path.join(obj, 'cr_exp.o'), os.path.join(cm, 'exp.c')], logger=logger)
     _run([cc] + FLAGS + SIMD + ['-I' + cm, '-c', '-o', os.path.join(obj, 'cr_log.o'), os.path.join(cm, 'log.c')], logger=logger)
+    _run([cc] + FLAGS + SIMD + ['-I' + os.path.join(cm, 'pow'), '-c', '-o', os.path.join(obj, 'cr_pow.o'),
+                                os.path.join(cm, 'pow', 'pow.c')], logger=logger)
+    _run([cc] + FLAGS + SIMD + ['-c', '-o', os.path.join(obj, 'cr_sin.o'), os.path.join(cm, 'sin.c')], logger=logger)
     _run([cc] + FLAGS + ['-I' + gl, '-D__ieee754_hypot=hypot', '-c', '-o', os.path.join(obj, 'hypot219.o'),
                          os.path.join(gl, 'e_hypot.c')], logger=logger)
-    target = os.path.join(out_dir, ENGINE_NAME)
-    tmp = target + '.tmp'
-    _run([cc] + FLAGS + SIMD + ['-shared', '-DXP_CR', '-I' + os.path.join(gsl_prefix, 'include'),
-                                '-Wl,-Bsymbolic', '-o', tmp, os.path.join(CSRC, 'xp.c'),
-                                os.path.join(obj, 'cr_exp.o'), os.path.join(obj, 'cr_log.o'),
-                                os.path.join(obj, 'hypot219.o'), libgsl, libcblas, '-lm'], logger=logger)
-    os.replace(tmp, target)
-    _say(logger, f'Engine written to {target}')
-    return target
+    targets = []
+    for ns in sorted(ENGINE_NAMES, reverse=True):          # one engine per state count
+        target = os.path.join(out_dir, ENGINE_NAMES[ns])
+        tmp = target + '.tmp'
+        _run([cc] + FLAGS + SIMD + ['-shared', '-DXP_CR', f'-DNS={ns}', '-I' + os.path.join(gsl_prefix, 'include'),
+                                    '-Wl,-Bsymbolic'] + LIBM_MAP + ['-o', tmp, os.path.join(CSRC, 'xp.c'),
+                                    os.path.join(obj, 'cr_exp.o'), os.path.join(obj, 'cr_log.o'),
+                                    os.path.join(obj, 'cr_pow.o'), os.path.join(obj, 'cr_sin.o'),
+                                    os.path.join(obj, 'hypot219.o'), libgsl, libcblas, '-lm'], logger=logger)
+        os.replace(tmp, target)
+        _say(logger, f'Engine ({ns} states) written to {target}')
+        targets.append(target)
+    return targets[0]

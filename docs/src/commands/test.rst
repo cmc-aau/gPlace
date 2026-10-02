@@ -5,6 +5,12 @@ test
 
 The ``test`` command places 20 GlobDB genomes on a small reference package bundled with gPlace (one 247-genome clade of the GTDB-Tk R226 class-level reference package 8) and compares the result with the output of GTDB-Tk's pplacer v1.1.alpha19 on the same input. It passes only if every printed value and the tree string are identical.
 
+With ``--models`` it also places the bundled test sets of pplacer's other models (see :ref:`models`)
+and compares them with the output of the stock pplacer v1.1.alpha19: the same reference package
+with LG, JTT, empirical frequencies and gamma (4 and 8 rates, alpha 0.05 to 1.3), pplacer's own
+PhyML test data (HIV DNA with GTR + gamma, actin with WAG + gamma) and a FastTree GTR + CAT DNA
+package. One more set checks ``--fix_gamma_underflow`` against gPlace's validated output.
+
 Arguments
 ---------
 

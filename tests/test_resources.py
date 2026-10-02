@@ -39,6 +39,16 @@ class TestResources(unittest.TestCase):
             self.assertGreater(m, measured)
             self.assertLess(m, measured * 1.10)
 
+    def test_memory_model_width(self):
+        """Class-level tree 8 (343 queries, 24 workers), measured peaks: WAG + CAT 11.0 GiB,
+        WAG + gamma (4 rates, width 80) 42.2 GiB untiled; tiled (9 tiles <= 1,841 edges): 6.3 GiB."""
+        cat = resources.estimate_memory(13714, 6856, 5036, 343, 6858, 5036, 24) / 2 ** 30
+        gam = resources.estimate_memory(13714, 6856, 5036, 343, 6858, 5036, 24, width=80) / 2 ** 30
+        self.assertGreater(cat, 11.0)
+        self.assertGreater(gam, 42.2)
+        self.assertLess(gam, 42.2 * 1.10)
+        self.assertLess(resources.estimate_memory(13714, 6856, 1500, 343, 6858, 1500, 24, width=4) / 2 ** 30, cat)
+
     def test_tiled_memory_grows_with_tiles_and_queries(self):
         a = resources.estimate_memory_tiled(1000, 2000, 10, 5000, 100, 1001, 5036, 4)
         self.assertLess(a, resources.estimate_memory_tiled(2000, 4000, 10, 5000, 100, 1001, 5036, 4))

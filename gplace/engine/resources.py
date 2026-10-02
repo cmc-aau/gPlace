@@ -67,16 +67,17 @@ def parse_cpus(value):
     return v
 
 
-def estimate_memory(n_nodes, n_internal, n_sites, n_queries, n_leaves, aln_len, workers):
+def estimate_memory(n_nodes, n_internal, n_sites, n_queries, n_leaves, aln_len, workers, width=NS):
     """Peak memory (bytes) of one gPlace pass over a reference package.
 
-    shared arrays : 2 x internal x sites x 20 doubles (distal/proximal) + 2 x internal x sites
+    shared arrays : 2 x internal x sites x width doubles (distal/proximal; width = 20 for protein CAT,
+                    4 for DNA CAT, rates x states for gamma) + 2 x internal x sites
                     int64 exponents + edges x queries doubles (prefilter scores)
     inputs        : alignments held as Python strings, bytes and masked arrays
     per worker    : private buffers and page tables for the shared arrays
     Calibrated on GTDB-Tk R226 class-level tree 2 (22,061 queries, 40 workers): measured cgroup
     peak 43.8 GiB (47.0 GB), model 44.7 GiB (48.0 GB); the model errs on the safe side."""
-    shared = (2 * n_internal * n_sites * NS * 8 + 2 * n_internal * n_sites * 8
+    shared = (2 * n_internal * n_sites * width * 8 + 2 * n_internal * n_sites * 8
               + max(n_nodes - 1, 1) * n_queries * 8)
     inputs = (n_leaves + n_queries) * aln_len * 3
     per_worker = 50e6 + 0.0005 * shared
@@ -85,10 +86,10 @@ def estimate_memory(n_nodes, n_internal, n_sites, n_queries, n_leaves, aln_len, 
 
 
 def estimate_memory_tiled(n_slots, max_edges, n_tiles, n_sites, n_queries, n_leaves, aln_len, workers,
-                          query_batch=QUERY_BATCH, n_cand=N_CAND):
+                          query_batch=QUERY_BATCH, n_cand=N_CAND, width=NS):
     """Peak memory (bytes) of one tiled pass (gplace.engine.tiled).
 
-    shared arrays : one tile's vectors (2 x slots x sites x 20 doubles + int64 exponents; slots =
+    shared arrays : one tile's vectors (2 x slots x sites x width doubles + int64 exponents; slots =
                     the tile's internal nodes and the roots of the tiles below it) + the prefilter
                     scores of one query batch against the largest tile
     boundaries    : distal and proximal vector of every tile root
@@ -99,9 +100,9 @@ def estimate_memory_tiled(n_slots, max_edges, n_tiles, n_sites, n_queries, n_lea
     127,343 queries measured 19.9 GiB (cgroup peak), model 20.5 GiB. Same tree with larger tiles:
     6 tiles of <= 55,595 edges, 127,343 queries measured 59.2 GiB, model 60.3 GiB; 5 tiles of
     <= 61,933 edges, 4,040 queries measured 54.3 GiB, model 56.1 GiB."""
-    shared = (2 * n_slots * n_sites * NS * 8 + 2 * n_slots * n_sites * 8
+    shared = (2 * n_slots * n_sites * width * 8 + 2 * n_slots * n_sites * 8
               + min(n_queries, query_batch) * max_edges * 8)
-    boundaries = 2 * n_tiles * n_sites * (NS + 1) * 8
+    boundaries = 2 * n_tiles * n_sites * (width + 1) * 8
     per_query = n_cand * 8 * 3 + 5000
     merge = MERGE_CELLS * 40
     inputs = (n_leaves + n_queries) * aln_len * 3
@@ -157,6 +158,12 @@ def available_memory():
                 if raw.isdigit() and int(raw) < 2 ** 60:
                     limits.append(int(raw))
     return min(limits) if limits else None
+
+
+def refpkg_width(refpkg_dir):
+    """Doubles per site of the likelihood vectors of a refpkg's model (models.width_of)."""
+    from gplace.engine import models
+    return models.width_of(models.read_phylo_model(refpkg_dir))
 
 
 def refpkg_dimensions(refpkg_dir):

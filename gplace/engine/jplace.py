@@ -20,11 +20,12 @@
 pplacer's Json module prints floats with ``%.12g`` and integers with ``%d``; with gPlace's
 bit-identical doubles every number in the file is textually identical to pplacer's output.
 Whitespace and key order are JSON-insignificant and not reproduced byte-for-byte. Like pplacer,
-non-finite values are written as ``nan``/``inf`` (strictly not valid JSON); :func:`read_jplace`
-accepts them.
+non-finite values are written as ``-nan``/``nan``/``-inf``/``inf`` (strictly not valid JSON);
+:func:`read_jplace` accepts them.
 """
 
 import json
+import math
 import re
 
 from gplace.config.output import JPLACE_FIELDS
@@ -39,6 +40,10 @@ def _qs(s):
 
 
 def _f(v):
+    """OCaml's %.12g via glibc printf: a NaN with the sign bit set prints as -nan (pplacer's
+    like-weight ratios after a -inf likelihood are such NaNs)."""
+    if v != v:
+        return '-nan' if math.copysign(1.0, v) < 0 else 'nan'
     return '%.12g' % v
 
 

@@ -160,6 +160,47 @@ under a hard 64 GB limit. Peak memory is the whole process group (cgroup peak).
 * *Time (untiled)*: the untiled run of the same job, where it fits in memory (tree 8 rerun
   alone; tree 2 from the table above).
 
+Other models
+------------
+
+Every model pplacer v1.1.alpha19 supports (:ref:`models`) was compared with the stock pplacer
+binary on the same inputs, untiled and tiled (``gplace place``; every placement record and the tree
+string textually identical, including pplacer's ``-inf``/``-nan`` values):
+
+.. list-table::
+   :header-rows: 1
+
+   * - Model
+     - Reference package
+     - Genomes
+     - Result (untiled and tiled)
+   * - LG, JTT; WAG/LG/JTT + empirical frequencies; WAG, LG, JTT + gamma (alpha 0.05-1.3, 4 and 8 rates)
+     - bundled test package (``gplace test --models``)
+     - 20 each
+     - identical
+   * - GTR, WAG, JTT + gamma (PhyML)
+     - pplacer's own test data
+     - 60 each
+     - identical
+   * - GTR + CAT (FastTree + taxit), GTR + gamma (raxml-ng)
+     - simulated 16S-like DNA, 1,200 and 5,000 references
+     - 300 / 1,000
+     - identical
+   * - WAG (GTDB-Tk), LG, JTT, WAG + empirical, LG + empirical
+     - GTDB-Tk R226 class-level package 8
+     - 343 each
+     - identical
+   * - WAG + gamma (alpha 0.8)
+     - GTDB-Tk R226 class-level package 8
+     - 343
+     - identical (342 genomes -inf in both, see :ref:`models/gamma_underflow`)
+
+The gamma rates use GSL's gamma functions, which call ``exp``, ``log``, ``pow`` and ``sin``. Their
+values in GTDB-Tk's pplacer binary (glibc 2.19) were compared under gdb with CORE-MATH's
+correctly-rounded functions on 8,088 inputs (the arguments GSL passes for discrete-gamma rates,
+plus random ones): identical in every case, while the system glibc 2.39 differed in 7. gPlace binds
+GSL's calls to CORE-MATH, and ``gplace check_install`` checks these values.
+
 How exactness was established
 -----------------------------
 

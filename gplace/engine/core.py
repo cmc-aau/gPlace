@@ -28,7 +28,7 @@ import re
 
 import numpy as np
 
-from gplace.config.common import CONFIG, ENGINE_NAME
+from gplace.config.common import CONFIG, ENGINE_NAMES
 from gplace.exceptions import EngineNotBuilt
 
 NS = 20
@@ -57,32 +57,41 @@ def P(a):
     return ctypes.c_void_p(a.ctypes.data)
 
 
-def engine_path():
-    """Location of the compiled engine: $GPLACE_ENGINE_DIR, else gplace/engine/lib/."""
-    return os.path.join(CONFIG.ENGINE_DIR, ENGINE_NAME)
+def engine_path(ns=NS):
+    """Location of the compiled engine for ns states (20: protein, 4: DNA): $GPLACE_ENGINE_DIR,
+    else gplace/engine/lib/."""
+    return os.path.join(CONFIG.ENGINE_DIR, ENGINE_NAMES[ns])
 
 
-_lib = None
+_libs = {}
 
 
-def lib():
-    """Load libgplace_core.so once and declare its C signatures."""
-    global _lib
-    if _lib is not None:
-        return _lib
+def lib(ns=NS):
+    """Load the engine for ns states once and declare its C signatures. Both engines can be loaded
+    in the same process (separate libraries, local symbols)."""
+    if ns in _libs:
+        return _libs[ns]
     from gplace.engine.build import cpu_has_avx2
     if not cpu_has_avx2():
         raise EngineNotBuilt('This CPU does not report AVX2 and FMA support, which the gPlace engine requires.')
-    path = engine_path()
+    if ns not in ENGINE_NAMES:
+        raise EngineNotBuilt(f'No engine for {ns} states.')
+    path = engine_path(ns)
     if not os.path.exists(path):
         raise EngineNotBuilt(f'The gPlace engine was not found at {path}. It is compiled when '
                              f'gPlace is installed (pip install .); to rebuild it: gplace build_engine')
     L = ctypes.CDLL(path)
+    L.xp_n_states.restype = I
+    if L.xp_n_states() != ns:
+        raise EngineNotBuilt(f'{path} is an engine for {L.xp_n_states()} states, not {ns}; rebuild it with '
+                             f'gplace build_engine.')
     L.xp_init.restype = I
     L.xp_engine_version.restype = ctypes.c_char_p
     L.xp_exp.argtypes = [D]; L.xp_exp.restype = D
     L.xp_log.argtypes = [D]; L.xp_log.restype = D
     L.xp_hypot.argtypes = [D, D]; L.xp_hypot.restype = D
+    L.xp_pow.argtypes = [D, D]; L.xp_pow.restype = D
+    L.xp_sin.argtypes = [D]; L.xp_sin.restype = D
     L.xp_symmv.argtypes = [V, V, V, I]; L.xp_symmv.restype = I
     L.xp_dediag.argtypes = [V, V, V, V, I]
     L.xp_multi_exp.argtypes = [V, V, V, V, V, I, V, D]
@@ -103,12 +112,41 @@ def lib():
     L.xp_tt_results.argtypes = [V, V]
     L.xp_tt_free.argtypes = [V]
     L.xp_trace_open.argtypes = [ctypes.c_char_p]
+    # gamma mixture model (Gmix)
+    L.xp_discrete_gamma.argtypes = [I, D, V]; L.xp_discrete_gamma.restype = I
+    L.xp_g_pairwise.argtypes = [V, V, V, V, V, V, I, I]
+    L.xp_g_statd_pairwise.argtypes = [V, V, V, V, V, V, V, I, I]
+    L.xp_g_pull_exponent.argtypes = [V, V, I, I, I]
+    L.xp_g_edge_scores8.argtypes = [V, ctypes.c_long, ctypes.c_long, I, V, V, V, I, I, I, V, V, I]
+    L.xp_g_edge_scores8.restype = I
+    L.xp_gtt_new.argtypes = [I, I, V, V, V, V, V, V]; L.xp_gtt_new.restype = V
+    L.xp_gtt_set.argtypes = [V, V, V, V, V, V, D, D, D]
+    L.xp_set_gamma_fix.argtypes = [I]
     L.xp_init()
-    _lib = L
+    _libs[ns] = L
     return L
 
 
 # ---------------------------------------------------------------------- alphabet --
+class Alphabet(object):
+    """A sequence alphabet as pplacer uses it: character -> likelihood vector (char_map), the
+    informative characters in prefilter-code order (codes), and lookup tables over bytes.
+    '-' and '?' are the only non-informative characters (Alignment.informative)."""
+
+    def __init__(self, name, char_map, codes):
+        self.name, self.char_map, self.codes = name, char_map, codes
+        self.ns = len(next(iter(char_map.values())))
+        self.lut = np.full((256, self.ns), np.nan)
+        self.valid = np.zeros(256, bool)
+        for ch, v in char_map.items():
+            self.lut[ord(ch)] = v
+            self.valid[ord(ch)] = True
+        self.gap_code = len(codes)
+        self.code_of = np.full(256, self.gap_code, np.uint8)
+        for i, c in enumerate(codes):
+            self.code_of[ord(c)] = i
+
+
 PROT_CODE = 'ARNDCQEGHILKMFPSTWYV'
 CODES = 'ARNDCQEGHILKMFPSTWYVBJZX'      # informative characters, in prefilter-code order
 
@@ -139,6 +177,25 @@ for _i, _c in enumerate(CODES):
     CODE_OF[ord(_c)] = _i
 
 
+PROTEIN = Alphabet('protein', PROT_MAP, CODES)
+
+
+def _nuc_map():
+    """Nuc_models.nuc_map (order A C G T): IUPAC ambiguity codes as sums of one-hot vectors;
+    N, X, '-' and '?' are all ones."""
+    bases = 'ACGT'
+    ambig = {'R': 'AG', 'Y': 'CT', 'M': 'AC', 'K': 'GT', 'S': 'CG', 'W': 'AT', 'H': 'ACT', 'B': 'CGT',
+             'V': 'ACG', 'D': 'AGT', 'N': 'ACGT', '-': 'ACGT', '?': 'ACGT', 'X': 'ACGT'}
+    m = {c: np.eye(4)[i] for i, c in enumerate(bases)}
+    m.update({c: np.array([1.0 if b in bs else 0.0 for b in bases]) for c, bs in ambig.items()})
+    return m
+
+
+NUC_MAP = _nuc_map()
+DNA = Alphabet('DNA', NUC_MAP, 'ACGTRYMKSWHBVDNX')
+ALPHABETS = {20: PROTEIN, 4: DNA}
+
+
 def informative(A):
     """Non-gap, non-'?' characters (pplacer's pre-mask and per-query site mask)."""
     return (A != ord('-')) & (A != ord('?'))
@@ -146,10 +203,16 @@ def informative(A):
 
 # --------------------------------------------------------------------------- WAG --
 def load_wag():
-    """WAG exchangeabilities R (symmetric, zero diagonal) and stationary frequencies, parsed
-    from the verbatim pplacer v1.1.alpha19 strings (float() == OCaml float_of_string)."""
+    """WAG exchangeabilities and frequencies (see load_protein_model)."""
+    return load_protein_model('WAG')
+
+
+def load_protein_model(name):
+    """Exchangeabilities R (symmetric, zero diagonal) and stationary frequencies of a protein model
+    (WAG, LG or JTT), parsed from the verbatim pplacer v1.1.alpha19 strings in data/<name>.txt
+    (float() == OCaml float_of_string)."""
     section, rows, statd = None, [], None
-    for line in open(os.path.join(DATA_DIR, 'wag.txt')):
+    for line in open(os.path.join(DATA_DIR, name.lower() + '.txt')):
         line = line.strip()
         if not line or line.startswith('#'):
             continue
@@ -166,10 +229,10 @@ def load_wag():
     return R, statd
 
 
-def build_diagd(R, pi):
+def build_diagd(R, pi, L=None):
     """Diagd.normed_of_exchangeable_pair, replicating pplacer's operation order.
     Returns (x, l, xit) with Q = x diag(l) xit^T (rate-normalised eigenvalues l)."""
-    L = lib()
+    L = L or lib()
     n = len(pi)
     B = [[0.0] * n for _ in range(n)]
     for i in range(n):

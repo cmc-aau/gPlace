@@ -50,7 +50,7 @@ import numpy as np
 
 from gplace.engine import core, resources
 from gplace.engine import placer as placer_mod
-from gplace.engine.core import NS, P
+from gplace.engine.core import P
 from gplace.engine.newick import parse_newick
 from gplace.engine.placer import Placer, Baseball, weighted_placements, shared_zeros, _fork_pool
 from gplace.exceptions import GPlaceException, GPlaceExit
@@ -100,17 +100,19 @@ def tile_layout(children, order, root, tile_edges):
     return tiles
 
 
-def plan_tiling(tree, n_sites, n_queries, n_leaves, aln_len, workers, tile_edges=None, max_memory=None):
+def plan_tiling(tree, n_sites, n_queries, n_leaves, aln_len, workers, tile_edges=None, max_memory=None,
+                width=resources.NS):
     """Choose how to place n_queries on `tree` (a newick.Tree).
 
     tile_edges : place on tiles of at most this many edges.
     max_memory : memory limit in bytes: untiled if its estimated peak fits, otherwise the largest
                  tiles whose estimated peak fits (larger tiles are faster: fewer rebuilds and
                  more work per worker pool). Plans use PLAN_FRACTION of the limit as headroom.
-    Neither    : untiled."""
+    Neither    : untiled.
+    width      : doubles per site in a likelihood vector (20 for protein CAT; gamma: rates x states)."""
     n_internal = tree.n_nodes - n_leaves
     untiled = resources.estimate_memory(tree.n_nodes, n_internal, n_sites, n_queries, n_leaves,
-                                        aln_len, workers)
+                                        aln_len, workers, width=width)
     whole = TilePlan(None, 1, tree.n_nodes, n_internal, untiled, untiled)
     budget = None if max_memory is None else max_memory * PLAN_FRACTION
     if tile_edges is None and (budget is None or untiled <= budget):
@@ -121,7 +123,7 @@ def plan_tiling(tree, n_sites, n_queries, n_leaves, aln_len, workers, tile_edges
         tiles = tile_layout(tree.children, order, tree.root, n)
         mx, sl = max(t[1] for t in tiles), max(t[2] for t in tiles)
         mem = resources.estimate_memory_tiled(sl, mx, len(tiles), n_sites, n_queries, n_leaves,
-                                              aln_len, workers)
+                                              aln_len, workers, width=width)
         return TilePlan(n, len(tiles), mx, sl, mem, untiled)
 
     if tile_edges is not None:
@@ -152,7 +154,7 @@ def plan_for_placer(placer, tile_edges=None, max_memory=None):
     """plan_tiling for a loaded Placer (its masked sites and queries)."""
     workers = placer.workers or resources.heuristic_cpus(placer.cpus)
     return plan_tiling(placer.tree, placer.nsites, len(placer.query_names), placer.n_leaves,
-                       placer.aln_len, workers, tile_edges, max_memory)
+                       placer.aln_len, workers, tile_edges, max_memory, width=placer.width)
 
 
 def load_tree(refpkg_dir):
@@ -210,7 +212,8 @@ class TiledPlacer(Placer):
         w = workers or self.workers or resources.heuristic_cpus(self.cpus)
         return resources.estimate_memory_tiled(self.n_slots, self.max_edges, len(self.tiles),
                                                self.nsites, len(self.query_names), self.n_leaves,
-                                               self.aln_len, w, self.query_batch, self.n_cand)
+                                               self.aln_len, w, self.query_batch, self.n_cand,
+                                               width=self.width)
 
     def _pool_map(self, fn, items, chunksize=1):
         """fn over items in a pool of self.workers forked processes; returns (results, seconds,
@@ -305,8 +308,8 @@ class TiledPlacer(Placer):
         """Allocate one tile's vectors; store the distal vector of every tile root (bottom-up)."""
         S = self.nsites
         self.zero_e = np.zeros(S, np.int64)
-        self.darr = shared_zeros((self.n_slots, S, NS)); self.dexp = shared_zeros((self.n_slots, S), np.int64)
-        self.parr = shared_zeros((self.n_slots, S, NS)); self.pexp = shared_zeros((self.n_slots, S), np.int64)
+        self.darr = shared_zeros((self.n_slots, S, self.width)); self.dexp = shared_zeros((self.n_slots, S), np.int64)
+        self.parr = shared_zeros((self.n_slots, S, self.width)); self.pexp = shared_zeros((self.n_slots, S), np.int64)
         self.bD, self.bDe, self.bP, self.bPe = {}, {}, {}, {}
         t0 = time.time()
         for ti in range(len(self.tiles)):
@@ -374,7 +377,7 @@ class TiledPlacer(Placer):
         nq, _ = self._qb
         t = self._supernodes8(i0, i1)
         st = self.lib.xp_edge_scores8(P(self.scores), self.max_edges, i0, i1 - i0, P(t.sn8), P(t.se8),
-                                      P(self.qevtab), P(self.cats), self.nsites, len(core.CODES),
+                                      P(self.qevtab), P(self.cats), self.nsites, len(self.alpha.codes),
                                       P(self._bcodes), nq)
         if st != 0:
             raise GPlaceException(f'Prefilter kernel failed ({st}) for edges {i0}..{i1}.')

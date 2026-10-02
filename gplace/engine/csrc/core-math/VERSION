@@ -1,1 +1,2 @@
 6b84457310ad90b644b3335af2faa8c7301e1c47 Fri Sep 25 09:07:08 2026 +0200
+files: exp.c log.c dint.h (exp/log); sin.c; pow/ (pow.c pow.h dint.h qint.h, pow's own dint.h)

@@ -4,8 +4,9 @@ gPlace
 
 **gPlace** places genomes on the GTDB reference trees **exactly as GTDB-Tk's pplacer does**,
 while using a fraction of the memory and time. It is a re-implementation of
-``pplacer -m WAG -c <refpkg>`` (pplacer v1.1.alpha19, the build GTDB-Tk ships) for the WAG +
-FastTree CAT reference packages used by GTDB-Tk.
+``pplacer -c <refpkg>`` (pplacer v1.1.alpha19, the build GTDB-Tk ships): the WAG + FastTree CAT
+reference packages used by GTDB-Tk, and every other model pplacer supports (LG, JTT and GTR for
+DNA; CAT or gamma rates; model or empirical frequencies, see :ref:`models`).
 
 * **Identical output:** same edges, likelihoods, like-weight ratios and branch lengths.
   Every number in the jplace file is textually identical to pplacer's, as is the reference
@@ -58,6 +59,7 @@ We encourage you to cite gPlace and the third-party software as described in :re
    :maxdepth: 1
 
    how_it_works
+   models
    validation
    changelog
    references

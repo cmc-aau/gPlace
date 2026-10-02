@@ -1,6 +1,6 @@
 # gPlace
 
-**gPlace** places genomes on the GTDB reference trees **exactly as GTDB-Tk's pplacer does**, bit for bit, while using a fraction of the memory and time. It is a re-implementation of `pplacer -m WAG -c <refpkg>` (pplacer v1.1.alpha19, the build GTDB-Tk ships) for the WAG + FastTree CAT reference packages used by GTDB-Tk.
+**gPlace** places genomes on the GTDB reference trees **exactly as GTDB-Tk's pplacer does**, bit for bit, while using a fraction of the memory and time. It is a re-implementation of `pplacer -c <refpkg>` (pplacer v1.1.alpha19, the build GTDB-Tk ships): the WAG + FastTree CAT reference packages used by GTDB-Tk, and every other model pplacer supports (LG, JTT, GTR for DNA; CAT or gamma rates; model or empirical frequencies).
 
 * **Identical output:** same edges, likelihoods, like-weight ratios and branch lengths. Every number in the jplace file is textually identical to pplacer's (`%.12g`), as is the reference tree string.
 * **Bounded memory:** under 44 GiB for the largest GTDB-Tk R226 class-level tree, which needs ~104 GB with pplacer.
@@ -11,6 +11,7 @@
 * **Drop-in placement:** `gplace place` takes the same inputs as pplacer (aligned queries + refpkg) and writes the same jplace.
 * **Pooled batches:** `gplace place_batch` places many alignments at once; alignments sharing a reference package are placed in a single pass.
 * **Memory limits and huge trees:** `--max_memory 64G` keeps a run within a memory limit. gPlace places without tiles when that fits, and otherwise tile by tile, with the largest tiles that fit, and identical results. This places genomes on the full GTDB bacterial tree (273,290 nodes), which would need ~490 GiB untiled. `--tile_edges N` sets the tile size directly.
+* **Every pplacer model:** WAG, LG, JTT (protein) and GTR (DNA), with FastTree CAT or gamma rate variation and model or empirical frequencies, read from the reference package as pplacer does. `--fix_gamma_underflow` optionally avoids pplacer's gamma underflow on large trees (likelihood `-inf`).
 * **Self-verifying installation:** `gplace check_install` checks the compiled engine bit for bit against values taken from GTDB-Tk's pplacer binary; `gplace test` places bundled genomes and compares them with pplacer's own output.
 
 ## Documentation
@@ -79,6 +80,11 @@ The file provided to `--batchfile` is a three-column, tab-separated file: query 
 ```
 All rows that use the same reference package are placed together, so the reference likelihoods are computed once. `scripts/make_gtdbtk_batchfile.py` writes this file for a directory of GTDB-Tk class-level alignments.
 
+### Other models and DNA
+The model comes from the reference package's `phylo_model` JSON, as in pplacer (`-m` is ignored for reference packages): `subs_model` WAG, LG, JTT or GTR, `ras_model` Price-CAT or gamma, `empirical_frequencies`. Reference packages made with `taxit create` from FastTree, RAxML or PhyML runs work unchanged; DNA queries use pplacer's nucleotide alphabet (IUPAC codes included).
+
+pplacer's gamma model fails on large trees: once the slow rates of a fast-evolving site underflow to zero, pplacer stops rescaling that site and the likelihood becomes `-inf` (on the GTDB-Tk class-level tree 8 with gamma, for 342 of 343 genomes). gPlace reproduces this by default and warns; `--fix_gamma_underflow` fixes it, at the cost of no longer matching pplacer (its results elsewhere change only in the last digits). See the documentation's models page.
+
 ### Compare jplace files
 ```bash
 gplace compare --jplace_a gplace.jplace --jplace_b pplacer.jplace
@@ -120,6 +126,7 @@ Check that gPlace is installed correctly and reproduces pplacer with the `check_
 ```bash
 gplace check_install
 gplace test --out_dir /tmp/gplace_test --cpus 4
+gplace test --models --cpus 4      # also LG, JTT, GTR, empirical frequencies and gamma
 ```
 
 Unit tests:
@@ -129,12 +136,13 @@ python -m unittest discover -s tests
 
 ## How it works
 
-pplacer caches three likelihood vectors (distal, proximal, supernode) of *sites × 20* doubles for every node of the reference tree, which is ~104 GB for the largest GTDB-Tk R226 class-level tree. gPlace keeps the arithmetic identical and changes only what is stored:
+pplacer caches three likelihood vectors (distal, proximal, supernode) of *sites × 20* doubles (protein CAT; × rates for gamma, × 4 for DNA) for every node of the reference tree, which is ~104 GB for the largest GTDB-Tk R226 class-level tree. gPlace keeps the arithmetic identical and changes only what is stored:
 
 * distal/proximal vectors are kept for internal nodes only, before pplacer's final power-of-two rescaling, which is re-applied exactly when a vector is used;
 * leaf vectors are rebuilt on demand in pplacer's operation order, and supernodes are computed during the prefilter;
 * SIMD lanes only process *different* numbers side by side, with no reordered sums and no fused multiply-add;
-* the engine links the same numerical libraries as pplacer's statically linked binary: GSL 1.16, glibc 2.19's `hypot`, and correctly-rounded `exp`/`log` (glibc 2.19's are correctly rounded, and CORE-MATH gives the same results).
+* the engine links the same numerical libraries as pplacer's statically linked binary: GSL 1.16, glibc 2.19's `hypot`, and correctly-rounded `exp`/`log`/`pow`/`sin` (glibc 2.19's are correctly rounded, and CORE-MATH gives the same results, also inside GSL's gamma functions);
+* two engines are built: 20 states (protein) and 4 states (DNA).
 
 Two behaviours of pplacer are reproduced deliberately:
 
@@ -148,6 +156,8 @@ See the documentation for the full list of rules that had to be matched.
 On the 127,343 GlobDB genomes classified with GTDB-Tk R226, across the 8 bacterial class-level reference packages, gPlace reproduces GTDB-Tk's jplace files for **127,343 / 127,343 genomes (100%)**: best edge, full placement list and every printed value, with all 112 tree strings byte-identical. One `place_batch` run took 28 min 25 s with 40 processes under a 64 GB limit (peak 43.8 GiB).
 
 On the full GTDB R226 bacterial tree (273,290 nodes), `--max_memory 64G` placed all 127,343 genomes tile by tile in 2 h 19 min (6 tiles, peak 59.2 GiB; untiled would need ~490 GiB). Every genome that is also in GTDB-Tk's full-tree classification tree (3,459) lands on the same edge with the same branch lengths. Tiled runs on the class-level trees are identical to GTDB-Tk's jplace files in every printed value. See the documentation's validation page.
+
+The other models (LG, JTT, empirical frequencies, GTR, gamma) were compared with the stock pplacer binary on its own test data, the bundled test package, simulated 16S-like DNA (up to 5,000 references) and GTDB-Tk's class-level tree 8: every placement record identical, untiled and tiled, including pplacer's `-inf` values on tree 8 with gamma.
 
 ## Citing gPlace
 

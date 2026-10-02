@@ -28,7 +28,6 @@ from gplace.biolib_lite.common import make_sure_path_exists
 from gplace.config.output import PATH_TEST_JPLACE, PATH_TEST_REPORT, PATH_BATCH_SUMMARY
 from gplace.exceptions import GPlaceExit, BatchfileMalformed, FileNotFound
 
-TEST_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tests', 'data')
 
 
 class OptionsParser(object):
@@ -82,17 +81,23 @@ class OptionsParser(object):
                              f'about {plan.untiled_memory / GiB:.1f} GiB; using --tile_edges '
                              f'{plan.tile_edges:,} (estimated peak {plan.memory / GiB:.1f} GiB).')
 
-    def _place_group(self, refpkg, queries, cpus, tile_edges=None, max_memory=None):
+    def _place_group(self, refpkg, queries, cpus, tile_edges=None, max_memory=None, fix_gamma=False):
         """Run the engine on one reference package; returns (Placer, results, seconds)."""
+        import math
         from gplace.engine import resources
-        from gplace.engine.placer import Placer
-        from gplace.engine.tiled import TiledPlacer, plan_for_placer
+        from gplace.engine.factory import new_placer, tiled_placer
+        from gplace.engine.tiled import plan_for_placer
         t0 = time.time()
-        placer = Placer(refpkg, queries, cpus)
+        placer = new_placer(refpkg, queries, cpus, fix_gamma)
+        model = placer.model
+        self.logger.info(f'Model: {model.describe()} ({model.alphabet.name})'
+                         + (' [--fix_gamma_underflow]' if fix_gamma and model.ras == 'gamma' else ''))
+        if fix_gamma and model.ras != 'gamma':
+            self.logger.info('--fix_gamma_underflow has no effect: the model is not gamma.')
         plan = plan_for_placer(placer, tile_edges, max_memory)
         self._log_plan(plan, max_memory)
         if plan.tile_edges is not None:
-            placer = TiledPlacer.from_placer(placer, plan.tile_edges)
+            placer = tiled_placer(placer, plan.tile_edges)
         cpu_txt = f'{placer.workers} CPUs' if placer.workers else f'--cpus auto on {placer.cpus} CPUs'
         tile_txt = (f'{len(placer.tiles):,} tiles of up to {placer.max_edges:,} edges; '
                     if plan.tile_edges is not None else '')
@@ -109,6 +114,15 @@ class OptionsParser(object):
         n_warn = sum(1 for _, _, w in results if w)
         if n_warn:
             self.warnings.info(f'{n_warn} queries had locations skipped after a GSL error (as pplacer does).')
+        n_inf = sum(1 for _, pl, _ in results if any(not math.isfinite(p[3]) for p in pl))
+        if n_inf:
+            msg = (f'{n_inf} queries have a -inf likelihood (pplacer: "encountered -inf for final '
+                   f'likelihood"); their placements are meaningless.')
+            if model.ras == 'gamma' and not fix_gamma:
+                msg += (' With gamma models this is pplacer\'s rescaling underflow on large trees; '
+                        '--fix_gamma_underflow avoids it (results then differ from pplacer).')
+            self.logger.warning(msg)
+            self.warnings.info(msg)
         return placer, results, time.time() - t0
 
     def place(self, options):
@@ -122,7 +136,8 @@ class OptionsParser(object):
         make_sure_path_exists(out_dir)
         queries = read_fasta(options.msa_file)
         self.logger.info(f'Read {len(queries):,} sequences from {options.msa_file}')
-        placer, results, secs = self._place_group(options.refpkg, queries, options.cpus, *tiling)
+        placer, results, secs = self._place_group(options.refpkg, queries, options.cpus, *tiling,
+                                                  fix_gamma=options.fix_gamma_underflow)
         write_jplace(options.out_file, placer.jplace_tree(), results, ' '.join(sys.argv))
         self.logger.info(f'Wrote {len(results):,} placements to {options.out_file} ({secs:.1f} s).')
 
@@ -161,7 +176,8 @@ class OptionsParser(object):
                                                  f'{entries[0][1]}; names must be unique per reference package.')
                     owner[nm] = out
                     pooled.append((nm, seq))
-            placer, results, secs = self._place_group(entries[0][1], pooled, options.cpus, *tiling)
+            placer, results, secs = self._place_group(entries[0][1], pooled, options.cpus, *tiling,
+                                                      fix_gamma=options.fix_gamma_underflow)
             tree = placer.jplace_tree()
             by_out = OrderedDict((out, []) for _, _, out in entries)
             for r in results:
@@ -218,9 +234,11 @@ class OptionsParser(object):
                 lines.append(f'#SBATCH --time={resources.slurm_time(seconds * 1.5 + 600)}')
             return lines
 
+        width = resources.refpkg_width(options.refpkg)
+
         def job_plan(sites, n_queries, n_leaves, L, workers, log=True):
             plan = plan_tiling(load_tree(options.refpkg), sites, n_queries, n_leaves, L, workers,
-                               tile_edges, max_memory)
+                               tile_edges, max_memory, width=width)
             if log:
                 self._log_plan(plan, max_memory)
             txt = (f' (tiled: {plan.n_tiles:,} tiles of up to {plan.max_edges:,} edges)'
@@ -260,7 +278,7 @@ class OptionsParser(object):
         sites_full = int((full_mask & self._ref_informative(options.refpkg, L)).sum())
         plan, _ = job_plan(sites_full, q_full, nl, L, w_pref)
         if plan.tile_edges is None and tile_edges is None and max_memory is None:
-            need = resources.estimate_memory(nn, ni, sites_full, len(sample), nl, L, w_pref)
+            need = resources.estimate_memory(nn, ni, sites_full, len(sample), nl, L, w_pref, width=width)
             avail = resources.available_memory()
             if avail and need > avail:
                 raise GPlaceExit(f'Benchmarking this reference package untiled needs about {need / GiB:.1f} GiB, '
@@ -299,8 +317,8 @@ class OptionsParser(object):
     def _time_untiled(self, refpkg, sample, q_full, cands, w_pref):
         """Untiled benchmark: cache the sample's vectors, time the prefilter at two sample sizes
         and the placement at each worker count. Returns (rows, seconds(queries_per_second))."""
-        from gplace.engine.placer import Placer
-        placer = Placer(refpkg, sample, w_pref)
+        from gplace.engine.factory import new_placer
+        placer = new_placer(refpkg, sample, w_pref)
         placer.cpus = max(cands)
         t0 = time.time(); placer.cache(); t_cache = time.time() - t0
         # prefilter time = fixed per-edge work + work per query: fit from two sweeps
@@ -322,9 +340,8 @@ class OptionsParser(object):
         optimisations of one rebuilt tile at each worker count, so the tree is not rebuilt for
         every count. The rates in rows are placement-only queries/s. Returns (rows,
         seconds(queries_per_second)); see TiledPlacer.job_seconds for the time model."""
-        from gplace.engine.placer import Placer
-        from gplace.engine.tiled import TiledPlacer
-        tp = TiledPlacer.from_placer(Placer(refpkg, sample, w_pref), tile_edges)
+        from gplace.engine.factory import new_placer, tiled_placer
+        tp = tiled_placer(new_placer(refpkg, sample, w_pref), tile_edges)
         tp.cpus = max(cands)
         tp.record_work = True
         self.logger.info(f'Placing the sample tile by tile ({len(tp.tiles):,} tiles of up to '
@@ -359,64 +376,98 @@ class OptionsParser(object):
         from gplace.engine.core import read_fasta, informative
         files = json.load(open(os.path.join(refpkg, 'CONTENTS.json')))['files']
         ref = read_fasta(os.path.join(refpkg, files['aln_fasta']))
-        RA = np.frombuffer(''.join(s for _, s in ref).encode(), np.uint8).reshape(len(ref), L)
+        RA = np.frombuffer(''.join(s.upper() for _, s in ref).encode(), np.uint8).reshape(len(ref), L)
         return informative(RA).any(axis=0)
 
     def run_test(self, options):
-        """Place the bundled test genomes and compare with GTDB-Tk's pplacer output."""
-        from gplace.engine.core import read_fasta
+        """Place the bundled test genomes and compare with GTDB-Tk's pplacer output; with --models,
+        also the test sets of pplacer's other models (expected outputs from the stock pplacer)."""
+        from gplace.engine import testsets
         from gplace.engine.jplace import write_jplace, compare_jplace
+        from gplace.engine.core import read_fasta
         out_dir = options.out_dir or tempfile.mkdtemp(prefix='gplace_test_')
         make_sure_path_exists(os.path.join(out_dir, os.path.dirname(PATH_TEST_JPLACE)))
-        refpkg = os.path.join(TEST_DATA, 'mini.refpkg')
-        queries = read_fasta(os.path.join(TEST_DATA, 'queries.fasta'))
-        expected = os.path.join(TEST_DATA, 'expected_pplacer.jplace')
-        placer, results, secs = self._place_group(refpkg, queries, options.cpus, *self._tiling_options(options))
-        out = os.path.join(out_dir, PATH_TEST_JPLACE)
-        write_jplace(out, placer.jplace_tree(), results, ' '.join(sys.argv))
-        r = compare_jplace(out, expected)
+        tiling = self._tiling_options(options)
+        t0 = time.time()
+        sets = [(testsets.wag_set(), os.path.join(out_dir, PATH_TEST_JPLACE))]
+        if getattr(options, 'models', False):
+            work = os.path.join(out_dir, 'models')
+            make_sure_path_exists(work)
+            sets += [(ts, os.path.join(work, ts.name.split(' (')[0].replace(' ', '_').replace('+', '')
+                                       .replace('--', '') + '.jplace')) for ts in testsets.model_sets(work)]
+        failed, report = [], []
+        for ts, out in sets:
+            if len(sets) > 1:
+                self.logger.info(f'Test set: {ts.name}')
+            placer, results, _ = self._place_group(ts.refpkg, read_fasta(ts.queries), options.cpus, *tiling,
+                                                   fix_gamma=ts.fix_gamma)
+            write_jplace(out, placer.jplace_tree(), results, ' '.join(sys.argv))
+            r = compare_jplace(out, ts.expected)
+            ok = r['identical'] == r['genomes'] and r['same_tree'] and not r['only_a'] and not r['only_b']
+            report.append((ts.name, r))
+            if not ok:
+                failed.append(ts.name)
+            if len(sets) > 1:
+                self.logger.info(f'  {r["identical"]}/{r["genomes"]} identical'
+                                 + ('' if ok else '  <-- DIFFERENT'))
         with open(os.path.join(out_dir, PATH_TEST_REPORT), 'w') as fh:
-            for k in ('genomes', 'best_edge', 'edge_list', 'identical', 'same_tree'):
-                fh.write(f'{k}\t{r[k]}\n')
+            fh.write('test_set\tgenomes\tbest_edge\tedge_list\tidentical\tsame_tree\n')
+            for name, r in report:
+                fh.write('\t'.join([name] + [str(r[k]) for k in ('genomes', 'best_edge', 'edge_list',
+                                                                   'identical', 'same_tree')]) + '\n')
+        r = report[0][1]
         self.logger.info(f'{r["identical"]}/{r["genomes"]} genomes: every printed value identical to '
                          f'GTDB-Tk\'s pplacer v1.1.alpha19; reference tree string identical: {r["same_tree"]}.')
-        if r['identical'] != r['genomes'] or not r['same_tree'] or r['only_a'] or r['only_b']:
-            raise GPlaceExit(f'The test placements differ from pplacer (see {out_dir}).')
-        self.logger.info(f'Test passed ({secs:.1f} s). Output: {out_dir}')
+        if len(sets) > 1:
+            n_other = len(sets) - 1
+            n_bad = sum(1 for f in failed if f != sets[0][0].name)
+            self.logger.info(f'Other models: {n_other - n_bad}/{n_other} test sets identical to their expected '
+                             f'output (the stock pplacer v1.1.alpha19; gPlace itself for --fix_gamma_underflow).')
+        if failed:
+            raise GPlaceExit(f'The test placements differ from pplacer for: {", ".join(failed)} (see {out_dir}).')
+        self.logger.info(f'Test passed ({time.time() - t0:.1f} s). Output: {out_dir}')
 
     def check_install(self, options):
-        """Check the engine is present and bit-exact."""
+        """Check both engines (protein and DNA) are present and bit-exact."""
         from gplace.engine import core, selftest
         from gplace.engine.build import cpu_has_avx2
         ok = True
         self.logger.info(f'CPU AVX2/FMA support: {"yes" if cpu_has_avx2() else "NO"}')
         ok &= cpu_has_avx2()
-        path = core.engine_path()
-        if not os.path.exists(path):
-            raise GPlaceExit(f'Engine not found at {path}. Build it with: gplace build_engine')
-        L = core.lib()
-        self.logger.info(f'Engine: {path}')
-        self.logger.info(f'        {L.xp_engine_version().decode()}')
-        n, bad = selftest.check_libm()
-        self.logger.info(f'libm vs GTDB-Tk pplacer binary (hypot/exp/log): {n - bad}/{n} identical')
-        ok &= bad == 0
-        si, se, sv = selftest.check_wag_eigen()
-        self.logger.info(f'WAG model vs GTDB-Tk pplacer binary: input {"identical" if si else "DIFFERENT"}, '
-                         f'eigenvalues {"identical" if se else "DIFFERENT"}, '
-                         f'eigenvectors {"identical" if sv else "DIFFERENT"}')
-        ok &= si and se and sv
-        nk, fails = selftest.check_kernels()
-        self.logger.info(f'SIMD kernels vs scalar references: {nk - len(fails)}/{nk} identical')
-        for f in fails[:10]:
-            self.logger.error(f'  mismatch: {f}')
-        ok &= not fails
+        for ns, what in ((20, 'protein'), (4, 'DNA')):
+            path = core.engine_path(ns)
+            if not os.path.exists(path):
+                raise GPlaceExit(f'Engine not found at {path}. Build it with: gplace build_engine')
+            L = core.lib(ns)
+            self.logger.info(f'Engine ({what}): {path}')
+            self.logger.info(f'        {L.xp_engine_version().decode()}')
+            n, bad = selftest.check_libm(ns)
+            self.logger.info(f'  libm vs GTDB-Tk pplacer binary (hypot/exp/log/pow/sin): {n - bad}/{n} identical')
+            ok &= bad == 0
+            if ns == 20:
+                si, se, sv = selftest.check_wag_eigen()
+                self.logger.info(f'  WAG model vs GTDB-Tk pplacer binary: input {"identical" if si else "DIFFERENT"}, '
+                                 f'eigenvalues {"identical" if se else "DIFFERENT"}, '
+                                 f'eigenvectors {"identical" if sv else "DIFFERENT"}')
+                ok &= si and se and sv
+            nk, fails = selftest.check_kernels(ns=ns)
+            ng, gfails = selftest.check_gamma_kernels(ns=ns)
+            self.logger.info(f'  kernels vs scalar references: {nk - len(fails)}/{nk} identical; gamma '
+                             f'kernels vs references: {ng - len(gfails)}/{ng} identical')
+            for f in (fails + gfails)[:10]:
+                self.logger.error(f'  mismatch: {f}')
+            ok &= not fails and not gfails
+        bad_g = selftest.check_discrete_gamma()
+        self.logger.info(f'Discrete gamma rates (GSL 1.16): {len(selftest.DISCRETE_GAMMA) - len(bad_g)}/'
+                         f'{len(selftest.DISCRETE_GAMMA)} identical to the validated values')
+        ok &= not bad_g
         if not ok:
             raise GPlaceExit('The engine is not bit-exact on this system; placements would not be '
                              'guaranteed identical to pplacer.')
-        self.logger.info('Installation OK: the engine reproduces GTDB-Tk\'s pplacer arithmetic bit for bit.')
+        self.logger.info('Installation OK: the engines reproduce GTDB-Tk\'s pplacer arithmetic bit for bit.')
 
     def build_engine(self, options):
-        """Compile libgplace_core.so, then run the installation checks."""
+        """Compile the engines, then run the installation checks."""
         from gplace.engine.build import build_engine
         build_engine(out_dir=options.engine_dir, gsl_prefix=options.gsl_prefix,
                      gsl_tarball=options.gsl_tarball, work_dir=options.build_dir, jobs=options.jobs)

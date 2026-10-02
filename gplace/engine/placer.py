@@ -15,7 +15,8 @@
 #                                                                             #
 ###############################################################################
 
-"""Exact, memory-bounded re-implementation of `pplacer -m WAG -c <refpkg>` (v1.1.alpha19).
+"""Exact, memory-bounded re-implementation of `pplacer -c <refpkg>` (v1.1.alpha19), for every model
+pplacer supports (WAG/LG/JTT/GTR, CAT or gamma rates; see models.py; gamma in gamma.py).
 
 Memory: pplacer caches distal, proximal and supernode vectors for every node
 (3 x nodes x sites x 20 doubles, ~104 GB for the largest GTDB-Tk R226 class-level tree).
@@ -41,8 +42,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-from gplace.engine import core
-from gplace.engine.core import NS, P, LUT
+from gplace.engine import core, models
+from gplace.engine.core import P
 from gplace.engine import resources
 from gplace.engine.newick import parse_newick, to_newick
 from gplace.exceptions import RefpkgMalformed, AlignmentMalformed, GPlaceException
@@ -120,7 +121,8 @@ def weighted_placements(lib, refined):
 
 
 def load_refpkg(refpkg_dir):
-    """Read CONTENTS.json and return (tree text, reference alignment, phylo_model dict)."""
+    """Read CONTENTS.json and return (tree text, reference alignment, phylo_model dict). The model is
+    checked when it is built (models.model_from_refpkg)."""
     cpath = os.path.join(refpkg_dir, 'CONTENTS.json')
     if not os.path.exists(cpath):
         raise RefpkgMalformed(f'No CONTENTS.json in reference package: {refpkg_dir}')
@@ -131,17 +133,12 @@ def load_refpkg(refpkg_dir):
     tree_txt = open(os.path.join(refpkg_dir, files['tree'])).read().strip()
     ref = core.read_fasta(os.path.join(refpkg_dir, files['aln_fasta']))
     pm = json.load(open(os.path.join(refpkg_dir, files['phylo_model'])))
-    if pm.get('subs_model') != 'WAG' or pm.get('ras_model') != 'Price-CAT':
-        raise RefpkgMalformed(f'Unsupported model in {refpkg_dir}: gPlace reproduces the '
-                              f'WAG + FastTree CAT (Price-CAT) refpkgs used by GTDB-Tk.')
-    if pm.get('empirical_frequencies'):
-        raise RefpkgMalformed('Refpkgs with empirical amino-acid frequencies are not supported '
-                              '(GTDB-Tk refpkgs use the built-in WAG frequencies).')
     return tree_txt, ref, pm
 
 
 class Placer(object):
-    """Place aligned protein queries on one reference package, exactly as pplacer does."""
+    """Place aligned queries on one reference package, exactly as pplacer does (CAT models; gamma
+    models use gamma.GammaPlacer, see factory.new_placer)."""
 
     def __init__(self, refpkg_dir, queries, cpus=1):
         self.logger = logging.getLogger('timestamp')
@@ -154,8 +151,10 @@ class Placer(object):
         else:
             self.cpus = self.workers = max(1, int(cpus))
             self.cpus_source = 'user'
-        self.lib = core.lib()
         tree_txt, ref, pm = load_refpkg(refpkg_dir)
+        self.alpha = models.alphabet_of(pm)                  # protein or DNA
+        self.ns = self.alpha.ns
+        self.lib = core.lib(self.ns)
         self.tree = parse_newick(tree_txt)
         self.children = self.tree.children
         self.bl = self.tree.branch_lengths_for_placement()
@@ -184,13 +183,18 @@ class Placer(object):
         if len(set(names)) != len(names):
             raise AlignmentMalformed('Duplicate query names; every query needs a unique name.')
 
-        # model
-        R, statd = core.load_wag()
-        self.statd = np.array(statd)
-        self.x, self.l, self.xit, _ = core.build_diagd(R, list(self.statd))
-        self.rates = np.array([float(v) for v in pm['Price-CAT']['Rates']])
+        # model (Refpkg.get_aln_fasta uppercases the alignment; the model is built before pre-masking)
+        ref = [(n, s.upper()) for n, s in ref]
+        self.model = models.model_from_refpkg(pm, ref, self.lib)
+        self.statd = np.array(self.model.statd)
+        self.x, self.l, self.xit, _ = core.build_diagd(self.model.R, list(self.statd), self.lib)
+        self.rates = np.array(self.model.rates)
         self.nrates = len(self.rates)
-        cats_full = np.array([int(v) - 1 for v in pm['Price-CAT']['SiteCategories']], dtype=np.int32)
+        self.width = self.ns                                 # doubles per site (gamma: rates x states)
+        if self.model.ras == 'cat':
+            cats_full = self.model.site_categories
+        else:                                                # gamma: every site under every rate
+            cats_full = np.zeros(len(ref[0][1]), dtype=np.int32)
 
         # alignments and pplacer's pre-mask (informative in >=1 reference AND >=1 query)
         queries = [(n, s.upper()) for n, s in queries]
@@ -205,10 +209,10 @@ class Placer(object):
         RA = np.frombuffer(''.join(s for _, s in ref).encode(), np.uint8).reshape(len(ref), L)
         QA = np.frombuffer(''.join(s for _, s in queries).encode(), np.uint8).reshape(len(queries), L)
         for A, seqs in ((RA, ref), (QA, queries)):
-            ok = core.VALID[A].all(axis=1)
+            ok = self.alpha.valid[A].all(axis=1)
             if not ok.all():
                 i = int(np.nonzero(~ok)[0][0])
-                raise AlignmentMalformed(f'Unknown characters {set(seqs[i][1]) - set(core.PROT_MAP)} '
+                raise AlignmentMalformed(f'Unknown characters {set(seqs[i][1].upper()) - set(self.alpha.char_map)} '
                                          f'in {seqs[i][0]}.')
         mask = core.informative(RA).any(axis=0) & core.informative(QA).any(axis=0)
         keep = np.nonzero(mask)[0]
@@ -240,7 +244,8 @@ class Placer(object):
         """Estimated peak memory (bytes) of this pass (see resources.estimate_memory)."""
         w = workers or self.workers or resources.heuristic_cpus(self.cpus)
         return resources.estimate_memory(self.nnodes, len(self.internal), self.nsites,
-                                         len(self.query_names), self.n_leaves, self.aln_len, w)
+                                         len(self.query_names), self.n_leaves, self.aln_len, w,
+                                         width=self.width)
 
     # ------------------------------------------------------------------ helpers --
     def tl(self):
@@ -248,8 +253,8 @@ class Placer(object):
         t = self.local
         if not hasattr(t, 'tensor'):
             S = self.nsites
-            t.tensor = np.zeros((self.nrates, NS, NS))
-            t.b = [np.empty((S, NS)) for _ in range(6)]
+            t.tensor = np.zeros((self.nrates, self.ns, self.ns))
+            t.b = [np.empty((S, self.width)) for _ in range(6)]
             t.e = [np.zeros(S, np.int64) for _ in range(4)]
         return t
 
@@ -259,7 +264,7 @@ class Placer(object):
         self.lib.xp_evolve(P(dst), P(src), self.nsites, P(self.cats), P(tensor))
 
     def leaf_lv(self, v):
-        return np.ascontiguousarray(LUT[self.refA[self.leaf_row[v]]])
+        return np.ascontiguousarray(self.alpha.lut[self.refA[self.leaf_row[v]]])
 
     def d_pre(self, v):
         """Distal vector before the final (-10) pull: (array, exponents)."""
@@ -334,8 +339,8 @@ class Placer(object):
         """Like_stree.calc_distal_and_proximal for internal nodes (pre -10 pull)."""
         S, n = self.nsites, len(self.internal)
         self.zero_e = np.zeros(S, np.int64)
-        self.darr = shared_zeros((n, S, NS)); self.dexp = shared_zeros((n, S), np.int64)
-        self.parr = shared_zeros((n, S, NS)); self.pexp = shared_zeros((n, S), np.int64)
+        self.darr = shared_zeros((n, S, self.width)); self.dexp = shared_zeros((n, S), np.int64)
+        self.parr = shared_zeros((n, S, self.width)); self.pexp = shared_zeros((n, S), np.int64)
         lock = threading.Lock(); done = threading.Event(); errs = []; count = [0]
         ex = ThreadPoolExecutor(self.cpus)
         pending = [0] * self.nnodes
@@ -390,21 +395,22 @@ class Placer(object):
     def _query_tables(self):
         """Prefilter inputs: every query character evolved by START_PEND under every rate
         (qevtab), and the queries as character codes."""
-        ten = np.zeros((self.nrates, NS, NS))
+        ns, alpha = self.ns, self.alpha
+        ten = np.zeros((self.nrates, ns, ns))
         self.lib.xp_multi_exp(P(ten), P(self.x), P(self.l), P(self.xit), P(self.rates),
                               self.nrates, P(self.occupied), core.START_PEND)
-        nc = len(core.CODES)
-        self.qevtab = np.zeros((self.nrates, nc, NS))
-        one = np.zeros((1, NS)); outv = np.empty((1, NS))
+        nc = len(alpha.codes)
+        self.qevtab = np.zeros((self.nrates, nc, ns))
+        one = np.zeros((1, ns)); outv = np.empty((1, ns))
         for c in range(self.nrates):
             if not self.occupied[c]:
                 continue
             cc = np.array([c], np.int32)
-            for k, ch in enumerate(core.CODES):
-                one[0] = core.PROT_MAP[ch]
+            for k, ch in enumerate(alpha.codes):
+                one[0] = alpha.char_map[ch]
                 self.lib.xp_evolve(P(outv), P(one), 1, P(cc), P(ten))
                 self.qevtab[c, k] = outv[0]
-        self.codes = np.ascontiguousarray(core.CODE_OF[self.QM])
+        self.codes = np.ascontiguousarray(alpha.code_of[self.QM])
 
     def prefilter(self):
         """Score every query against every edge (pplacer's h_ranking scores), 8 edges per call."""
@@ -483,7 +489,7 @@ class Placer(object):
         S = self.nsites
         t = self.tl()
         if not hasattr(t, 'sn8'):
-            t.sn8 = np.empty((8, S, NS)); t.se8 = np.zeros((8, S), np.int64)
+            t.sn8 = np.empty((8, S, self.width)); t.se8 = np.zeros((8, S), np.int64)
         for lane, k in enumerate(range(i0, i1)):
             v = int(self.locs[k])
             self.get_d(v, t.b[0], t.e[0]); self.get_p(v, t.b[1], t.e[1])
@@ -495,7 +501,7 @@ class Placer(object):
 
     def _prefilter_group(self, g):
         i0, i1 = g
-        S, Qn, E, nc = self.nsites, len(self.query_names), self.scores.shape[1], len(core.CODES)
+        S, Qn, E, nc = self.nsites, len(self.query_names), self.scores.shape[1], len(self.alpha.codes)
         t = self._supernodes8(i0, i1)
         st = self.lib.xp_edge_scores8(P(self.scores), E, i0, i1 - i0, P(t.sn8), P(t.se8),
                                       P(self.qevtab), P(self.cats), S, nc, P(self.codes), Qn)
@@ -530,7 +536,7 @@ class Placer(object):
         qrow = self.QM[qi]
         reind = np.nonzero(core.informative(qrow))[0].astype(np.int32)
         m = len(reind)
-        qm = np.ascontiguousarray(LUT[qrow][reind])
+        qm = np.ascontiguousarray(self.alpha.lut[qrow][reind])
         catm = np.ascontiguousarray(self.cats[reind])
         tt = L.xp_tt_new(m, P(catm), P(self.statd), P(self.x), P(self.l), P(self.xit),
                          P(self.rates), self.nrates, P(qm))

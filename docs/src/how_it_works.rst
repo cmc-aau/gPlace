@@ -86,7 +86,9 @@ Every floating-point result keeps pplacer's operands, operation order and roundi
   (``-ffp-contract=off``);
 * the numerical libraries match pplacer's statically linked binary: GSL 1.16 (GSL 2.x changes the
   eigendecomposition in its last bits), glibc 2.19's ``hypot`` (glibc >= 2.35 changed it) and
-  correctly-rounded ``exp``/``log`` (CORE-MATH gives the same results as glibc 2.19's);
+  correctly-rounded ``exp``/``log``/``pow``/``sin`` (CORE-MATH gives the same results as glibc
+  2.19's; GSL's own calls in the gamma functions are bound to them as well, and no inexact system
+  libm function is imported);
 * pplacer's control-flow quirks are reproduced: the optimiser keeps the *last evaluated* branch
   lengths; the bisection start finder evaluates f(right) before f(left); an assertion failing
   inside a GSL callback returns NaN (ocamlgsl's ``caml_callback_exn``), so GSL reports an error

@@ -48,10 +48,13 @@ include = ["gplace*"]
 gplace = [
     "engine/csrc/*.c",
     "engine/csrc/core-math/*",
+    "engine/csrc/core-math/pow/*",
     "engine/csrc/glibc/*",
     "engine/data/*",
     "tests/data/*",
     "tests/data/mini.refpkg/*",
+    "tests/data/models/*",
+    "tests/data/models/*.refpkg/*",
 ]
 
 [tool.cibuildwheel]
@@ -62,7 +65,7 @@ archs = ["x86_64"]
 manylinux-x86_64-image = "manylinux2014"
 # The container's compiler differs from a developer machine's: the wheel is only accepted if
 # the compiled engine is bit-exact and reproduces pplacer on the bundled genomes.
-test-command = "gplace check_install && gplace test --cpus 2"
+test-command = "gplace check_install && gplace test --models --cpus 2"
 
 [tool.cibuildwheel.linux]
 environment = { GPLACE_BUILD_JOBS = "4", GPLACE_BUILD_DIR = "/tmp/gplace_build" }

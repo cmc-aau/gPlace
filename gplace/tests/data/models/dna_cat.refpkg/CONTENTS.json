@@ -1,0 +1,18 @@
+{
+  "metadata": {
+    "format_version": "1.1"
+  },
+  "files": {
+    "tree": "tree.nwk",
+    "aln_fasta": "aln.fasta",
+    "phylo_model": "phylo_model.json"
+  },
+  "md5": {
+    "tree": "d27dd28bc3dac3449c6014e20348f676",
+    "aln_fasta": "234bcaa892835c3e5771ce27313cb08c",
+    "phylo_model": "83dc744526141360fc89d88de4fb6bde"
+  },
+  "log": [],
+  "rollback": null,
+  "rollforward": null
+}

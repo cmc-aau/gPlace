@@ -19,7 +19,9 @@ import logging
 import os
 from functools import lru_cache
 
-ENGINE_NAME = 'libgplace_core.so'
+ENGINE_NAME = 'libgplace_core.so'          # 20 states: protein models
+ENGINE_NAME_NT = 'libgplace_core_nt.so'    # 4 states: DNA (GTR)
+ENGINE_NAMES = {20: ENGINE_NAME, 4: ENGINE_NAME_NT}
 
 
 class __GPlaceCommonConfig:
@@ -31,7 +33,7 @@ class __GPlaceCommonConfig:
 
     @property
     def ENGINE_DIR(self):
-        """Directory holding libgplace_core.so: $GPLACE_ENGINE_DIR, else gplace/engine/lib."""
+        """Directory holding the engine libraries: $GPLACE_ENGINE_DIR, else gplace/engine/lib."""
         raw = os.getenv('GPLACE_ENGINE_DIR')
         if raw:
             return os.path.expandvars(os.path.expanduser(raw))

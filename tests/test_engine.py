@@ -48,17 +48,21 @@ class TestEngineImports(unittest.TestCase):
 
     def test_only_exact_libm_functions_imported(self):
         """The wheel runs on any distribution's libm; only functions that are exact everywhere
-        (sqrt, frexp, ldexp) may come from it. exp/log/hypot are built in."""
+        (sqrt, frexp, ldexp, fmod, round, ...) may come from it. exp/log/pow/sin/hypot are built in,
+        also for GSL's own calls (build.py LIBM_CR); other libm functions GSL references are traps."""
         import shutil
         import subprocess
         nm = shutil.which('nm')
         if nm is None:
             self.skipTest('nm not available')
-        out = subprocess.run([nm, '-D', '--undefined-only', core.engine_path()],
-                             capture_output=True, text=True).stdout
-        imported = {line.split()[-1].split('@')[0] for line in out.splitlines() if line.strip()}
+        imported = set()
+        for ns in (20, 4):
+            out = subprocess.run([nm, '-D', '--undefined-only', core.engine_path(ns)],
+                                 capture_output=True, text=True).stdout
+            imported |= {line.split()[-1].split('@')[0] for line in out.splitlines() if line.strip()}
         libm = {'exp', 'log', 'pow', 'hypot', 'expm1', 'log1p', 'log2', 'log10', 'exp2', 'cbrt',
                 'sin', 'cos', 'tan', 'atan', 'atan2', 'lgamma', 'tgamma', 'erf', 'erfc', 'fma', 'sqrt',
+                'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'asin', 'acos', 'sincos',
                 'frexp', 'ldexp', 'fabs', 'floor', 'ceil', 'round', 'trunc', 'fmod', 'modf'}
-        allowed = {'sqrt', 'frexp', 'ldexp', 'fabs', 'floor', 'ceil', 'trunc', 'modf'}
+        allowed = {'sqrt', 'frexp', 'ldexp', 'fabs', 'floor', 'ceil', 'trunc', 'modf', 'fmod', 'round'}
         self.assertEqual(imported & libm - allowed, set())

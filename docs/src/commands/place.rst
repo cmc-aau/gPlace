@@ -3,7 +3,7 @@
 place
 =====
 
-The ``place`` command places the aligned queries of one FASTA file on one pplacer reference package and writes a jplace file. It computes exactly what GTDB-Tk's ``pplacer -m WAG -j <cpus> -c <refpkg> -o <out.json> <msa>`` computes: same placements, same printed numbers, same tree string.
+The ``place`` command places the aligned queries of one FASTA file on one pplacer reference package and writes a jplace file. It computes exactly what GTDB-Tk's ``pplacer -m WAG -j <cpus> -c <refpkg> -o <out.json> <msa>`` computes: same placements, same printed numbers, same tree string. The model comes from the reference package (WAG, LG, JTT or GTR; CAT or gamma; see :ref:`models`); ``--fix_gamma_underflow`` avoids pplacer's gamma underflow on large trees (:ref:`models/gamma_underflow`).
 
 Arguments
 ---------
@@ -69,10 +69,11 @@ Output
 
 .. code-block:: text
 
-    [2026-09-26 21:05:55] INFO: gPlace v0.1.0
-    [2026-09-26 21:05:55] INFO: gplace place --msa_file user_msa_file.fasta --refpkg mini.refpkg --out_file gplace.jplace --cpus 4
-    [2026-09-26 21:05:55] INFO: Read 20 sequences from user_msa_file.fasta
-    [2026-09-26 21:05:55] INFO: Placing 20 queries on mini.refpkg (493 nodes, 4,891 sites, 4 CPUs).
-    [2026-09-26 21:05:56] INFO: Cached likelihood vectors for 246 internal nodes (0.4 GB).
-    [2026-09-26 21:05:56] INFO: Scored 20 queries against 492 edges.
-    [2026-09-26 21:05:58] INFO: Wrote 20 placements to gplace.jplace (3.2 s).
+    [2026-10-01 19:23:40] INFO: gPlace v0.1.0
+    [2026-10-01 19:23:40] INFO: gplace place --msa_file user_msa_file.fasta --refpkg mini.refpkg --out_file gplace.jplace --cpus 4
+    [2026-10-01 19:23:42] INFO: Read 20 sequences from user_msa_file.fasta
+    [2026-10-01 19:23:44] INFO: Model: WAG + CAT (20 rates), model frequencies (protein)
+    [2026-10-01 19:23:44] INFO: Placing 20 queries on mini.refpkg (493 nodes, 4,891 sites, 4 CPUs; estimated peak memory 0.9 GiB).
+    [2026-10-01 19:23:47] INFO: Cached likelihood vectors for 246 internal nodes (0.4 GB).
+    [2026-10-01 19:23:48] INFO: Scored 20 queries against 492 edges.
+    [2026-10-01 19:23:51] INFO: Wrote 20 placements to gplace.jplace (8.0 s).

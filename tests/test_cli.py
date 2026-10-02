@@ -18,6 +18,15 @@ class TestCli(unittest.TestCase):
                     ['benchmark', '--refpkg', 'r', '--queries', '100']):
             self.assertEqual(p.parse_args(cmd).subparser_name, cmd[0])
 
+    def test_model_options(self):
+        p = get_main_parser()
+        place = ['place', '--msa_file', 'q.fa', '--refpkg', 'r', '--out_file', 'o.json']
+        self.assertFalse(p.parse_args(place).fix_gamma_underflow)
+        self.assertTrue(p.parse_args(place + ['--fix_gamma_underflow']).fix_gamma_underflow)
+        self.assertTrue(p.parse_args(['place_batch', '--batchfile', 'b', '--out_dir', 'o',
+                                      '--fix_gamma_underflow']).fix_gamma_underflow)
+        self.assertTrue(p.parse_args(['test', '--models']).models)
+
     def test_tiling_options(self):
         p = get_main_parser()
         place = ['place', '--msa_file', 'q.fa', '--refpkg', 'r', '--out_file', 'o.json']
