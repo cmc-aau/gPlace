@@ -3,8 +3,10 @@
 Installing gPlace
 =================
 
-gPlace's placement engine is written in C. On x86-64 Linux, ``pip install gtdb-gplace`` installs
-it prebuilt; installing from source compiles it automatically.
+gPlace's placement engine is written in Rust (``gplace/engine/rust``) and links three third-party C
+libraries that exactness depends on: GSL 1.16, CORE-MATH and glibc 2.19's ``hypot``. On x86-64 and
+ARM64 Linux, ``pip install gtdb-gplace`` installs it prebuilt; installing from source compiles it
+automatically.
 
 
 Sources
@@ -28,7 +30,7 @@ Hardware requirements
    * - Resource
      - Requirement
    * - CPU
-     - x86-64 with AVX2 and FMA (any Intel/AMD server CPU from the last decade).
+     - x86-64 (AVX2 kernels with AVX2 and FMA, otherwise the portable engine) or ARM64 (NEON).
    * - Memory
      - Depends on the reference tree and the number of queries: about
        *2 x internal nodes x sites x 168 bytes + edges x queries x 8 bytes*.
@@ -43,7 +45,10 @@ Build requirements
 
 Only needed when installing from source (not with the prebuilt wheel):
 
-* A C compiler (``gcc``) and ``make``, to compile GSL 1.16 and the engine during installation.
+* A Rust toolchain, 1.75 or newer (``cargo``; e.g. from https://rustup.rs or conda-forge ``rust``) for the engine,
+  and a C compiler (``gcc``) and ``make`` for GSL 1.16, CORE-MATH and ``hypot``. ``GPLACE_CARGO``
+  selects a ``cargo`` that is not on ``PATH``. The engine has no Rust dependencies, so the build
+  works offline.
 * Internet access to download ``gsl-1.16.tar.gz`` from ftp.gnu.org, or a local copy
   (``GPLACE_GSL_TARBALL``, SHA-256 verified), or an existing static GSL 1.16 build
   (``GPLACE_GSL_PREFIX``).

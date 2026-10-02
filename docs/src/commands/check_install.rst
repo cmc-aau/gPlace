@@ -3,7 +3,7 @@
 check_install
 =============
 
-The ``check_install`` command checks that the compiled engine reproduces pplacer's arithmetic bit for bit on this machine: the CPU features, the libm functions against values taken from GTDB-Tk's pplacer binary, the WAG eigendecomposition against the one inside that binary, and every SIMD kernel against its scalar reference.
+The ``check_install`` command checks that the compiled engine reproduces pplacer's arithmetic bit for bit on this machine: the CPU and the engine variant it uses (``avx2`` on x86-64 CPUs with AVX2 and FMA, else ``portable``), the libm functions against values taken from GTDB-Tk's pplacer binary, the WAG eigendecomposition against the one inside that binary, and every SIMD kernel against its scalar reference.
 
 Arguments
 ---------

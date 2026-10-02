@@ -103,6 +103,19 @@ def __fix_gamma(group):
                             '(slightly where pplacer is finite). Default: reproduce pplacer exactly')
 
 
+def __mrca_class(group):
+    group.add_argument('--mrca_class', action='store_true', default=False,
+                       help='reference packages with a taxonomy: classify each placement by the taxonomic '
+                            'MRCA of the reference sequences below its edge, instead of by edge painting '
+                            '(pplacer\'s --mrca-class)')
+
+
+def __discard_nonoverlapped(group):
+    group.add_argument('--discard_nonoverlapped', action='store_true', default=False,
+                       help='drop queries that have no residue in any column where a reference sequence '
+                            'has one, instead of stopping (pplacer\'s --discard-nonoverlapped)')
+
+
 def __test_models(group):
     group.add_argument('--models', action='store_true', default=False,
                        help='also place the bundled test sets for the other pplacer models (LG, JTT, '
@@ -184,6 +197,8 @@ def get_main_parser():
         with arg_group(parser, 'optional arguments') as grp:
             __cpus(grp)
             __fix_gamma(grp)
+            __mrca_class(grp)
+            __discard_nonoverlapped(grp)
             __temp_dir(grp)
             __help(grp)
         __tiling(parser)
@@ -196,6 +211,8 @@ def get_main_parser():
         with arg_group(parser, 'optional arguments') as grp:
             __cpus(grp)
             __fix_gamma(grp)
+            __mrca_class(grp)
+            __discard_nonoverlapped(grp)
             __temp_dir(grp)
             __help(grp)
         __tiling(parser)

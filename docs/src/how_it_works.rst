@@ -76,12 +76,25 @@ pplacer's algorithm is unchanged; only the order of the work is:
 Each pass rebuilds the tiles, so tiled placement is 1.7-2.5x slower than untiled placement on a
 tree that fits in memory; ``--max_memory`` therefore places untiled whenever it can.
 
+Platforms
+---------
+
+The engine is built in variants from the same C source: ``avx2`` (x86-64; the kernels process 4
+*different* results per instruction), ``neon`` (ARM64; 2 per instruction) and ``portable``
+(scalar loops performing the same operations in the same order; any 64-bit CPU). gPlace loads
+``avx2`` on x86-64 CPUs that have AVX2 and FMA, ``neon`` on ARM64 and ``portable`` elsewhere. The
+SIMD kernels never fuse a multiply and an add: each lane does exactly what the scalar loop does. Neither depends on the CPU's floating-point details beyond IEEE
+754 double precision: no fused multiply-add is contracted implicitly, and the only libm
+functions taken from the system are exact by definition (``sqrt``, ``frexp``, ``ldexp``, and
+``fma`` for the portable engine on x86-64).
+
 Exactness rules
 ---------------
 
 Every floating-point result keeps pplacer's operands, operation order and rounding:
 
-* the C kernels mirror pplacer's ``linear_c.c`` loops and GSL's ``dgemv`` loop order; SIMD lanes
+* the engine (Rust, ``gplace/engine/rust``) mirrors pplacer's ``linear_c.c`` loops and GSL's
+  ``dgemv`` loop order; Rust never fuses a multiply and an add, and SIMD lanes
   only process *different* results, no reduction is reordered, and no multiply-add is fused
   (``-ffp-contract=off``);
 * the numerical libraries match pplacer's statically linked binary: GSL 1.16 (GSL 2.x changes the

@@ -81,14 +81,34 @@ class OptionsParser(object):
                              f'about {plan.untiled_memory / GiB:.1f} GiB; using --tile_edges '
                              f'{plan.tile_edges:,} (estimated peak {plan.memory / GiB:.1f} GiB).')
 
-    def _place_group(self, refpkg, queries, cpus, tile_edges=None, max_memory=None, fix_gamma=False):
-        """Run the engine on one reference package; returns (Placer, results, seconds)."""
+    def _place_group(self, refpkg, queries, cpus, tile_edges=None, max_memory=None, fix_gamma=False,
+                     mrca_class=False, discard_nonoverlapped=False):
+        """Run the engine on one reference package; returns (Placer, results, seconds, classifier):
+        results has one entry per query (in input order; identical sequences are placed once),
+        classifier is None unless the refpkg has a taxonomy (see taxonomy.Classifier)."""
         import math
-        from gplace.engine import resources
+        from gplace.engine import resources, taxonomy
         from gplace.engine.factory import new_placer, tiled_placer
         from gplace.engine.tiled import plan_for_placer
         t0 = time.time()
-        placer = new_placer(refpkg, queries, cpus, fix_gamma)
+        placer = new_placer(refpkg, queries, cpus, fix_gamma, discard_nonoverlapped)
+        if placer.discarded:
+            self.logger.info(f'Discarded {len(placer.discarded):,} queries that do not overlap the reference '
+                             f'sequences (--discard_nonoverlapped), e.g. {placer.discarded[0]}.')
+        n_all, n_rep = len(placer.all_names), len(placer.query_names)
+        if n_rep < n_all:
+            self.logger.info(f'{n_all:,} queries, {n_rep:,} distinct sequences after pre-masking: identical '
+                             f'sequences are placed once and written as one record (as pplacer does).')
+        classifier = None
+        if taxonomy.tax_equipped(refpkg):
+            classifier = taxonomy.Classifier(refpkg, placer.tree, mrca_class)
+            self.logger.info(f'Reference package has a taxonomy: placements are classified by '
+                             f'{classifier.method} ("classification" field).')
+            for rank in classifier.missing_ranks:
+                self.logger.warning(f'rank {rank} not represented in the lineage of any sequence in '
+                                    f'reference package {refpkg}.')
+        elif mrca_class:
+            self.logger.info('--mrca_class has no effect: the reference package has no taxonomy.')
         model = placer.model
         self.logger.info(f'Model: {model.describe()} ({model.alphabet.name})'
                          + (' [--fix_gamma_underflow]' if fix_gamma and model.ras == 'gamma' else ''))
@@ -110,7 +130,7 @@ class OptionsParser(object):
             self.logger.warning(f'The estimated peak memory ({mem / 2 ** 30:.1f} GiB) is more than the '
                                 f'{avail / 2 ** 30:.1f} GiB available; use --max_memory to place tile by '
                                 f'tile within a memory limit.')
-        results = placer.run()
+        results = placer.expand(placer.run())
         n_warn = sum(1 for _, _, w in results if w)
         if n_warn:
             self.warnings.info(f'{n_warn} queries had locations skipped after a GSL error (as pplacer does).')
@@ -123,7 +143,7 @@ class OptionsParser(object):
                         '--fix_gamma_underflow avoids it (results then differ from pplacer).')
             self.logger.warning(msg)
             self.warnings.info(msg)
-        return placer, results, time.time() - t0
+        return placer, results, time.time() - t0, classifier
 
     def place(self, options):
         """Place the queries of one alignment on one reference package."""
@@ -136,10 +156,13 @@ class OptionsParser(object):
         make_sure_path_exists(out_dir)
         queries = read_fasta(options.msa_file)
         self.logger.info(f'Read {len(queries):,} sequences from {options.msa_file}')
-        placer, results, secs = self._place_group(options.refpkg, queries, options.cpus, *tiling,
-                                                  fix_gamma=options.fix_gamma_underflow)
-        write_jplace(options.out_file, placer.jplace_tree(), results, ' '.join(sys.argv))
-        self.logger.info(f'Wrote {len(results):,} placements to {options.out_file} ({secs:.1f} s).')
+        placer, results, secs, classify = self._place_group(
+            options.refpkg, queries, options.cpus, *tiling, fix_gamma=options.fix_gamma_underflow,
+            mrca_class=options.mrca_class, discard_nonoverlapped=options.discard_nonoverlapped)
+        records = placer.records([r[0] for r in results])
+        write_jplace(options.out_file, placer.jplace_tree(), results, ' '.join(sys.argv), records, classify)
+        self.logger.info(f'Wrote {len(results):,} placements ({len(records):,} records) to '
+                         f'{options.out_file} ({secs:.1f} s).')
 
     def place_batch(self, options):
         """Place many alignments; queries sharing a reference package are placed in one pass."""
@@ -176,15 +199,17 @@ class OptionsParser(object):
                                                  f'{entries[0][1]}; names must be unique per reference package.')
                     owner[nm] = out
                     pooled.append((nm, seq))
-            placer, results, secs = self._place_group(entries[0][1], pooled, options.cpus, *tiling,
-                                                      fix_gamma=options.fix_gamma_underflow)
+            placer, results, secs, classify = self._place_group(
+                entries[0][1], pooled, options.cpus, *tiling, fix_gamma=options.fix_gamma_underflow,
+                mrca_class=options.mrca_class, discard_nonoverlapped=options.discard_nonoverlapped)
             tree = placer.jplace_tree()
             by_out = OrderedDict((out, []) for _, _, out in entries)
             for r in results:
                 by_out[owner[r[0]]].append(r)
             for msa, refpkg, out in entries:
                 make_sure_path_exists(os.path.dirname(os.path.abspath(out)))
-                write_jplace(out, tree, by_out[out], ' '.join(sys.argv))
+                write_jplace(out, tree, by_out[out], ' '.join(sys.argv),
+                             placer.records([r[0] for r in by_out[out]]), classify)
                 summary.append((refpkg, msa, out, len(by_out[out]), f'{secs:.1f}'))
             placer.release()
             del placer, results, pooled, owner, by_out
@@ -318,7 +343,7 @@ class OptionsParser(object):
         """Untiled benchmark: cache the sample's vectors, time the prefilter at two sample sizes
         and the placement at each worker count. Returns (rows, seconds(queries_per_second))."""
         from gplace.engine.factory import new_placer
-        placer = new_placer(refpkg, sample, w_pref)
+        placer = new_placer(refpkg, sample, w_pref, discard_nonoverlapped=True)
         placer.cpus = max(cands)
         t0 = time.time(); placer.cache(); t_cache = time.time() - t0
         # prefilter time = fixed per-edge work + work per query: fit from two sweeps
@@ -341,7 +366,7 @@ class OptionsParser(object):
         every count. The rates in rows are placement-only queries/s. Returns (rows,
         seconds(queries_per_second)); see TiledPlacer.job_seconds for the time model."""
         from gplace.engine.factory import new_placer, tiled_placer
-        tp = tiled_placer(new_placer(refpkg, sample, w_pref), tile_edges)
+        tp = tiled_placer(new_placer(refpkg, sample, w_pref, discard_nonoverlapped=True), tile_edges)
         tp.cpus = max(cands)
         tp.record_work = True
         self.logger.info(f'Placing the sample tile by tile ({len(tp.tiles):,} tiles of up to '
@@ -399,11 +424,15 @@ class OptionsParser(object):
         for ts, out in sets:
             if len(sets) > 1:
                 self.logger.info(f'Test set: {ts.name}')
-            placer, results, _ = self._place_group(ts.refpkg, read_fasta(ts.queries), options.cpus, *tiling,
-                                                   fix_gamma=ts.fix_gamma)
-            write_jplace(out, placer.jplace_tree(), results, ' '.join(sys.argv))
+            placer, results, _, classify = self._place_group(ts.refpkg, read_fasta(ts.queries), options.cpus,
+                                                             *tiling, fix_gamma=ts.fix_gamma,
+                                                             mrca_class=ts.mrca_class,
+                                                             discard_nonoverlapped=ts.discard)
+            write_jplace(out, placer.jplace_tree(), results, ' '.join(sys.argv),
+                         placer.records([r[0] for r in results]), classify)
             r = compare_jplace(out, ts.expected)
-            ok = r['identical'] == r['genomes'] and r['same_tree'] and not r['only_a'] and not r['only_b']
+            ok = (r['identical'] == r['genomes'] and r['same_tree'] and r['same_records'] and r['same_fields']
+                  and not r['only_a'] and not r['only_b'])
             report.append((ts.name, r))
             if not ok:
                 failed.append(ts.name)
@@ -430,10 +459,13 @@ class OptionsParser(object):
     def check_install(self, options):
         """Check both engines (protein and DNA) are present and bit-exact."""
         from gplace.engine import core, selftest
+        import platform
         from gplace.engine.build import cpu_has_avx2
         ok = True
-        self.logger.info(f'CPU AVX2/FMA support: {"yes" if cpu_has_avx2() else "NO"}')
-        ok &= cpu_has_avx2()
+        variant = core.engine_variant()
+        self.logger.info(f'CPU: {platform.machine()}, AVX2/FMA: {"yes" if cpu_has_avx2() else "no"}; '
+                         f'engine variant: {variant}'
+                         + (' (set by GPLACE_ENGINE_VARIANT)' if os.getenv('GPLACE_ENGINE_VARIANT') else ''))
         for ns, what in ((20, 'protein'), (4, 'DNA')):
             path = core.engine_path(ns)
             if not os.path.exists(path):

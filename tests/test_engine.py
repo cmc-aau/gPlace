@@ -55,14 +55,25 @@ class TestEngineImports(unittest.TestCase):
         nm = shutil.which('nm')
         if nm is None:
             self.skipTest('nm not available')
-        imported = set()
-        for ns in (20, 4):
-            out = subprocess.run([nm, '-D', '--undefined-only', core.engine_path(ns)],
-                                 capture_output=True, text=True).stdout
-            imported |= {line.split()[-1].split('@')[0] for line in out.splitlines() if line.strip()}
+        from gplace.config.common import ENGINE_VARIANTS
+        allowed_extra = {'avx2': set(), 'neon': set(), 'portable': {'fma'}}   # fma: correctly rounded everywhere
+        found = 0
+        for variant in ENGINE_VARIANTS:
+            imported = set()
+            for ns in (20, 4):
+                path = core.engine_path(ns, variant)
+                if not os.path.exists(path):
+                    continue
+                found += 1
+                out = subprocess.run([nm, '-D', '--undefined-only', path], capture_output=True, text=True).stdout
+                imported |= {line.split()[-1].split('@')[0] for line in out.splitlines() if line.strip()}
+            self._check(imported, allowed_extra[variant])
+        self.assertGreater(found, 0)
+
+    def _check(self, imported, allowed_extra):
         libm = {'exp', 'log', 'pow', 'hypot', 'expm1', 'log1p', 'log2', 'log10', 'exp2', 'cbrt',
                 'sin', 'cos', 'tan', 'atan', 'atan2', 'lgamma', 'tgamma', 'erf', 'erfc', 'fma', 'sqrt',
                 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'asin', 'acos', 'sincos',
                 'frexp', 'ldexp', 'fabs', 'floor', 'ceil', 'round', 'trunc', 'fmod', 'modf'}
         allowed = {'sqrt', 'frexp', 'ldexp', 'fabs', 'floor', 'ceil', 'trunc', 'modf', 'fmod', 'round'}
-        self.assertEqual(imported & libm - allowed, set())
+        self.assertEqual(imported & libm - allowed - allowed_extra, set())

@@ -89,19 +89,26 @@ class TestModelsEngine(unittest.TestCase):
     def test_model_test_sets_identical(self):
         """Every bundled model test set, untiled and tiled, identical to its expected output (the
         stock pplacer v1.1.alpha19)."""
+        from gplace.engine import taxonomy
         from gplace.engine.factory import new_placer, tiled_placer
         from gplace.engine.jplace import write_jplace, compare_jplace
         with tempfile.TemporaryDirectory() as d:
             for ts in testsets.model_sets(d):
                 for tiled in (False, True):
                     with self.subTest(test_set=ts.name, tiled=tiled):
-                        p = new_placer(ts.refpkg, core.read_fasta(ts.queries), 2, ts.fix_gamma)
+                        p = new_placer(ts.refpkg, core.read_fasta(ts.queries), 2, ts.fix_gamma, ts.discard)
+                        classify = (taxonomy.Classifier(ts.refpkg, p.tree, ts.mrca_class)
+                                    if taxonomy.tax_equipped(ts.refpkg) else None)
                         if tiled:
                             p = tiled_placer(p, ts.tile_edges)
                         out = os.path.join(d, 'out.jplace')
-                        write_jplace(out, p.jplace_tree(), p.run(), 'unittest')
+                        results = p.expand(p.run())
+                        write_jplace(out, p.jplace_tree(), results, 'unittest',
+                                     p.records([r[0] for r in results]), classify)
                         r = compare_jplace(out, ts.expected)
                         self.assertTrue(r['same_tree'])
+                        self.assertTrue(r['same_records'])
+                        self.assertTrue(r['same_fields'])
                         self.assertEqual(r['identical'], r['genomes'])
 
     def test_gamma_fix_changes_only_the_last_digits(self):
@@ -129,6 +136,21 @@ class TestModelsEngine(unittest.TestCase):
                 json.dump({'files': files}, open(os.path.join(pkg, 'CONTENTS.json'), 'w'))
                 with self.assertRaises(RefpkgMalformed):
                     new_placer(pkg, core.read_fasta(ts.queries)[:2], 1)
+
+    def test_cache_is_deterministic_with_many_threads(self):
+        """Building the likelihood cache with many threads on a small tree, where tasks finish
+        while the first ones are still being submitted, gives the same vectors every time (a node
+        must never be submitted twice)."""
+        import hashlib
+        from gplace.engine.factory import new_placer
+        with tempfile.TemporaryDirectory() as d:
+            ts = [t for t in testsets.model_sets(d) if 'CAT (FastTree)' in t.name][0]
+            p = new_placer(ts.refpkg, core.read_fasta(ts.queries), 32)
+            seen = set()
+            for _ in range(25):
+                p.cache()
+                seen.add(hashlib.md5(p.darr.tobytes() + p.parr.tobytes()).hexdigest())
+            self.assertEqual(len(seen), 1)
 
 
 class TestNonFinite(unittest.TestCase):

@@ -9,6 +9,7 @@
 ## Features
 
 * **Drop-in placement:** `gplace place` takes the same inputs as pplacer (aligned queries + refpkg) and writes the same jplace.
+* **pplacer's behaviour, also outside GTDB-Tk:** reference packages with a taxonomy get pplacer's `classification` field (edge painting, or `--mrca_class`); identical query sequences are placed once and written as one record; queries that don't overlap the reference alignment stop the run as in pplacer, or are dropped with `--discard_nonoverlapped`.
 * **Pooled batches:** `gplace place_batch` places many alignments at once; alignments sharing a reference package are placed in a single pass.
 * **Memory limits and huge trees:** `--max_memory 64G` keeps a run within a memory limit. gPlace places without tiles when that fits, and otherwise tile by tile, with the largest tiles that fit, and identical results. This places genomes on the full GTDB bacterial tree (273,290 nodes), which would need ~490 GiB untiled. `--tile_edges N` sets the tile size directly.
 * **Every pplacer model:** WAG, LG, JTT (protein) and GTR (DNA), with FastTree CAT or gamma rate variation and model or empirical frequencies, read from the reference package as pplacer does. `--fix_gamma_underflow` optionally avoids pplacer's gamma underflow on large trees (likelihood `-inf`).
@@ -20,17 +21,17 @@ Documentation for gPlace can be found [here](https://cmc-aau.github.io/gPlace/).
 
 ## Installation
 
-gPlace needs Python >= 3.12 and an x86-64 CPU with AVX2 and FMA (any recent Intel/AMD server).
+gPlace needs Python >= 3.12 on 64-bit Linux, x86-64 or ARM64 (the platforms pplacer runs on, except macOS for now). It uses SIMD kernels on x86-64 CPUs with AVX2 and FMA and on ARM64 (NEON), and a portable engine with the same results on other x86-64 CPUs.
 
 ```bash
 pip install gtdb-gplace
 ```
-On x86-64 Linux this installs a prebuilt wheel: no compiler needed, one wheel for every Linux
+On x86-64 and ARM64 Linux this installs a prebuilt wheel: no compiler needed, one wheel per architecture for every Linux
 distribution with glibc >= 2.17 (CentOS 7 and newer) and every Python >= 3.12. The wheel is
 built in the manylinux2014 container and only published after it passes `gplace check_install`
 and `gplace test` there and on several distributions.
 
-From source (other platforms, or development), which needs a C compiler (gcc) and `make`:
+From source (other platforms, or development), which needs a Rust toolchain (`cargo`, Rust 1.75 or newer) for the engine and a C compiler (gcc) and `make` for the third-party C it links (GSL 1.16, CORE-MATH, glibc 2.19's `hypot`):
 ```bash
 git clone https://github.com/cmc-aau/gPlace.git
 cd gPlace

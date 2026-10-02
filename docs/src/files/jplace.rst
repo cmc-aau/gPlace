@@ -8,9 +8,12 @@ Placements in the jplace format (version 3), as written by pplacer, e.g. GTDB-Tk
 
 * ``tree``: the reference tree with ``{edge}`` numbers, byte-identical to pplacer's (labels
   quoted only when needed, branch lengths ``%g``).
-* ``placements``: one record per query, ``{"p": [[...], ...], "nm": [[name, 1]]}``, placements
-  sorted by like-weight ratio.
-* ``fields``: ``distal_length, edge_num, like_weight_ratio, likelihood, pendant_length``.
+* ``placements``: one record per distinct query sequence, ``{"p": [[...], ...], "nm": [[name, 1],
+  ...]}``, placements sorted by like-weight ratio. As in pplacer, queries whose pre-masked
+  sequences are identical are placed once and share a record, names in input order.
+* ``fields``: ``distal_length, edge_num, like_weight_ratio, likelihood, pendant_length``; with a
+  reference package that has a taxonomy and seq_info, ``classification`` comes first: the tax_id
+  of the placement's edge (a string, or ``null``), as pplacer writes it.
 
 Numbers are printed as pplacer prints them (``%.12g``), so with gPlace's bit-identical results
 every number is textually identical to pplacer's. Whitespace, key order and the order of the

@@ -46,7 +46,9 @@ include = ["gplace*"]
 
 [tool.setuptools.package-data]
 gplace = [
-    "engine/csrc/*.c",
+    "engine/rust/Cargo.toml",
+    "engine/rust/build.rs",
+    "engine/rust/src/*.rs",
     "engine/csrc/core-math/*",
     "engine/csrc/core-math/pow/*",
     "engine/csrc/glibc/*",
@@ -55,18 +57,23 @@ gplace = [
     "tests/data/mini.refpkg/*",
     "tests/data/models/*",
     "tests/data/models/*.refpkg/*",
+    "tests/data/parity/*",
 ]
 
 [tool.cibuildwheel]
-# One py3-none wheel (the engine is loaded with ctypes), built in the manylinux2014 container
-# (glibc 2.17) so it runs on any x86-64 Linux distribution from the last decade.
-build = "cp312-manylinux_x86_64"
-archs = ["x86_64"]
+# One py3-none wheel per architecture (the engine is loaded with ctypes), built in the
+# manylinux2014 container (glibc 2.17) so it runs on any Linux distribution from the last decade:
+# x86-64 (avx2 + portable engines) and ARM64 (neon + portable engines). Each runner builds its own arch.
+build = "cp312-manylinux_x86_64 cp312-manylinux_aarch64"
+archs = ["native"]
 manylinux-x86_64-image = "manylinux2014"
+manylinux-aarch64-image = "manylinux2014"
 # The container's compiler differs from a developer machine's: the wheel is only accepted if
 # the compiled engine is bit-exact and reproduces pplacer on the bundled genomes.
 test-command = "gplace check_install && gplace test --models --cpus 2"
 
 [tool.cibuildwheel.linux]
-environment = { GPLACE_BUILD_JOBS = "4", GPLACE_BUILD_DIR = "/tmp/gplace_build" }
-repair-wheel-command = "auditwheel repair --plat manylinux2014_x86_64 -w {dest_dir} {wheel}"
+# the engine is Rust: install a minimal toolchain in the manylinux container
+before-all = "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal"
+environment = { GPLACE_BUILD_JOBS = "4", GPLACE_BUILD_DIR = "/tmp/gplace_build", PATH = "$HOME/.cargo/bin:$PATH" }
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"

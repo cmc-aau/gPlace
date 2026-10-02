@@ -28,7 +28,7 @@ import re
 
 import numpy as np
 
-from gplace.config.common import CONFIG, ENGINE_NAMES
+from gplace.config.common import CONFIG, ENGINE_NAMES, ENGINE_VARIANTS, engine_file
 from gplace.exceptions import EngineNotBuilt
 
 NS = 20
@@ -57,10 +57,29 @@ def P(a):
     return ctypes.c_void_p(a.ctypes.data)
 
 
-def engine_path(ns=NS):
-    """Location of the compiled engine for ns states (20: protein, 4: DNA): $GPLACE_ENGINE_DIR,
-    else gplace/engine/lib/."""
-    return os.path.join(CONFIG.ENGINE_DIR, ENGINE_NAMES[ns])
+def engine_variant():
+    """The engine variant this machine uses: $GPLACE_ENGINE_VARIANT (avx2, neon or portable) if
+    set, else avx2 on x86-64 CPUs with AVX2 and FMA, neon on ARM64 (when that engine is installed),
+    else portable (same results, scalar kernels)."""
+    import platform
+    from gplace.engine.build import cpu_has_avx2
+    v = os.getenv('GPLACE_ENGINE_VARIANT', '').strip().lower()
+    if v:
+        if v not in ENGINE_VARIANTS:
+            raise EngineNotBuilt(f'GPLACE_ENGINE_VARIANT must be one of {", ".join(ENGINE_VARIANTS)}, not {v!r}.')
+        return v
+    simd = os.path.exists(os.path.join(CONFIG.ENGINE_DIR, engine_file(NS, 'avx2')))
+    if cpu_has_avx2() and simd:
+        return 'avx2'
+    if platform.machine().lower() in ('aarch64', 'arm64') and simd:
+        return 'neon'
+    return 'portable'
+
+
+def engine_path(ns=NS, variant=None):
+    """Location of the compiled engine for ns states (20: protein, 4: DNA) and a variant (default:
+    engine_variant()): $GPLACE_ENGINE_DIR, else gplace/engine/lib/."""
+    return os.path.join(CONFIG.ENGINE_DIR, engine_file(ns, variant or engine_variant()))
 
 
 _libs = {}
@@ -72,8 +91,14 @@ def lib(ns=NS):
     if ns in _libs:
         return _libs[ns]
     from gplace.engine.build import cpu_has_avx2
-    if not cpu_has_avx2():
-        raise EngineNotBuilt('This CPU does not report AVX2 and FMA support, which the gPlace engine requires.')
+    variant = engine_variant()
+    if variant == 'avx2' and not cpu_has_avx2():
+        raise EngineNotBuilt('The avx2 engine needs an x86-64 CPU with AVX2 and FMA; this one has '
+                             'neither (unset GPLACE_ENGINE_VARIANT to use the portable engine).')
+    import platform
+    if variant == 'neon' and platform.machine().lower() not in ('aarch64', 'arm64'):
+        raise EngineNotBuilt('The neon engine is for ARM64 CPUs (unset GPLACE_ENGINE_VARIANT to use '
+                             'this machine\'s engine).')
     if ns not in ENGINE_NAMES:
         raise EngineNotBuilt(f'No engine for {ns} states.')
     path = engine_path(ns)
@@ -85,6 +110,9 @@ def lib(ns=NS):
     if L.xp_n_states() != ns:
         raise EngineNotBuilt(f'{path} is an engine for {L.xp_n_states()} states, not {ns}; rebuild it with '
                              f'gplace build_engine.')
+    L.xp_simd.restype = I
+    if L.xp_simd() != {'portable': 0, 'avx2': 1, 'neon': 2}[variant]:
+        raise EngineNotBuilt(f'{path} is not a {variant} engine; rebuild it with gplace build_engine.')
     L.xp_init.restype = I
     L.xp_engine_version.restype = ctypes.c_char_p
     L.xp_exp.argtypes = [D]; L.xp_exp.restype = D

@@ -264,9 +264,8 @@ class TiledPlacer(Placer):
                 errs.append(e); done.set()
 
         try:
-            for v in tile['internal']:
-                if pending[v] == 0:
-                    ex.submit(distal_task, v)
+            for v in [v for v in tile['internal'] if pending[v] == 0]:   # see Placer.cache
+                ex.submit(distal_task, v)
             done.wait()
             if errs:
                 raise errs[0]

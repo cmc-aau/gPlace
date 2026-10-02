@@ -27,14 +27,16 @@ def is_gamma(refpkg_dir):
     return models.read_phylo_model(refpkg_dir).get('ras_model') == 'gamma'
 
 
-def new_placer(refpkg_dir, queries, cpus=1, fix_gamma_underflow=False):
-    """A loaded placer for refpkg_dir (untiled). fix_gamma_underflow only affects gamma models."""
+def new_placer(refpkg_dir, queries, cpus=1, fix_gamma_underflow=False, discard_nonoverlapped=False):
+    """A loaded placer for refpkg_dir (untiled). fix_gamma_underflow only affects gamma models;
+    discard_nonoverlapped drops queries that do not overlap the reference alignment (pplacer's
+    --discard-nonoverlapped) instead of stopping."""
     if is_gamma(refpkg_dir):
         from gplace.engine.gamma import GammaPlacer
-        placer = GammaPlacer(refpkg_dir, queries, cpus)
+        placer = GammaPlacer(refpkg_dir, queries, cpus, discard_nonoverlapped=discard_nonoverlapped)
         placer.set_gamma_fix(fix_gamma_underflow)
         return placer
-    return Placer(refpkg_dir, queries, cpus)
+    return Placer(refpkg_dir, queries, cpus, discard_nonoverlapped=discard_nonoverlapped)
 
 
 def tiled_placer(placer, tile_edges, **kw):

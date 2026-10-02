@@ -120,6 +120,25 @@ def weighted_placements(lib, refined):
     return pl
 
 
+def _distinct_rows(A):
+    """(row -> index of its distinct row, first row of every distinct row), distinct rows numbered
+    in order of first occurrence. Rows are hashed (BLAKE2b), and equal hashes are verified."""
+    import hashlib
+    seen, first = {}, []
+    rep_of = np.empty(len(A), np.int64)
+    for i in range(len(A)):
+        key = hashlib.blake2b(A[i].tobytes(), digest_size=16).digest()
+        for r in seen.get(key, ()):
+            if np.array_equal(A[first[r]], A[i]):
+                break
+        else:
+            r = len(first)
+            first.append(i)
+            seen.setdefault(key, []).append(r)
+        rep_of[i] = r
+    return rep_of, first
+
+
 def load_refpkg(refpkg_dir):
     """Read CONTENTS.json and return (tree text, reference alignment, phylo_model dict). The model is
     checked when it is built (models.model_from_refpkg)."""
@@ -140,7 +159,7 @@ class Placer(object):
     """Place aligned queries on one reference package, exactly as pplacer does (CAT models; gamma
     models use gamma.GammaPlacer, see factory.new_placer)."""
 
-    def __init__(self, refpkg_dir, queries, cpus=1):
+    def __init__(self, refpkg_dir, queries, cpus=1, discard_nonoverlapped=False):
         self.logger = logging.getLogger('timestamp')
         cpus = resources.parse_cpus(cpus)
         if cpus == 'auto':
@@ -214,15 +233,38 @@ class Placer(object):
                 i = int(np.nonzero(~ok)[0][0])
                 raise AlignmentMalformed(f'Unknown characters {set(seqs[i][1].upper()) - set(self.alpha.char_map)} '
                                          f'in {seqs[i][0]}.')
-        mask = core.informative(RA).any(axis=0) & core.informative(QA).any(axis=0)
+        # pplacer_run.premask: every query must have a residue in a column where some reference
+        # has one ("doesn't overlap any reference sequences"), unless --discard-nonoverlapped
+        ref_inf = core.informative(RA).any(axis=0)
+        overlaps = (core.informative(QA) & ref_inf).any(axis=1)
+        self.discarded = [names[i] for i in np.nonzero(~overlaps)[0]]
+        if self.discarded:
+            if not discard_nonoverlapped:
+                raise AlignmentMalformed(f'Sequence {self.discarded[0]} doesn\'t overlap any reference '
+                                         f'sequences.' + (f' ({len(self.discarded)} such sequences; '
+                                                          f'--discard_nonoverlapped drops them.)'
+                                                          if len(self.discarded) > 1 else
+                                                          ' (--discard_nonoverlapped drops it.)'))
+            keep_q = np.nonzero(overlaps)[0]
+            names = [names[i] for i in keep_q]
+            QA = np.ascontiguousarray(QA[keep_q])
+            if not names:
+                raise AlignmentMalformed('No query sequences to place: none overlaps the reference sequences.')
+        mask = ref_inf & core.informative(QA).any(axis=0)
         keep = np.nonzero(mask)[0]
         self.nsites = len(keep)
         self.cats = np.ascontiguousarray(cats_full[keep])
         self.occupied = np.zeros(self.nrates, np.uint8)
         self.occupied[np.unique(self.cats)] = 1
         self.refA = np.ascontiguousarray(RA[:, keep])
-        self.QM = np.ascontiguousarray(QA[:, keep])
-        self.query_names = names
+        # pplacer places each distinct (pre-masked) sequence once: query_names/QM hold the first
+        # query of every distinct sequence; all_names and rep_of map every query to its row
+        QM = np.ascontiguousarray(QA[:, keep])
+        rep_of, first = _distinct_rows(QM)
+        self.all_names, self.rep_of = names, rep_of
+        self.QM = QM if len(first) == len(names) else np.ascontiguousarray(QM[first])
+        self.query_names = [names[i] for i in first]
+        self._name_index = None
         rowof = {n: i for i, (n, _) in enumerate(ref)}
         missing = [nm for nm in leaf_names if nm not in rowof]
         if missing:
@@ -239,6 +281,26 @@ class Placer(object):
         self.local = threading.local()
         self.aln_len = L
         self.n_leaves = len(leaf_names)
+
+    def expand(self, results):
+        """Results of the distinct sequences (run/place_all) -> one per query, in input order."""
+        return [(nm,) + tuple(results[r][1:]) for nm, r in zip(self.all_names, self.rep_of)]
+
+    def records(self, names):
+        """jplace records for the queries `names` (one output file), as pplacer groups them:
+        queries with the same pre-masked sequence share a record, names in input order. The mask is
+        the file's own (columns with a residue in some reference and some query of the file), as
+        when pplacer places that file alone. Returns [[name, ...], ...] in first-occurrence order."""
+        if self._name_index is None:
+            self._name_index = {n: i for i, n in enumerate(self.all_names)}
+        ii = np.array([self._name_index[n] for n in names], np.int64)
+        rows = self.QM[self.rep_of[ii]]
+        rows = np.ascontiguousarray(rows[:, core.informative(rows).any(axis=0)])
+        rep_of, first = _distinct_rows(rows)
+        out = [[] for _ in first]
+        for n, r in zip(names, rep_of):
+            out[r].append(n)
+        return out
 
     def memory_estimate(self, workers=None):
         """Estimated peak memory (bytes) of this pass (see resources.estimate_memory)."""
@@ -362,9 +424,10 @@ class Placer(object):
             except BaseException as e:
                 errs.append(e); done.set()
 
-        for v in self.internal:
-            if pending[v] == 0:
-                ex.submit(distal_task, v)
+        # the starting nodes are taken before any task runs: running tasks decrement pending and
+        # submit parents themselves, so testing pending while submitting could submit a node twice
+        for v in [v for v in self.internal if pending[v] == 0]:
+            ex.submit(distal_task, v)
         done.wait()
         if errs:
             ex.shutdown(); raise errs[0]

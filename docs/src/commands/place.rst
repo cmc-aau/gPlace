@@ -15,6 +15,23 @@ Arguments
    :path: place
    :nodefaultconst:
 
+Taxonomy, duplicates and non-overlapping queries
+------------------------------------------------
+
+gPlace follows pplacer here too:
+
+* **Classification.** If the reference package lists a ``taxonomy`` (pplacer's tax table) and a
+  ``seq_info`` file, e.g. one built with ``taxit create --taxonomy ... --seq-info ...``, every
+  placement gets a ``classification`` field: the taxon of its edge by *edge painting* (the most
+  specific rank at which exactly one taxon is cut by the edge), or with ``--mrca_class`` the
+  taxonomic MRCA of the reference sequences below the edge. GTDB-Tk's reference packages have no
+  taxonomy, so their output has no such field.
+* **Duplicates.** Queries whose sequences are identical after pre-masking are placed once and
+  written as one record listing all their names.
+* **Non-overlapping queries.** A query with no residue in any column where a reference sequence
+  has one stops the run (``Sequence ... doesn't overlap any reference sequences.``), unless
+  ``--discard_nonoverlapped`` drops it.
+
 Memory limits and large trees
 -----------------------------
 

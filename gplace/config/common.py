@@ -22,6 +22,15 @@ from functools import lru_cache
 ENGINE_NAME = 'libgplace_core.so'          # 20 states: protein models
 ENGINE_NAME_NT = 'libgplace_core_nt.so'    # 4 states: DNA (GTR)
 ENGINE_NAMES = {20: ENGINE_NAME, 4: ENGINE_NAME_NT}
+# "avx2": AVX2 kernels, x86-64 CPUs with AVX2 and FMA; "neon": NEON kernels, ARM64; "portable":
+# scalar kernels, any 64-bit CPU. All give the same results. The SIMD engine of an architecture
+# (avx2 on x86-64, neon on ARM64) keeps the names above; the portable one is *_portable.so.
+ENGINE_VARIANTS = ('avx2', 'neon', 'portable')
+
+
+def engine_file(ns, variant='avx2'):
+    name = ENGINE_NAMES[ns]
+    return name if variant != 'portable' else name.replace('.so', '_portable.so')
 
 
 class __GPlaceCommonConfig:

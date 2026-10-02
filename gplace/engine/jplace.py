@@ -47,7 +47,7 @@ def _f(v):
     return '%.12g' % v
 
 
-def write_jplace(path, tree, results, invocation):
+def write_jplace(path, tree, results, invocation, records=None, classify=None):
     """Write a jplace file.
 
     Parameters
@@ -60,15 +60,31 @@ def write_jplace(path, tree, results, invocation):
         [(name, placements, warnings)], placements as [distal, edge, lwr, likelihood, pendant].
     invocation : str
         Command line recorded in the metadata.
+    records : list, optional
+        [[name, ...], ...]: names sharing a record (pplacer writes identical query sequences as one
+        record, Placer.records); default one record per result.
+    classify : callable, optional
+        edge number -> tax_id or None (taxonomy.Classifier): adds pplacer's "classification"
+        field, first in the sorted field list.
     """
+    pl_of = {name: pl for name, pl, _ in results}
+    if records is None:
+        records = [[name] for name, _, _ in results]
+    fields = (['classification'] if classify is not None else []) + JPLACE_FIELDS
     with open(path, 'w') as fh:
         fh.write('{"tree": ' + _qs(tree) + ', "placements":\n  [\n')
-        for i, (name, pl, _) in enumerate(results):
-            ps = ', '.join('[%s, %d, %s, %s, %s]' % (_f(p[0]), int(p[1]), _f(p[2]), _f(p[3]), _f(p[4]))
-                           for p in pl)
-            fh.write('  {"p": [%s], "nm": [[%s, 1]]}%s\n' % (ps, _qs(name), ',' if i + 1 < len(results) else ''))
+        for i, names in enumerate(records):
+            rows = []
+            for p in pl_of[names[0]]:
+                row = '%s, %d, %s, %s, %s' % (_f(p[0]), int(p[1]), _f(p[2]), _f(p[3]), _f(p[4]))
+                if classify is not None:
+                    tax = classify(int(p[1]))
+                    row = ('null' if tax is None else _qs(tax)) + ', ' + row
+                rows.append('[' + row + ']')
+            nm = ', '.join('[%s, 1]' % _qs(n) for n in names)
+            fh.write('  {"p": [%s], "nm": [%s]}%s\n' % (', '.join(rows), nm, ',' if i + 1 < len(records) else ''))
         fh.write('  ], "metadata": {"invocation": ' + _qs(invocation) + '}, "version": 3, "fields":\n')
-        fh.write('  [' + ', '.join(_qs(f) for f in JPLACE_FIELDS) + ']\n}\n')
+        fh.write('  [' + ', '.join(_qs(f) for f in fields) + ']\n}\n')
 
 
 _NONFINITE = [(re.compile(r'(?<![\w."])-?nan(?![\w"])'), 'NaN'),
@@ -93,17 +109,27 @@ def read_jplace(path):
     return js.get('tree', ''), out, fields
 
 
+def _records(path):
+    """The name lists of a file's records (pplacer writes identical queries as one record)."""
+    text = open(path).read()
+    for rx, rep in _NONFINITE:
+        text = rx.sub(rep, text)
+    return sorted(tuple(n[0] for n in pl['nm']) if 'nm' in pl else tuple(pl['n'])
+                  for pl in json.loads(text)['placements'])
+
+
 def compare_jplace(path_a, path_b):
     """Compare two jplace files placement by placement.
 
     Returns a dict with counts of identical best edges, identical full edge lists, identical
     printed values (every field equal) and the largest absolute difference per field for the
     best placement, plus up to 25 examples of differing genomes."""
-    tree_a, a, _ = read_jplace(path_a)
-    tree_b, b, _ = read_jplace(path_b)
+    tree_a, a, fields_a = read_jplace(path_a)
+    tree_b, b, fields_b = read_jplace(path_b)
     names = sorted(set(a) | set(b))
     rep = {'genomes': len(names), 'only_a': 0, 'only_b': 0, 'best_edge': 0, 'edge_list': 0,
            'identical': 0, 'same_tree': tree_a == tree_b,
+           'same_records': _records(path_a) == _records(path_b), 'same_fields': fields_a == fields_b,
            'max_delta': {k: 0.0 for k in ('likelihood', 'like_weight_ratio', 'distal_length', 'pendant_length')},
            'examples': []}
     for n in names:

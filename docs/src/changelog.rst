@@ -24,5 +24,14 @@ Major Changes:
   full GTDB bacterial tree).
 * Prefilter kernel: exponent totals in 64-bit integers, so very large trees stay on the SIMD path
   (7-37x faster prefilter on the full GTDB bacterial tree; identical scores).
-* Prebuilt ``manylinux2014`` wheel (one wheel for every Linux distribution and Python >= 3.12).
+* Runs where pplacer runs on Linux: x86-64 (AVX2 kernels with AVX2 + FMA, otherwise a portable
+  engine with identical results) and ARM64 (NEON kernels).
+* pplacer's taxonomic ``classification`` field for reference packages with a taxonomy (edge
+  painting, or ``--mrca_class``); identical query sequences placed once and written as one record;
+  queries that do not overlap the reference alignment stop the run, or are dropped with
+  ``--discard_nonoverlapped``.
+* Prebuilt ``manylinux2014`` wheels for x86-64 and ARM64 (one wheel per architecture for every
+  Linux distribution and Python >= 3.12).
 * jplace output with pplacer's number formatting (``%.12g``) and a byte-identical tree string.
+* The engine is written in Rust (``gplace/engine/rust``, no dependencies; installing from source
+  needs Rust 1.75 or newer); GSL 1.16, CORE-MATH and glibc 2.19's ``hypot`` stay C.
