@@ -1,0 +1,54 @@
+# Build the engine and check it is bit-exact against GTDB-Tk's pplacer on every push.
+name: Tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]       # x86-64, ARM64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache GSL 1.16 build
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/gplace/build/gsl116
+          key: gsl116-${{ runner.os }}-${{ runner.arch }}-v1
+
+      - name: Rust toolchain (the engine is Rust)
+        run: |
+          command -v cargo || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Install gPlace (compiles the engine)
+        env:
+          GPLACE_BUILD_JOBS: 4
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Check the engine
+        run: gplace check_install
+
+      - name: Placement test (bit-identical to pplacer)
+        run: gplace test --models --cpus 2
+
+      - name: Portable engine (scalar kernels; same results as AVX2 / NEON)
+        env:
+          GPLACE_ENGINE_VARIANT: portable
+        run: |
+          gplace check_install
+          gplace test --models --cpus 2
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests
