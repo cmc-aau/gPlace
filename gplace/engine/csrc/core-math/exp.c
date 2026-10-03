@@ -72,6 +72,7 @@ roundeven_finite (double x)
     if (v.n == 0 || __builtin_ctzll (v.n) > __builtin_ctzll (u.n))
       ix = v.f;
   }
+  ix = __builtin_copysign (ix, x); /* gPlace: -0.5 -> -0.0, as roundeven */
 # endif
   return ix;
 }

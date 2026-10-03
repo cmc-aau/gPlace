@@ -45,7 +45,10 @@ from gplace.exceptions import GPlaceExit
 CSRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csrc')        # third-party C
 RUST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rust')   # the engine (Rust)
 RUST_TRIPLES = {'x86_64': 'x86_64-unknown-linux-gnu', 'aarch64': 'aarch64-unknown-linux-gnu'}
-FLAGS = ['-O2', '-fPIC', '-ffp-contract=off']
+# -Werror=implicit-function-declaration: a builtin the compiler does not know (e.g. __builtin_roundeven
+# before gcc 10) would otherwise compile as a call to a missing function and only fail when the engine
+# is loaded
+FLAGS = ['-O2', '-fPIC', '-ffp-contract=off', '-Werror=implicit-function-declaration']
 SIMD = ['-mavx2', '-mfma']          # AVX2 kernels; -mfma only for CORE-MATH's explicit fma() calls
 VARIANT_FLAGS = {'avx2': SIMD, 'neon': [], 'portable': []}    # ARM64: NEON is part of ARMv8-A
 # GSL's own libm calls (its gamma functions use exp, log, pow, sin) must give glibc 2.19's results,
@@ -120,6 +123,46 @@ def engine_variants(cc='gcc'):
     if arch in ('aarch64', 'arm64'):
         return ('neon', 'portable')
     return ('portable',)
+
+
+def compiler_id(cc='gcc'):
+    """(name, major version) of the C compiler: ('gcc', 9), ('clang', 17), or (None, None)."""
+    try:
+        out = subprocess.run([cc, '-dM', '-E', '-x', 'c', os.devnull], capture_output=True, text=True).stdout
+    except OSError:
+        return None, None
+    macros = dict(l.split()[1:3] for l in out.splitlines() if l.startswith('#define ') and len(l.split()) >= 3)
+    if '__clang_major__' in macros:
+        return 'clang', int(macros['__clang_major__'])
+    if '__GNUC__' in macros:
+        return 'gcc', int(macros['__GNUC__'])
+    return None, None
+
+
+def c_std_flags(cc='gcc'):
+    """gcc < 5 compiles C as gnu90 by default; CORE-MATH needs C99 or later."""
+    name, major = compiler_id(cc)
+    return ['-std=gnu11'] if name == 'gcc' and major < 5 else []
+
+
+def check_engine(path, cc='gcc'):
+    """Stop if a compiled engine cannot be used: an undefined __builtin_* symbol (a compiler builtin
+    the C compiler did not know), or, when built for this machine, any load error."""
+    name, major = compiler_id(cc)
+    who = f'{name} {major}' if name else cc
+    nm = shutil.which('nm')
+    if nm:
+        out = subprocess.run([nm, '-D', '--undefined-only', path], capture_output=True, text=True).stdout
+        missing = sorted({l.split()[-1] for l in out.splitlines() if l.split() and l.split()[-1].startswith('__builtin_')})
+        if missing:
+            raise GPlaceExit(f'The engine {path} needs {", ".join(missing)}, which the C compiler ({who}) does not '
+                             f'provide. Please report this; a newer compiler (e.g. gcc >= 10) avoids it.')
+    if target_arch(cc) == platform.machine():
+        import ctypes
+        try:
+            ctypes.CDLL(path)
+        except OSError as e:
+            raise GPlaceExit(f'The engine was built with {who} but cannot be loaded: {e}')
 
 
 def variant_flags(variant, cc='gcc'):
@@ -246,8 +289,9 @@ def build_engine(out_dir=None, gsl_prefix=None, gsl_tarball=None, work_dir=None,
     cm = os.path.join(CSRC, 'core-math')
     gl = os.path.join(CSRC, 'glibc')
     targets = []
+    std = c_std_flags(cc)
     for variant in engine_variants(cc):
-        flags = FLAGS + variant_flags(variant, cc)
+        flags = FLAGS + std + variant_flags(variant, cc)
         obj = os.path.join(work_dir, 'obj', f'{target_arch(cc)}-{variant}')
         os.makedirs(obj, exist_ok=True)
         o = lambda n: os.path.join(obj, n)
@@ -256,15 +300,16 @@ def build_engine(out_dir=None, gsl_prefix=None, gsl_tarball=None, work_dir=None,
         _run([cc] + flags + ['-I' + os.path.join(cm, 'pow'), '-c', '-o', o('cr_pow.o'),
                              os.path.join(cm, 'pow', 'pow.c')], logger=logger)
         _run([cc] + flags + ['-c', '-o', o('cr_sin.o'), os.path.join(cm, 'sin.c')], logger=logger)
-        _run([cc] + FLAGS + ['-I' + gl, '-D__ieee754_hypot=hypot', '-c', '-o', o('hypot219.o'),
+        _run([cc] + FLAGS + std + ['-I' + gl, '-D__ieee754_hypot=hypot', '-c', '-o', o('hypot219.o'),
                              os.path.join(gl, 'e_hypot.c')], logger=logger)
-        _run([cc] + FLAGS + ['-I' + gl, '-D__log1p=log1p', '-c', '-o', o('log1p219.o'),
+        _run([cc] + FLAGS + std + ['-I' + gl, '-D__log1p=log1p', '-c', '-o', o('log1p219.o'),
                              os.path.join(gl, 's_log1p.c')], logger=logger)
         libm_map = LIBM_MAP if variant == 'avx2' else LIBM_MAP_PORTABLE
         objs = [o('cr_exp.o'), o('cr_log.o'), o('cr_pow.o'), o('cr_sin.o'), o('hypot219.o'), o('log1p219.o')]
         for ns in sorted(ENGINE_NAMES, reverse=True):          # one engine per state count
             target = os.path.join(out_dir, engine_file(ns, variant))
             build_rust_engine(target, variant, ns, gsl_prefix, objs, libm_map, work_dir, cc, logger)
+            check_engine(target, cc)
             _say(logger, f'Engine ({variant}, {ns} states) written to {target}')
             targets.append(target)
     return targets

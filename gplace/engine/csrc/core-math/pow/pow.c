@@ -70,6 +70,26 @@ SOFTWARE.
 
 #include "pow.h"
 
+/* gPlace: __builtin_mul_overflow appeared in gcc 5; older compilers get the same check through
+   128-bit products (exact: the factors are below 2^64 in magnitude). */
+#if defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 5)
+# define mul_overflow_ui(a, b, r) __builtin_mul_overflow (a, b, r)
+# define mul_overflow_uu(a, b, r) __builtin_mul_overflow (a, b, r)
+#else
+static inline int mul_overflow_ui (uint64_t a, int64_t b, int64_t *r)
+{
+  __int128 p = (__int128) a * (__int128) b;
+  *r = (int64_t) p;
+  return p != (__int128) *r;
+}
+static inline int mul_overflow_uu (uint64_t a, uint64_t b, uint64_t *r)
+{
+  unsigned __int128 p = (unsigned __int128) a * b;
+  *r = (uint64_t) p;
+  return (p >> 64) != 0;
+}
+#endif
+
 // Warning: clang also defines __GNUC__
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
@@ -1321,12 +1341,12 @@ exact_pow (double *r, double x, double y, const dint64_t *z,
   while (t) {
     if (t & 0x1) {
       // k = m * k;
-      if (__builtin_mul_overflow (m, k, &k)) /* m*k overflows */
+      if (mul_overflow_ui (m, k, &k)) /* m*k overflows */
         return 0;
     }
     t = t >> 1;
     // m *= m;
-    if (t != 0 && __builtin_mul_overflow (m, m, &m)) /* m*m overflows */
+    if (t != 0 && mul_overflow_uu (m, m, &m)) /* m*m overflows */
       return 0;
   }
 

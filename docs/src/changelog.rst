@@ -50,6 +50,11 @@ Major Changes:
   ``--gamma_alpha`` (``--model`` is accepted).
 * Stockholm query files (``.sto``, ``.sth``) and reference packages with ``aln_sto``; gzipped
   alignments (``.gz``).
+* Source installs with older C compilers (gcc 4.8 to 9, e.g. CentOS 7): the vendored CORE-MATH
+  ``sin`` and ``pow`` no longer need ``__builtin_roundeven`` (gcc 10) or ``__builtin_mul_overflow``
+  (gcc 5), and gcc < 5 compiles them as C11. Before, gcc < 10 built an engine that failed to load
+  (``undefined symbol: __builtin_roundeven``); the build now stops on any unknown builtin and checks
+  that every engine loads.
 * Gamma models with 21 or more categories (GSL calls ``log1p``: glibc 2.19's, as in pplacer) are
   supported; a GSL error while the gamma rates are computed (e.g. alpha 10^6) stops gPlace with
   pplacer's message, as pplacer stops.
