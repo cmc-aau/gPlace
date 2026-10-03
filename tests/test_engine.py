@@ -48,7 +48,7 @@ class TestEngineImports(unittest.TestCase):
 
     def test_only_exact_libm_functions_imported(self):
         """The wheel runs on any distribution's libm; only functions that are exact everywhere
-        (sqrt, frexp, ldexp, fmod, round, ...) may come from it. exp/log/pow/sin/hypot are built in,
+        (sqrt, frexp, ldexp, fmod, round, ...) may come from it. exp/log/pow/sin/hypot/log1p are built in,
         also for GSL's own calls (build.py LIBM_CR); other libm functions GSL references are traps."""
         import shutil
         import subprocess

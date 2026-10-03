@@ -12,6 +12,8 @@ Below is a list of all gPlace command line options:
    place
    place_batch
    compare
+   tog
+   taxit
    benchmark
    test
    check_install

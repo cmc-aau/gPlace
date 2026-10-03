@@ -80,10 +80,12 @@ pub extern "C" fn xp_n_states() -> c_int {
     NS as c_int
 }
 
-/// GSL must report errors as return codes (the optimiser relies on them), not abort.
+/// GSL must report errors as return codes (the optimiser relies on them), not abort. The handler
+/// ignores them, like gsl_set_error_handler_off, except while the discrete gamma rates are computed:
+/// there it records the first one (see `model::gsl_error_handler`).
 #[no_mangle]
 pub extern "C" fn xp_init() -> c_int {
-    unsafe { ffi::gsl_set_error_handler_off() };
+    unsafe { ffi::gsl_set_error_handler(Some(model::gsl_error_handler)) };
     0
 }
 
@@ -113,6 +115,12 @@ pub extern "C" fn xp_sin(v: f64) -> f64 {
 #[no_mangle]
 pub extern "C" fn xp_hypot(a: f64, b: f64) -> f64 {
     unsafe { ffi::hypot(a, b) }
+}
+
+/// log1p is only used by GSL (gsl_cdf_gamma_Pinv, 21+ gamma categories); exported for the self-tests.
+#[no_mangle]
+pub extern "C" fn xp_log1p(v: f64) -> f64 {
+    unsafe { ffi::log1p(v) }
 }
 
 /// Targets of the libm functions GSL references but gPlace never calls (build.py LIBM_TRAPS):

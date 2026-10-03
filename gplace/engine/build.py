@@ -53,9 +53,9 @@ VARIANT_FLAGS = {'avx2': SIMD, 'neon': [], 'portable': []}    # ARM64: NEON is p
 # GSL's object files reference are never called by gPlace; they are bound to traps that abort, so
 # no inexact system libm function can be used silently (tests/test_engine.py checks the imports).
 LIBM_CR = {'exp': 'cr_exp', 'log': 'cr_log', 'pow': 'cr_pow', 'sin': 'cr_sin'}
-LIBM_TRAPS = ('cos', 'cosh', 'sinh', 'tan', 'tanh', 'log1p', 'sincos', 'expm1', 'atan', 'atan2', 'asin',
+LIBM_TRAPS = ('cos', 'cosh', 'sinh', 'tan', 'tanh', 'sincos', 'expm1', 'atan', 'atan2', 'asin',
               'acos', 'acosh', 'atanh', 'asinh', 'log10', 'log2', 'exp2', 'cbrt', 'erf', 'erfc', 'lgamma',
-              'tgamma', 'fma')
+              'tgamma', 'fma')     # log1p and hypot: glibc 2.19's own code (csrc/glibc), linked in
 LIBM_MAP = ([f'-Wl,--defsym={k}={v}' for k, v in LIBM_CR.items()]
             + [f'-Wl,--defsym={k}=xp_libm_trap_{k}' for k in LIBM_TRAPS])
 # The portable engine is compiled without -mfma, so on x86-64 CORE-MATH's fma() calls go to libm:
@@ -258,8 +258,10 @@ def build_engine(out_dir=None, gsl_prefix=None, gsl_tarball=None, work_dir=None,
         _run([cc] + flags + ['-c', '-o', o('cr_sin.o'), os.path.join(cm, 'sin.c')], logger=logger)
         _run([cc] + FLAGS + ['-I' + gl, '-D__ieee754_hypot=hypot', '-c', '-o', o('hypot219.o'),
                              os.path.join(gl, 'e_hypot.c')], logger=logger)
+        _run([cc] + FLAGS + ['-I' + gl, '-D__log1p=log1p', '-c', '-o', o('log1p219.o'),
+                             os.path.join(gl, 's_log1p.c')], logger=logger)
         libm_map = LIBM_MAP if variant == 'avx2' else LIBM_MAP_PORTABLE
-        objs = [o('cr_exp.o'), o('cr_log.o'), o('cr_pow.o'), o('cr_sin.o'), o('hypot219.o')]
+        objs = [o('cr_exp.o'), o('cr_log.o'), o('cr_pow.o'), o('cr_sin.o'), o('hypot219.o'), o('log1p219.o')]
         for ns in sorted(ENGINE_NAMES, reverse=True):          # one engine per state count
             target = os.path.join(out_dir, engine_file(ns, variant))
             build_rust_engine(target, variant, ns, gsl_prefix, objs, libm_map, work_dir, cc, logger)

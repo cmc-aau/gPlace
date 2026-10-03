@@ -4,7 +4,7 @@ Installing gPlace
 =================
 
 gPlace's placement engine is written in Rust (``gplace/engine/rust``) and links three third-party C
-libraries that exactness depends on: GSL 1.16, CORE-MATH and glibc 2.19's ``hypot``. On x86-64 and
+libraries that exactness depends on: GSL 1.16, CORE-MATH and glibc 2.19's ``hypot`` and ``log1p``. On x86-64 and
 ARM64 Linux, ``pip install gtdb-gplace`` installs it prebuilt; installing from source compiles it
 automatically.
 

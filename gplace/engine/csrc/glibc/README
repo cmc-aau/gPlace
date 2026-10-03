@@ -2,6 +2,13 @@ e_hypot.c is sysdeps/ieee754/dbl-64/e_hypot.c from GNU C Library 2.19 (unmodifie
 fdlibm-derived implementation, Copyright (C) 1993 Sun Microsystems, freely redistributable
 with its notice preserved). GTDB-Tk's pplacer v1.1.alpha19 is statically linked with glibc 2.19;
 GSL 1.16's Householder/Givens code calls libm hypot(), and glibc >= 2.35 ships a different
-hypot(), which changes the WAG eigendecomposition in its last bits. math_private.h is a minimal
-shim providing the word-access macros e_hypot.c needs; the file is compiled with
--D__ieee754_hypot=hypot so GSL links against it.
+hypot(), which changes the WAG eigendecomposition in its last bits.
+
+s_log1p.c is sysdeps/ieee754/dbl-64/s_log1p.c from GNU C Library 2.19 (unmodified; fdlibm-derived,
+same notice), the log1p() of pplacer's binary on x86-64 (glibc 2.19 has no x86-64-specific version).
+GSL 1.16's gsl_cdf_gamma_Pinv calls log1p(-P) for P > 0.95, i.e. pplacer's discrete gamma rates with
+21 or more categories; log1p is not correctly rounded, so only this algorithm gives pplacer's values.
+
+math_private.h is a minimal shim providing what the two files need (word-access macros, the alias
+macros, math_force_eval); they are compiled with -D__ieee754_hypot=hypot and -D__log1p=log1p so GSL
+links against them.

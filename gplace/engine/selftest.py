@@ -17,7 +17,7 @@
 
 """Bit-exactness self-tests of the compiled engine (`gplace check_install`).
 
-1. libm: hypot/exp/log/pow/sin against values returned by the libm inside GTDB-Tk's pplacer binary.
+1. libm: hypot/exp/log/pow/sin/log1p against values returned by the libm inside GTDB-Tk's pplacer binary.
 2. Model: the WAG eigendecomposition against the one dumped from GTDB-Tk's pplacer binary.
 3. Kernels: every SIMD kernel against its scalar reference, on random and extreme inputs, in the
    protein (20-state) and DNA (4-state) engines.
@@ -59,7 +59,7 @@ def check_libm(ns=NS):
         op, a, b, want = line.split()
         a, b, want = float.fromhex(a), float.fromhex(b), float.fromhex(want)
         got = {'h': lambda: L.xp_hypot(a, b), 'e': lambda: L.xp_exp(a), 'l': lambda: L.xp_log(a),
-               'p': lambda: L.xp_pow(a, b), 's': lambda: L.xp_sin(a)}[op]()
+               'p': lambda: L.xp_pow(a, b), 's': lambda: L.xp_sin(a), 'q': lambda: L.xp_log1p(a)}[op]()
         n += 1
         bad += _bits(np.array([got]))[0] != _bits(np.array([want]))[0]
     return n, bad

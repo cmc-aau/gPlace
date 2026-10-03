@@ -474,7 +474,7 @@ class OptionsParser(object):
             self.logger.info(f'Engine ({what}): {path}')
             self.logger.info(f'        {L.xp_engine_version().decode()}')
             n, bad = selftest.check_libm(ns)
-            self.logger.info(f'  libm vs GTDB-Tk pplacer binary (hypot/exp/log/pow/sin): {n - bad}/{n} identical')
+            self.logger.info(f'  libm vs GTDB-Tk pplacer binary (hypot/exp/log/pow/sin/log1p): {n - bad}/{n} identical')
             ok &= bad == 0
             if ns == 20:
                 si, se, sv = selftest.check_wag_eigen()
@@ -529,7 +529,37 @@ class OptionsParser(object):
             self.check_install(options)
         elif options.subparser_name == 'build_engine':
             self.build_engine(options)
+        elif options.subparser_name == 'tog':
+            from gplace.tools.tog import tog
+            tog(options.placefiles, out_file=options.tog_out_file, out_dir=options.tog_out_dir,
+                prefix=options.tog_prefix, pp=options.pp, xml=options.xml, node_numbers=options.node_numbers)
+        elif options.subparser_name == 'taxit':
+            from gplace.tools import taxit
+            cmd = getattr(options, 'taxit_command', None)
+            try:
+                return self._taxit(taxit, cmd, options)
+            except (ValueError, KeyError) as e:          # taxit leaves these uncaught: same last line
+                print(f'{type(e).__name__}: {e}', file=sys.stderr)
+                return 1
         else:
             self.logger.error('Unknown gPlace command: "' + options.subparser_name + '"\n')
             sys.exit(1)
         return 0
+
+    @staticmethod
+    def _taxit(taxit, cmd, options):
+        if cmd == 'create':
+            files = {k: getattr(options, k) for k in taxit.CREATE_FILES}
+            st = taxit.create(options.package_name, options.locus, clobber=options.clobber,
+                              author=options.author, description=options.description,
+                              package_version=options.package_version, stats_type=options.stats_type,
+                              frequency_type=options.frequency_type, reroot=options.reroot, rppr=options.rppr,
+                              **files)
+        elif cmd == 'check':
+            st = taxit.check(options.refpkg)
+        elif cmd == 'info':
+            st = taxit.info(options.refpkg, seq_names=options.seq_names, tally=options.tally,
+                            lengths=options.lengths)
+        else:
+            raise GPlaceExit('Use: gplace taxit {create,check,info} -h')
+        return st

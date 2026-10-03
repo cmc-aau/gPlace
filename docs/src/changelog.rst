@@ -34,4 +34,10 @@ Major Changes:
   Linux distribution and Python >= 3.12).
 * jplace output with pplacer's number formatting (``%.12g``) and a byte-identical tree string.
 * The engine is written in Rust (``gplace/engine/rust``, no dependencies; installing from source
-  needs Rust 1.75 or newer); GSL 1.16, CORE-MATH and glibc 2.19's ``hypot`` stay C.
+  needs Rust 1.75 or newer); GSL 1.16, CORE-MATH and glibc 2.19's ``hypot`` and ``log1p`` stay C.
+* ``tog`` (the same output as ``guppy tog``, byte for byte, Newick or phyloXML) and ``taxit create``,
+  ``taxit check``, ``taxit info`` (as taxtastic's ``taxit``): a placement workflow needs neither
+  pplacer nor taxtastic.
+* Gamma models with 21 or more categories (GSL calls ``log1p``: glibc 2.19's, as in pplacer) are
+  supported; a GSL error while the gamma rates are computed (e.g. alpha 10^6) stops gPlace with
+  pplacer's message, as pplacer stops.

@@ -37,6 +37,10 @@ def print_help():
     place_batch   -> Place many alignments, pooling queries per reference package.
     compare       -> Compare two jplace files placement by placement.
 
+  pplacer companion tools (so no pplacer or taxtastic installation is needed):
+    tog           -> Tree with each query as a pendant edge (same output as guppy tog).
+    taxit         -> Reference packages: create, check, info (same as taxtastic's taxit).
+
   Planning:
     benchmark     -> Find the fastest --cpus, and the memory and time a job needs (e.g. for SLURM).
 
@@ -71,15 +75,17 @@ def main():
     elif hasattr(args, 'out_file') and args.out_file:
         import os
         log_dir = os.path.dirname(os.path.abspath(args.out_file))
-    logger_setup(log_dir, "gplace.log", "gPlace", __version__, False,
+    tool = getattr(args, 'subparser_name', None) in ('tog', 'taxit')    # quiet: their output is the point
+    logger_setup(log_dir, "gplace.log", "gPlace", __version__, tool,
                  hasattr(args, 'debug') and args.debug)
     logger = logging.getLogger('timestamp')
 
     # -------------------------------------------------
     # do what we came here to do
+    rc = 0
     try:
         gp_parser = OptionsParser(__version__, log_dir)
-        gp_parser.parse_options(args)
+        rc = gp_parser.parse_options(args)
     except SystemExit:
         logger.error('Controlled exit resulting from early termination.')
         sys.exit(1)
@@ -111,6 +117,8 @@ def main():
         msg += '=' * 80
         logger.error(msg)
         sys.exit(1)
+    if rc:
+        sys.exit(rc)                 # e.g. taxit check: the tool's own exit status
 
 
 if __name__ == '__main__':

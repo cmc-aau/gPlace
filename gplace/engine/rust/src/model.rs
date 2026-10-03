@@ -4,7 +4,10 @@
 
 use crate::ffi::{self, exp};
 use crate::{simd, sl, sl_mut, NS, SIMD20};
-use std::os::raw::c_int;
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_int};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 /// Gsl_eigen.symmv: unsorted eigendecomposition of a symmetric n x n matrix (row-major).
 #[no_mangle]
@@ -112,6 +115,40 @@ pub unsafe extern "C" fn xp_multi_exp(tensor: *mut f64, x: *const f64, l: *const
     }
 }
 
+/// pplacer turns every GSL error into an OCaml exception (`Gsl_error.init ()` in ppatteries.ml), and
+/// its discrete gamma catches none: the first GSL error raised while the rates are computed ends the
+/// run (e.g. `Gsl_exn(6, "inverse failed to converge")` for alpha 1e6). The engine records that first
+/// error so that gPlace stops with the same message; outside the rates GSL errors are ignored (the
+/// optimiser uses GSL's return codes, as pplacer's handlers of Gsl_exn do).
+static RECORDING: AtomicBool = AtomicBool::new(false);
+static FIRST_ERROR: Mutex<Option<(c_int, String)>> = Mutex::new(None);
+
+/// The GSL error handler installed by xp_init.
+pub(crate) unsafe extern "C" fn gsl_error_handler(reason: *const c_char, _file: *const c_char, _line: c_int,
+                                                  gsl_errno: c_int) {
+    if RECORDING.load(Ordering::Relaxed) {
+        let mut first = FIRST_ERROR.lock().unwrap_or_else(|p| p.into_inner());
+        if first.is_none() {
+            let r = if reason.is_null() { String::new() } else { CStr::from_ptr(reason).to_string_lossy().into_owned() };
+            *first = Some((gsl_errno, r));
+        }
+    }
+}
+
+/// The first GSL error of the last xp_discrete_gamma call: its gsl_errno (0 if none), with its message
+/// copied into buf (NUL-terminated, truncated to len bytes).
+#[no_mangle]
+pub unsafe extern "C" fn xp_gamma_gsl_error(buf: *mut c_char, len: usize) -> c_int {
+    let first = FIRST_ERROR.lock().unwrap_or_else(|p| p.into_inner());
+    let Some((errno, reason)) = first.as_ref() else { return 0 };
+    if len > 0 {
+        let n = reason.len().min(len - 1);
+        std::ptr::copy_nonoverlapping(reason.as_ptr() as *const c_char, buf, n);
+        *buf.add(n) = 0;
+    }
+    *errno
+}
+
 /// Gamma.discrete_gamma: inverse of the gamma CDF, below a tiny epsilon -> 0.
 fn inverse_gamma_cdf(alpha: f64, beta: f64, y: f64) -> f64 {
     let epsilon = 1e-7;
@@ -124,7 +161,8 @@ fn inverse_gamma_cdf(alpha: f64, beta: f64, y: f64) -> f64 {
     }
 }
 
-/// Gamma.discrete_gamma n_cat alpha (Yang 1994, mean rates), then make_mean_one.
+/// Gamma.discrete_gamma n_cat alpha (Yang 1994, mean rates), then make_mean_one. Returns 0, -1 for
+/// n_cat <= 0, or 2 if GSL raised an error (where pplacer stops; xp_gamma_gsl_error tells which).
 #[no_mangle]
 pub unsafe extern "C" fn xp_discrete_gamma(n_cat: c_int, alpha: f64, out: *mut f64) -> c_int {
     if n_cat <= 0 {
@@ -133,6 +171,8 @@ pub unsafe extern "C" fn xp_discrete_gamma(n_cat: c_int, alpha: f64, out: *mut f
     let n = n_cat as usize;
     let out = sl_mut(out, n);
     let mut freq = vec![0.0; n + 1];
+    *FIRST_ERROR.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    RECORDING.store(true, Ordering::Relaxed);
     for (i, f) in freq.iter_mut().enumerate() {
         *f = if i == 0 {
             0.
@@ -142,6 +182,10 @@ pub unsafe extern "C" fn xp_discrete_gamma(n_cat: c_int, alpha: f64, out: *mut f
             let cutpoint = inverse_gamma_cdf(alpha, 1., i as f64 / n as f64);
             ffi::gsl_sf_gamma_inc_P(alpha + 1., cutpoint)
         };
+    }
+    RECORDING.store(false, Ordering::Relaxed);
+    if FIRST_ERROR.lock().unwrap_or_else(|p| p.into_inner()).is_some() {
+        return 2;
     }
     let mut tot = 0.;
     for i in 0..n {

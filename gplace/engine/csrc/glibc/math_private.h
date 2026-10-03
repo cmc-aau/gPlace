@@ -1,4 +1,4 @@
-/* minimal shim for compiling glibc 2.19 dbl-64 e_hypot.c standalone */
+/* minimal shim for compiling glibc 2.19 dbl-64 e_hypot.c and s_log1p.c standalone */
 #include <stdint.h>
 typedef uint32_t u_int32_t;
 typedef union { double value; struct { uint32_t lsw, msw; } p; } ieee_double_shape_type;
@@ -11,3 +11,6 @@ typedef union { double value; struct { uint32_t lsw, msw; } p; } ieee_double_sha
 #include <math.h>
 #define __ieee754_sqrt sqrt
 #define strong_alias(a,b)
+#define weak_alias(a,b)
+/* sysdeps/generic/math_private.h: evaluate x (for its floating-point flags); no effect on results */
+#define math_force_eval(x) ({ __typeof (x) __x = (x); __asm __volatile__ ("" : : "m" (__x)); })

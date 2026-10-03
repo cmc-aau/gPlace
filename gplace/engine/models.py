@@ -27,6 +27,7 @@ ignored):
     (Gstar_support.seqtype_and_trans_statd_of_info).
 """
 
+import ctypes
 import json
 import os
 
@@ -116,12 +117,24 @@ def gtr_exchangeabilities(subs_rates):
 
 def discrete_gamma(n_cats, alpha, lib=None):
     """Gamma.discrete_gamma n_cats alpha: Yang (1994) mean rates of n_cats equally likely
-    categories, scaled to mean 1, with GSL 1.16's gamma functions (in the engine)."""
+    categories, scaled to mean 1, with GSL 1.16's gamma functions (in the engine). Like pplacer,
+    whose GSL errors are exceptions that nothing catches here, it stops at the first GSL error."""
     if int(n_cats) < 1 or not alpha > 0:
         raise RefpkgMalformed(f'Invalid gamma model: n_cats {n_cats}, alpha {alpha}.')
     L = lib or core.lib()
     out = np.empty(int(n_cats))
-    if L.xp_discrete_gamma(int(n_cats), float(alpha), core.P(out)) != 0:
+    st = L.xp_discrete_gamma(int(n_cats), float(alpha), core.P(out))
+    if st == 2:
+        buf = ctypes.create_string_buffer(256)
+        errno = L.xp_gamma_gsl_error(buf, len(buf))
+        reason = buf.value.decode(errors='replace')
+        # ocamlgsl's errno type starts CONTINUE (-2), FAILURE (-1), EDOM (1), ...: pplacer prints the
+        # constructor's index, e.g. 6 for GSL_EFAILED (5)
+        ocaml = errno + 1 if errno > 0 else errno + 2
+        raise RefpkgMalformed(f'Gamma model n_cats {n_cats}, alpha {alpha}: GSL error {errno} "{reason}" while '
+                              f'computing the discrete gamma rates; pplacer stops here too with "Fatal error: '
+                              f'exception Gsl_error.Gsl_exn({ocaml}, "{reason}")".')
+    if st != 0:
         raise RefpkgMalformed(f'Invalid gamma model: n_cats {n_cats}, alpha {alpha}.')
     return [float(v) for v in out]
 

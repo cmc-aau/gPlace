@@ -1,7 +1,7 @@
 //! Link the third-party C the engine needs for bit-exactness (see gplace/engine/build.py, which
 //! compiles it and passes the paths through environment variables):
 //!   XP_GSL_PREFIX  static, -fPIC GSL 1.16 (lib/libgsl.a, lib/libgslcblas.a)
-//!   XP_DEPS_OBJS   CORE-MATH exp/log/pow/sin and glibc 2.19 hypot object files (space-separated)
+//!   XP_DEPS_OBJS   CORE-MATH exp/log/pow/sin and glibc 2.19 hypot/log1p object files (space-separated)
 //!   XP_LINK_ARGS   linker arguments binding GSL's libm calls (exp, log, pow, sin) to CORE-MATH and
 //!                  the other libm functions GSL references to aborting traps (space-separated)
 use std::env;

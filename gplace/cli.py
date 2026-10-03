@@ -262,4 +262,72 @@ def get_main_parser():
             __jobs(grp)
             __help(grp)
 
+    with subparser(sub_parsers, 'tog', 'Make a tree with each query placed as a pendant edge (same output '
+                                       'as guppy tog).') as parser:
+        parser.add_argument('placefiles', nargs='+', metavar='placefile', help='jplace file(s)')
+        with arg_group(parser, 'guppy tog options') as grp:
+            grp.add_argument('-o', dest='tog_out_file', metavar='FILE', help='Specify the filename to write to.')
+            grp.add_argument('--out-dir', '--out_dir', dest='tog_out_dir', metavar='DIR',
+                             help='Specify the directory to write files to.')
+            grp.add_argument('--prefix', dest='tog_prefix', metavar='PREFIX',
+                             help='Specify a string to be prepended to filenames.')
+            grp.add_argument('--pp', action='store_true', help='Use posterior probability for the weight.')
+            grp.add_argument('--xml', action='store_true', help='Write phyloXML (with colors) for all visualizations.')
+            grp.add_argument('--node-numbers', '--node_numbers', dest='node_numbers', action='store_true',
+                             help='Put the node numbers in where the bootstraps usually go.')
+            __help(grp)
+
+    with subparser(sub_parsers, 'taxit', 'Reference packages for pplacer: taxit create, check and info (same '
+                                         'as taxtastic\'s taxit).') as parser:
+        taxit_sub = parser.add_subparsers(title='taxit subcommands', dest='taxit_command')
+        with subparser(taxit_sub, 'create', 'Create a reference package.') as tp:
+            tp.add_argument('-c', '--clobber', action='store_true', dest='clobber', default=False,
+                            help='Delete an existing reference package.')
+            req = tp.add_argument_group('Required arguments')
+            req.add_argument('-P', '--package-name', required=True, dest='package_name', metavar='PATH',
+                             help='Name of refpkg to create')
+            req.add_argument('-l', '--locus', required=True, dest='locus', metavar='LOCUS',
+                             help='The locus described by the reference package')
+            meta = tp.add_argument_group('Package Metadata')
+            meta.add_argument('-a', '--author', dest='author', metavar='NAME', help='Person who created the reference package')
+            meta.add_argument('-d', '--description', dest='description', metavar='TEXT', help='An arbitrary description field')
+            meta.add_argument('-r', '--package-version', dest='package_version', metavar='VERSION',
+                              help='Release version for the reference package')
+            inf = tp.add_argument_group('Input files')
+            inf.add_argument('-f', '--aln-fasta', dest='aln_fasta', metavar='FILE', help='Multiple alignment in fasta format')
+            inf.add_argument('-i', '--seq-info', dest='seq_info', metavar='file',
+                             help='CSV format file describing the aligned reference sequences, minimally containing '
+                                  'the fields "seqname" and "tax_id"')
+            inf.add_argument('-m', '--mask', dest='mask', metavar='FILE', help='Text file containing a mask')
+            inf.add_argument('-M', '--model-file', dest='model', metavar='FILE',
+                             help='File containing model information usually the .bestModel file')
+            inf.add_argument('-p', '--profile', dest='profile', metavar='FILE', help='Alignment profile')
+            inf.add_argument('-R', '--readme', dest='readme', metavar='FILE',
+                             help='README file describing the reference package')
+            inf.add_argument('-s', '--tree-stats', dest='tree_stats', metavar='FILE',
+                             help='File containing tree statistics (for example RAxML_info.whatever")')
+            inf.add_argument('-S', '--aln-sto', dest='aln_sto', metavar='FILE', help='Multiple alignment in Stockholm format')
+            inf.add_argument('-t', '--tree-file', dest='tree', metavar='FILE', help='Phylogenetic tree in newick format')
+            inf.add_argument('-T', '--taxonomy', dest='taxonomy', metavar='FILE',
+                             help='CSV format file defining the taxonomy. Fields include "tax_id","parent_id","rank",'
+                                  '"tax_name" followed by a column defining tax_id at each rank starting with root')
+            ti = tp.add_argument_group('Tree information')
+            ti.add_argument('--stats-type', choices=('PhyML', 'FastTree', 'RAxML'),
+                            help='stats file type [default: attempt to guess from file contents]')
+            ti.add_argument('--frequency-type', choices=('empirical', 'model'),
+                            help='Residue frequency type from the model. Required for PhyML Amino Acid alignments.')
+            rg = tp.add_argument_group('Taxonomic Rerooting')
+            rg.add_argument('--no-reroot', action='store_false', dest='reroot', default=True,
+                            help='Do not reroot the reference package using `rppr reroot`. [default: reroot if '
+                                 '`rppr` is available and a taxonomy file is specified]')
+            rg.add_argument('--rppr', default='rppr', help='Name of the rppr executable. [default: %(default)s]')
+        with subparser(taxit_sub, 'check', 'Validate a reference package.') as tp:
+            tp.add_argument('refpkg', metavar='REFPKG', help='Path to Refpkg to check')
+        with subparser(taxit_sub, 'info', 'Show information about reference packages.') as tp:
+            tp.add_argument('refpkg', metavar='refpkg', help='the reference package to operate on')
+            tp.add_argument('-n', '--seq-names', action='store_true', default=False, help='print a list of sequence names')
+            tp.add_argument('-t', '--tally', action='store_true', default=False,
+                            help='print a tally of sequences representing each taxon at rank RANK')
+            tp.add_argument('-l', '--lengths', action='store_true', default=False, help='print sequence lengths')
+
     return main_parser

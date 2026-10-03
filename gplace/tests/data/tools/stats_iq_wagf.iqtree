@@ -1,0 +1,168 @@
+IQ-TREE 3.1.4 built Sep 29 2026
+
+Input file name: aas.fa
+Type of analysis: tree reconstruction
+Random seed number: 828991
+
+REFERENCES
+----------
+
+To cite IQ-TREE 3 please use:
+
+Thomas K.F. Wong, Nhan Ly-Trong, Huaiyan Ren, Piyumal Demotte, Hector Banos,
+Andrew J. Roger, Edward Susko, Chris Bielow, Nicola De Maio, Nick Goldman,
+Matthew W. Hahn, Mario dos Reis, Le Sy Vinh, Gavin Huttley, Robert Lanfear, Bui Quang Minh (2026)
+IQ-TREE 3: Phylogenomic Inference Software using Complex Evolutionary Models.
+Molecular Biology and Evolution, msag117.
+https://doi.org/10.1093/molbev/msag117
+
+SEQUENCE ALIGNMENT
+------------------
+
+NOTE: Alignment sequence type is auto-detected. If in doubt, specify it via -st option.
+Input data: 30 sequences with 600 amino-acid sites
+Number of constant sites: 378 (= 63% of all sites)
+Number of invariant (constant or ambiguous constant) sites: 378 (= 63% of all sites)
+Number of parsimony informative sites: 155
+Number of distinct site patterns: 324
+
+SUBSTITUTION PROCESS
+--------------------
+
+Model of substitution: WAG+F+G4
+
+State frequencies: (empirical counts from alignment)
+
+  pi(A) = 0.0985
+  pi(R) = 0.0524
+  pi(N) = 0.0416
+  pi(D) = 0.0604
+  pi(C) = 0.0073
+  pi(Q) = 0.0391
+  pi(E) = 0.0810
+  pi(G) = 0.0478
+  pi(H) = 0.0151
+  pi(I) = 0.0812
+  pi(L) = 0.1132
+  pi(K) = 0.0601
+  pi(M) = 0.0209
+  pi(F) = 0.0173
+  pi(P) = 0.0407
+  pi(S) = 0.0369
+  pi(T) = 0.0703
+  pi(W) = 0.0081
+  pi(Y) = 0.0286
+  pi(V) = 0.0795
+
+Model of rate heterogeneity: Gamma with 4 categories
+Gamma shape alpha: 0.2909
+
+ Category  Relative_rate  Proportion
+  1         0.0046         0.2500
+  2         0.0975         0.2500
+  3         0.5803         0.2500
+  4         3.3177         0.2500
+Relative rates are computed as MEAN of the portion of the Gamma distribution falling in the category.
+
+MAXIMUM LIKELIHOOD TREE
+-----------------------
+
+Log-likelihood of the tree: -6133.6661 (s.e. 287.7858)
+Unconstrained log-likelihood (without tree): -3167.2385
+Number of free parameters (#branches + #model parameters): 77
+Akaike information criterion (AIC) score: 12421.3323
+Corrected Akaike information criterion (AICc) score: 12444.3437
+Bayesian information criterion (BIC) score: 12759.8958
+
+Total tree length (sum of branch lengths): 1.8738
+Sum of internal branch lengths: 0.5661 (30.2119% of tree length)
+
+NOTE: Tree is UNROOTED although outgroup taxon 'RS_GCF_016056305.1' is drawn at root
+
++----------RS_GCF_016056305.1
+|
+|                                          +---RS_GCF_014698795.1
+|                                       +--|
+|                                       |  |           +-----GB_GCA_041743605.1
+|                                       |  |        +--|
+|                                       |  |        |  +--RS_GCF_013393905.1
+|                                       |  |     +--|
+|                                       |  |     |  +--RS_GCF_023734775.1
+|                                       |  |  +--|
+|                                       |  |  |  +--RS_GCF_014698065.1
+|                                       |  +--|
+|                                       |     |  +---RS_GCF_036917555.1
+|                                       |     +--|
+|                                       |        +-------RS_GCF_036917575.1
+|                                    +--|
+|                                    |  |  +----RS_GCF_020829445.1
+|                                    |  +--|
+|                                    |     +----RS_GCF_937863485.1
+|                                 +--|
+|                                 |  +---RS_GCF_034530675.1
+|                    +------------|
+|                    |            +----RS_GCF_013343235.1
+|         +----------|
+|         |          |            +--RS_GCF_014698835.1
+|         |          |        +---|
+|         |          |        |   +-----GB_GCA_034531195.1
+|         |          +--------|
+|         |                   +--------GB_GCA_014697355.1
+|      +--|
+|      |  |                  +------RS_GCF_002154725.1
+|      |  |              +---|
+|      |  |              |   +---------GB_GCA_034530935.1
+|      |  |  +-----------|
+|      |  |  |           +--------RS_GCF_014697075.1
+|      |  +--|
+|      |     |                     +----------------RS_GCF_019598945.1
+|      |     |                +----|
+|      |     |                |    +--------------------RS_GCF_039871975.1
+|      |     |       +--------|
+|      |     |       |        |                  +------RS_GCF_001277295.1
+|      |     |       |        |              +---|
+|      |     |       |        |              |   +-------RS_GCF_009711975.1
+|      |     |       |        +--------------|
+|      |     |       |                       +--------RS_GCF_002934005.1
+|      |     |  +----|
+|      |     |  |    +--------------------------RS_GCF_014697195.1
+|      |     +--|
+|      |        +------------------GB_GCA_019359515.1
++------|
+|      |       +-------------------RS_GCF_022063185.1
+|      |  +----|
+|      |  |    +-----------------RS_GCF_001597745.1
+|      +--|
+|         +------------------------RS_GCF_019976755.1
+|
+|     +--------------------------RS_GCF_000340565.2
++-----|
+      +------------------GB_GCA_038259655.1
+
+Tree in newick format:
+
+(RS_GCF_016056305.1:0.0465994761,(((((((RS_GCF_014698795.1:0.0186805259,((((GB_GCA_041743605.1:0.0237506951,RS_GCF_013393905.1:0.0113092093):0.0109109490,RS_GCF_023734775.1:0.0144858127):0.0027787440,RS_GCF_014698065.1:0.0142334637):0.0069678143,(RS_GCF_036917555.1:0.0174517321,RS_GCF_036917575.1:0.0315345418):0.0056971880):0.0105000958):0.0059451976,(RS_GCF_020829445.1:0.0233492170,RS_GCF_937863485.1:0.0230729596):0.0081893297):0.0141913632,RS_GCF_034530675.1:0.0176654752):0.0055544822,RS_GCF_013343235.1:0.0225381957):0.0519934729,((RS_GCF_014698835.1:0.0125726577,GB_GCA_034531195.1:0.0255864295):0.0182641867,GB_GCA_014697355.1:0.0365844707):0.0375975693):0.0445399043,(((RS_GCF_002154725.1:0.0283682899,GB_GCA_034530935.1:0.0412678044):0.0168957168,RS_GCF_014697075.1:0.0363102541):0.0487101902,((((RS_GCF_019598945.1:0.0665411158,RS_GCF_039871975.1:0.0834756703):0.0207698140,((RS_GCF_001277295.1:0.0276480541,RS_GCF_009711975.1:0.0334505213):0.0192192542,RS_GCF_002934005.1:0.0387745534):0.0599200799):0.0351716116,RS_GCF_014697195.1:0.1065092171):0.0211708242,GB_GCA_019359515.1:0.0745378048):0.0107068637):0.0096630311):0.0154841131,((RS_GCF_022063185.1:0.0781500128,RS_GCF_001597745.1:0.0705493546):0.0200545332,RS_GCF_019976755.1:0.0998800476):0.0109858836):0.0287291539,(RS_GCF_000340565.2:0.1060191787,GB_GCA_038259655.1:0.0768190290):0.0255101154);
+
+ALISIM COMMAND
+--------------
+To simulate an alignment of the same length as the original alignment, using the tree and model parameters estimated from this analysis, you can use the following command:
+
+--alisim simulated_MSA -t iq_wagf.treefile -m "WAG+F+G4{0.290932}" --length 600
+
+To mimic the alignment used to produce this analysis, i.e. simulate an alignment of the same length as the original alignment, using the tree and model parameters estimated from this analysis *and* copying the same gap positions as the original alignment, you can use the following command:
+
+iqtree -s aas.fa --alisim mimicked_MSA
+
+To simulate any number of alignments in either of the two commandlines above, use the --num-alignments options, for example mimic 100 alignments you would use the command line:
+
+iqtree -s aas.fa --alisim mimicked_MSA --num-alignments 100
+
+For more information on using AliSim, please visit: www.iqtree.org/doc/AliSim
+
+TIME STAMP
+----------
+
+Date and time: Sat Oct  3 04:00:40 2026
+Total CPU time used: 239.723 seconds (0h:3m:59s)
+Total wall-clock time used: 60.8489 seconds (0h:1m:0s)
+

@@ -13,6 +13,7 @@
 * **Pooled batches:** `gplace place_batch` places many alignments at once; alignments sharing a reference package are placed in a single pass.
 * **Memory limits and huge trees:** `--max_memory 64G` keeps a run within a memory limit. gPlace places without tiles when that fits, and otherwise tile by tile, with the largest tiles that fit, and identical results. This places genomes on the full GTDB bacterial tree (273,290 nodes), which would need ~490 GiB untiled. `--tile_edges N` sets the tile size directly.
 * **Every pplacer model:** WAG, LG, JTT (protein) and GTR (DNA), with FastTree CAT or gamma rate variation and model or empirical frequencies, read from the reference package as pplacer does. `--fix_gamma_underflow` optionally avoids pplacer's gamma underflow on large trees (likelihood `-inf`).
+* **No pplacer or taxtastic needed:** `gplace tog` writes the same tree as `guppy tog` (byte for byte, Newick or phyloXML), and `gplace taxit create/check/info` builds and checks reference packages as taxtastic's `taxit` does.
 * **Self-verifying installation:** `gplace check_install` checks the compiled engine bit for bit against values taken from GTDB-Tk's pplacer binary; `gplace test` places bundled genomes and compares them with pplacer's own output.
 
 ## Documentation
@@ -91,6 +92,13 @@ pplacer's gamma model fails on large trees: once the slow rates of a fast-evolvi
 gplace compare --jplace_a gplace.jplace --jplace_b pplacer.jplace
 ```
 
+### Placement tree and reference packages (no pplacer or taxtastic needed)
+```bash
+gplace tog -o placements.tree gplace.jplace                  # = guppy tog
+gplace taxit create -P my.refpkg -l bac120 -f msa.faa -t tree.nwk -s fasttree.log    # = taxit create
+gplace taxit check my.refpkg
+```
+
 ### Choosing `--cpus` and planning a job
 Placement is limited by memory bandwidth rather than core count: on a 64-vCPU AMD EPYC server, 32-40 processes were fastest and 64 were about 1.5x slower. Peak memory barely depends on `--cpus`: the large arrays are shared between processes.
 
@@ -142,7 +150,7 @@ pplacer caches three likelihood vectors (distal, proximal, supernode) of *sites 
 * distal/proximal vectors are kept for internal nodes only, before pplacer's final power-of-two rescaling, which is re-applied exactly when a vector is used;
 * leaf vectors are rebuilt on demand in pplacer's operation order, and supernodes are computed during the prefilter;
 * SIMD lanes only process *different* numbers side by side, with no reordered sums and no fused multiply-add;
-* the engine links the same numerical libraries as pplacer's statically linked binary: GSL 1.16, glibc 2.19's `hypot`, and correctly-rounded `exp`/`log`/`pow`/`sin` (glibc 2.19's are correctly rounded, and CORE-MATH gives the same results, also inside GSL's gamma functions);
+* the engine links the same numerical libraries as pplacer's statically linked binary: GSL 1.16, glibc 2.19's `hypot` and `log1p`, and correctly-rounded `exp`/`log`/`pow`/`sin` (glibc 2.19's are correctly rounded, and CORE-MATH gives the same results, also inside GSL's gamma functions);
 * two engines are built: 20 states (protein) and 4 states (DNA).
 
 Two behaviours of pplacer are reproduced deliberately:
@@ -166,4 +174,4 @@ A manuscript is in preparation. Please also cite pplacer, GTDB-Tk and GTDB (see 
 
 ## License
 
-gPlace is released under the GNU General Public License (Version 3). It includes code from CORE-MATH (MIT license) and from the GNU C Library 2.19 (`e_hypot.c`, fdlibm notice preserved); see `gplace/engine/csrc/`.
+gPlace is released under the GNU General Public License (Version 3). It includes code from CORE-MATH (MIT license) and from the GNU C Library 2.19 (`e_hypot.c`, `s_log1p.c`, fdlibm notices preserved); see `gplace/engine/csrc/`.

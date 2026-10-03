@@ -80,6 +80,22 @@ class TestModelsEngine(unittest.TestCase):
         r = models.discrete_gamma(8, 0.7)
         self.assertAlmostEqual(sum(r) / 8, 1.0, places=12)
 
+    def test_discrete_gamma_many_categories(self):
+        """21 or more categories: GSL calls log1p (glibc 2.19's, built in), not an aborting trap."""
+        for n, a in [(21, 2.0), (24, 0.6), (32, 0.3), (100, 1.0)]:
+            r = models.discrete_gamma(n, a)
+            self.assertEqual(len(r), n)
+            self.assertAlmostEqual(sum(r) / n, 1.0, places=10)
+
+    def test_discrete_gamma_gsl_error_stops_like_pplacer(self):
+        """pplacer turns GSL errors into exceptions: alpha 1e6 stops it with
+        Gsl_error.Gsl_exn(6, "inverse failed to converge"); gPlace stops with the same message."""
+        from gplace.exceptions import RefpkgMalformed
+        with self.assertRaises(RefpkgMalformed) as cm:
+            models.discrete_gamma(4, 1e6)
+        self.assertIn('Gsl_error.Gsl_exn(6, "inverse failed to converge")', str(cm.exception))
+        models.discrete_gamma(4, 0.5)                                    # the next model is unaffected
+
     def test_dna_and_gamma_kernels(self):
         from gplace.engine.selftest import check_kernels, check_gamma_kernels
         for ns in (20, 4):

@@ -120,6 +120,7 @@ def lib(ns=NS):
     L.xp_hypot.argtypes = [D, D]; L.xp_hypot.restype = D
     L.xp_pow.argtypes = [D, D]; L.xp_pow.restype = D
     L.xp_sin.argtypes = [D]; L.xp_sin.restype = D
+    L.xp_log1p.argtypes = [D]; L.xp_log1p.restype = D
     L.xp_symmv.argtypes = [V, V, V, I]; L.xp_symmv.restype = I
     L.xp_dediag.argtypes = [V, V, V, V, I]
     L.xp_multi_exp.argtypes = [V, V, V, V, V, I, V, D]
@@ -142,6 +143,7 @@ def lib(ns=NS):
     L.xp_trace_open.argtypes = [ctypes.c_char_p]
     # gamma mixture model (Gmix)
     L.xp_discrete_gamma.argtypes = [I, D, V]; L.xp_discrete_gamma.restype = I
+    L.xp_gamma_gsl_error.argtypes = [ctypes.c_char_p, ctypes.c_size_t]; L.xp_gamma_gsl_error.restype = I
     L.xp_g_pairwise.argtypes = [V, V, V, V, V, V, I, I]
     L.xp_g_statd_pairwise.argtypes = [V, V, V, V, V, V, V, I, I]
     L.xp_g_pull_exponent.argtypes = [V, V, I, I, I]

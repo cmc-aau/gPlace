@@ -34,7 +34,8 @@ PARITY = os.path.join(TEST_DATA, 'parity')
 TestSet = namedtuple('TestSet', 'name refpkg queries expected fix_gamma tile_edges mrca_class discard',
                      defaults=(False, False))
 
-_MINI_VARIANTS = ('LG', 'JTT', 'WAG_emp', 'LG_emp_g1.3x4', 'WAG_g0.5x4', 'JTT_g0.7x8', 'WAG_g0.05x4')
+_MINI_VARIANTS = ('LG', 'JTT', 'WAG_emp', 'LG_emp_g1.3x4', 'WAG_g0.5x4', 'JTT_g0.7x8', 'WAG_g0.05x4',
+                  'JTT_g2.0x21', 'WAG_g0.6x24', 'LG_g0.3x32')    # 21+ categories: GSL calls log1p
 
 
 def wag_set():

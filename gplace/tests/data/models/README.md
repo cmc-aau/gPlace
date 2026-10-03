@@ -6,6 +6,8 @@ GTDB-Tk uses): `pplacer -j 4 -c <refpkg> -o <out> <queries>`.
 * `mini_<model>.phylo_model.json`: the bundled `mini.refpkg` (its tree and alignment) with another
   model: LG, JTT, empirical frequencies (`_emp`), gamma (`_g<alpha>x<n_cats>`). Queries:
   `../queries.fasta`.
+* `mini_JTT_g2.0x21`, `mini_WAG_g0.6x24`, `mini_LG_g0.3x32`: 21 or more gamma categories, where
+  GSL's `gsl_cdf_gamma_Pinv` calls `log1p` (glibc 2.19's, `gplace/engine/csrc/glibc/s_log1p.c`).
 * `mini_WAG_g0.05x4.fix.jplace`: the same with `--fix_gamma_underflow` (gPlace only; not pplacer
   output). At alpha 0.05 the blocked rescaling changes the last digits.
 * `like_gtr.refpkg`, `like_wag.refpkg`: pplacer's own likelihood test data

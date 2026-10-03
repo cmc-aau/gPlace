@@ -99,9 +99,13 @@ Every floating-point result keeps pplacer's operands, operation order and roundi
   (``-ffp-contract=off``);
 * the numerical libraries match pplacer's statically linked binary: GSL 1.16 (GSL 2.x changes the
   eigendecomposition in its last bits), glibc 2.19's ``hypot`` (glibc >= 2.35 changed it) and
+  ``log1p`` (GSL's inverse gamma CDF calls it for 21 or more gamma categories), and
   correctly-rounded ``exp``/``log``/``pow``/``sin`` (CORE-MATH gives the same results as glibc
   2.19's; GSL's own calls in the gamma functions are bound to them as well, and no inexact system
   libm function is imported);
+* GSL errors behave as in pplacer, which turns every GSL error into an exception: the optimiser's
+  are handled as pplacer handles them, and a GSL error while the discrete gamma rates are computed
+  (e.g. alpha 10^6: "inverse failed to converge") stops gPlace with pplacer's message;
 * pplacer's control-flow quirks are reproduced: the optimiser keeps the *last evaluated* branch
   lengths; the bisection start finder evaluates f(right) before f(left); an assertion failing
   inside a GSL callback returns NaN (ocamlgsl's ``caml_callback_exn``), so GSL reports an error

@@ -12,6 +12,7 @@ conda environment. pplacer forks its workers even with `-j 1`, so the scripts se
 | `gdb_dump_eigen.py` | the matrix passed to `gsl_eigen_symmv` and its eigenvalues/eigenvectors | showed the input matrix was identical and the solver differed, which led to the GSL 1.16 + glibc 2.19 `hypot` requirement; the dump is `gplace/engine/data/stock_wag_eigen.txt` |
 | `gdb_dump_vectors.py` | `dediagonalize` arguments and the first three-taxon vectors | localised differences to the model set-up |
 | `gdb_call_libm.py` | `hypot`/`exp`/`log` evaluated inside the binary on random inputs | `gplace/engine/data/stock_libm_vectors.tsv` |
+| `gdb_call_log1p.py` | `log1p` evaluated inside the binary (bits passed exactly): every argument GSL passes for 21-300 gamma categories, plus random and special inputs | the `q` rows of `stock_libm_vectors.tsv`; showed glibc 2.19's `s_log1p.c` gives the binary's values |
 
 Examples:
 
