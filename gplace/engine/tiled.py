@@ -167,8 +167,8 @@ def load_tree(refpkg_dir):
 class TiledPlacer(Placer):
     """Placer holding one tile of the likelihood cache at a time; same results as Placer."""
 
-    def __init__(self, refpkg_dir, queries, cpus=1, tile_edges=10000, **kw):
-        super().__init__(refpkg_dir, queries, cpus)
+    def __init__(self, refpkg_dir, queries, cpus=1, tile_edges=10000, search=None, always_refine=False, **kw):
+        super().__init__(refpkg_dir, queries, cpus, search=search, always_refine=always_refine)
         self._setup_tiles(tile_edges, **kw)
 
     @classmethod
@@ -187,6 +187,12 @@ class TiledPlacer(Placer):
         self.query_batch = max(1, int(query_batch))
         self.n_cand = max(1, int(n_cand))
         self.round_size = max(1, int(round_size))
+        tp = self.search.t_max_pitches                # more pitches: rank and try more edges at once
+        if tp == math.inf:
+            self.n_cand = self.round_size = self.nnodes - 1
+        else:
+            self.n_cand = min(max(self.n_cand, 4 * (tp + 1)), self.nnodes - 1)
+            self.round_size = max(self.round_size, (tp + 1) // 5)
         layout = tile_layout(self.children, self.tree.postorder(), self.root, self.tile_edges)
         roots = {r for r, _, _ in layout}
         self.tile_of = [-1] * self.nnodes
@@ -447,7 +453,7 @@ class TiledPlacer(Placer):
         """pplacer's baseball on the stored first-stage results in ranked order: the Baseball when
         the search has ended, 'next' when the next ranked edge is not evaluated yet, 'more' when
         the query needs more ranked edges than it has."""
-        bb = Baseball()
+        bb = Baseball(self.search)
         row = self._rank_row(qi)
         for loc in row:
             if loc == _NO_EDGE:                      # every edge of the tree tried
@@ -476,7 +482,8 @@ class TiledPlacer(Placer):
                 row = self._rank_row(qi)
                 chunk = [int(v) for v in row[nxt[qi]:nxt[qi] + self.round_size] if v != _NO_EDGE]
                 nxt[qi] += len(chunk)
-                work[qi] = [(loc, core.START_PEND, self.bl[loc] / 2., core.INITIAL_TOL) for loc in chunk]
+                work[qi] = [(loc, self.search.start_pend, self.bl[loc] / 2., self.search.ml_tolerance)
+                            for loc in chunk]
             for qi, out in self._evaluate(work):
                 for loc, r, st in out:
                     stage1[qi][loc] = (r, st)

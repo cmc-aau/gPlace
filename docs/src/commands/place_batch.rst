@@ -5,6 +5,10 @@ place_batch
 
 The ``place_batch`` command places the alignments listed in a :ref:`batchfile <files/batchfile>`. All alignments that share a reference package are pooled and placed in one pass, so the reference likelihood vectors are computed once per reference package. A query's placement does not depend on which other queries are placed with it, so pooling gives exactly the same results as placing each file separately.
 
+pplacer's settings (``--max_strikes``, ``--keep_at_most``, ``--no_pre_mask``, ``--always_refine``,
+...) and Stockholm query files work as for :ref:`place <commands/place>`; reference files without a
+reference package, and query files holding the reference sequences, need ``place``.
+
 ``--max_memory`` and ``--tile_edges`` work as for :ref:`place <commands/place>`. With
 ``--max_memory``, untiled or tiled placement, and the tile size, are chosen separately for each
 reference package, from its tree and the number of queries pooled on it.

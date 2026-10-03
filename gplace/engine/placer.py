@@ -46,6 +46,7 @@ from gplace.engine import core, models
 from gplace.engine.core import P
 from gplace.engine import resources
 from gplace.engine.newick import parse_newick, to_newick
+from gplace.engine.reference import Reference
 from gplace.exceptions import RefpkgMalformed, AlignmentMalformed, GPlaceException
 
 
@@ -77,10 +78,11 @@ def _place_chunk(qis):
 
 class Baseball(object):
     """pplacer's stopping rule for the first-stage optimisations ("baseball"), fed one location at
-    a time in ranked order: stop after MAX_STRIKES locations more than STRIKE_BOX log-units below
-    the best so far, or after MAX_PITCHES locations."""
+    a time in ranked order: stop after max_strikes locations more than strike_box log-units below
+    the best so far, or after max_pitches locations (max_strikes 0: never; see core.Search)."""
 
-    def __init__(self):
+    def __init__(self, search):
+        self.search = search
         self.results, self.warns = [], []
         self.like_record, self.n_strikes = -math.inf, 0
 
@@ -91,23 +93,23 @@ class Baseball(object):
             self.warns.append((loc, st))
             return True
         like = r[0]; prev = len(self.results); self.results.append((loc, r))
-        if prev >= core.MAX_PITCHES:
+        if prev >= self.search.t_max_pitches:
             return False
         elif like > self.like_record:
             self.like_record = like
-        elif like < self.like_record - core.STRIKE_BOX:
-            if self.n_strikes + 1 >= core.MAX_STRIKES:
+        elif like < self.like_record - self.search.strike_box:
+            if self.n_strikes + 1 >= self.search.t_max_strikes:
                 return False
             self.n_strikes += 1
         return True
 
     def kept(self, lib):
-        """Locations refined at the final tolerance: up to KEEP_AT_MOST within log(KEEP_FACTOR)
+        """Locations refined at the final tolerance: up to keep_at_most within log(keep_factor)
         of the best, best first."""
         srt = sorted(self.results, key=lambda x: -x[1][0])
         best = srt[0][1][0]
-        lkf = lib.xp_log(core.KEEP_FACTOR)
-        return [x for i, x in enumerate(srt) if i < core.KEEP_AT_MOST and x[1][0] >= lkf + best]
+        lkf = lib.xp_log(self.search.keep_factor)
+        return [x for i, x in enumerate(srt) if i < self.search.keep_at_most and x[1][0] >= lkf + best]
 
 
 def weighted_placements(lib, refined):
@@ -140,27 +142,21 @@ def _distinct_rows(A):
 
 
 def load_refpkg(refpkg_dir):
-    """Read CONTENTS.json and return (tree text, reference alignment, phylo_model dict). The model is
-    checked when it is built (models.model_from_refpkg)."""
-    cpath = os.path.join(refpkg_dir, 'CONTENTS.json')
-    if not os.path.exists(cpath):
-        raise RefpkgMalformed(f'No CONTENTS.json in reference package: {refpkg_dir}')
-    files = json.load(open(cpath)).get('files', {})
-    for key in ('tree', 'aln_fasta', 'phylo_model'):
-        if key not in files or not os.path.exists(os.path.join(refpkg_dir, files[key])):
-            raise RefpkgMalformed(f'Reference package {refpkg_dir} has no "{key}" file.')
-    tree_txt = open(os.path.join(refpkg_dir, files['tree'])).read().strip()
-    ref = core.read_fasta(os.path.join(refpkg_dir, files['aln_fasta']))
-    pm = json.load(open(os.path.join(refpkg_dir, files['phylo_model'])))
-    return tree_txt, ref, pm
+    """(tree text, reference alignment or None, phylo_model dict) of a reference package directory
+    or a reference.Reference."""
+    R = Reference.of(refpkg_dir)
+    return R.tree_text(), R.alignment(), R.phylo_model()
 
 
 class Placer(object):
-    """Place aligned queries on one reference package, exactly as pplacer does (CAT models; gamma
-    models use gamma.GammaPlacer, see factory.new_placer)."""
+    """Place aligned queries on one reference (a reference package directory or a
+    reference.Reference), exactly as pplacer does (CAT models; gamma models use gamma.GammaPlacer,
+    see factory.new_placer)."""
 
-    def __init__(self, refpkg_dir, queries, cpus=1, discard_nonoverlapped=False):
+    def __init__(self, refpkg_dir, queries, cpus=1, discard_nonoverlapped=False, search=None,
+                 always_refine=False):
         self.logger = logging.getLogger('timestamp')
+        self.search = search = search or core.Search()
         cpus = resources.parse_cpus(cpus)
         if cpus == 'auto':
             self.cpus = resources.available_cpus()          # threads for the cache
@@ -170,7 +166,8 @@ class Placer(object):
         else:
             self.cpus = self.workers = max(1, int(cpus))
             self.cpus_source = 'user'
-        tree_txt, ref, pm = load_refpkg(refpkg_dir)
+        self.reference = Reference.of(refpkg_dir)
+        tree_txt, ref, pm = load_refpkg(self.reference)
         self.alpha = models.alphabet_of(pm)                  # protein or DNA
         self.ns = self.alpha.ns
         self.lib = core.lib(self.ns)
@@ -188,14 +185,23 @@ class Placer(object):
             raise RefpkgMalformed('Duplicate leaf names in the reference tree.')
         in_ref = [q for q in queries if q[0] in ref_names]
         queries = [q for q in queries if q[0] not in ref_names]
+        self.from_input_alignment = bool(in_ref)
         if in_ref:
             if len(in_ref) != len(ref_names):
                 raise AlignmentMalformed('Some, but not all reference sequences found in provided '
                                          'alignment file. Are there overlaps between query and '
                                          'reference sequence IDs?')
+            seen = set()
+            for nm, _ in in_ref:
+                if nm in seen:
+                    raise AlignmentMalformed(f"duplicate reference sequence '{nm}' in the query file")
+                seen.add(nm)
             self.logger.info('Found reference sequences in the query alignment; using those as '
                              'the reference alignment (as pplacer does).')
             ref = in_ref
+        elif ref is None:
+            raise RefpkgMalformed('Please specify a reference alignment with --ref_aln or --refpkg, or '
+                                  'include all reference sequences in the query alignment.')
         if not queries:
             raise AlignmentMalformed('No query sequences to place.')
         names = [n for n, _ in queries]
@@ -210,10 +216,13 @@ class Placer(object):
         self.rates = np.array(self.model.rates)
         self.nrates = len(self.rates)
         self.width = self.ns                                 # doubles per site (gamma: rates x states)
-        if self.model.ras == 'cat':
+        # pplacer refines the model when the reference sequences come from the query file or with
+        # --always-refine; only the CAT refinement does something (Gmix_model.refine is a no-op)
+        self.refined = self.model.ras == 'cat' and (self.from_input_alignment or always_refine)
+        if self.model.ras == 'cat' and not self.refined:
             cats_full = self.model.site_categories
         else:                                                # gamma: every site under every rate
-            cats_full = np.zeros(len(ref[0][1]), dtype=np.int32)
+            cats_full = np.zeros(len(ref[0][1]), dtype=np.int32)    # refined: set below
 
         # alignments and pplacer's pre-mask (informative in >=1 reference AND >=1 query)
         queries = [(n, s.upper()) for n, s in queries]
@@ -234,10 +243,18 @@ class Placer(object):
                 raise AlignmentMalformed(f'Unknown characters {set(seqs[i][1].upper()) - set(self.alpha.char_map)} '
                                          f'in {seqs[i][0]}.')
         # pplacer_run.premask: every query must have a residue in a column where some reference
-        # has one ("doesn't overlap any reference sequences"), unless --discard-nonoverlapped
-        ref_inf = core.informative(RA).any(axis=0)
-        overlaps = (core.informative(QA) & ref_inf).any(axis=1)
-        self.discarded = [names[i] for i in np.nonzero(~overlaps)[0]]
+        # has one ("doesn't overlap any reference sequences"), unless --discard-nonoverlapped.
+        # --no-pre-mask: every column is kept and nothing is checked or discarded; a query without
+        # a residue stops pplacer (core.ml)
+        if search.no_pre_mask:
+            empty = np.nonzero(~core.informative(QA).any(axis=1))[0]
+            if len(empty):
+                raise AlignmentMalformed(f"sequence '{names[empty[0]]}' has no informative sites.")
+            ref_inf = overlaps = np.ones(L, bool)
+        else:
+            ref_inf = core.informative(RA).any(axis=0)
+            overlaps = (core.informative(QA) & ref_inf).any(axis=1)
+        self.discarded = [] if search.no_pre_mask else [names[i] for i in np.nonzero(~overlaps)[0]]
         if self.discarded:
             if not discard_nonoverlapped:
                 raise AlignmentMalformed(f'Sequence {self.discarded[0]} doesn\'t overlap any reference '
@@ -250,7 +267,7 @@ class Placer(object):
             QA = np.ascontiguousarray(QA[keep_q])
             if not names:
                 raise AlignmentMalformed('No query sequences to place: none overlaps the reference sequences.')
-        mask = ref_inf & core.informative(QA).any(axis=0)
+        mask = ref_inf if search.no_pre_mask else ref_inf & core.informative(QA).any(axis=0)
         keep = np.nonzero(mask)[0]
         self.nsites = len(keep)
         self.cats = np.ascontiguousarray(cats_full[keep])
@@ -281,6 +298,111 @@ class Placer(object):
         self.local = threading.local()
         self.aln_len = L
         self.n_leaves = len(leaf_names)
+        if self.refined:
+            self.logger.info('Refining the CAT site categories on the reference tree (pplacer refines the '
+                             'model when ' + ('the reference sequences are in the query alignment).'
+                                              if self.from_input_alignment else '--always_refine is given).'))
+            self.refine_site_categories()
+
+    # --------------------------------------------------------------- refinement --
+    def _heavy_first_postorder(self):
+        """Postorder with the largest subtree of every node first, so that a pass keeping only the
+        vectors of finished subtrees holds O(log n) of them."""
+        size = [1] * self.nnodes
+        for v in self.tree.postorder():
+            for c in self.children[v]:
+                size[v] += size[c]
+        order, stack = [], [(self.root, False)]
+        while stack:
+            v, seen = stack.pop()
+            if seen or not self.children[v]:
+                order.append(v)
+                continue
+            stack.append((v, True))
+            for c in sorted(self.children[v], key=lambda c: size[c]):   # largest popped first
+                stack.append((c, False))
+        return order
+
+    def _site_log_likes(self, cat, order):
+        """Like_stree.site_log_like_arr with every site in category cat: the distal vectors of
+        calc_distal_and_evolv_dist (the same operations as the cache), then
+        site_log_like_arr3 at the root; returns the per-site log-likelihoods."""
+        S, ns, R, L = self.nsites, self.ns, self.nrates, self.lib
+        cats = np.full(S, cat, np.int32)
+        occ = np.zeros(R, np.uint8); occ[cat] = 1
+        ten = np.zeros((R, ns, ns))
+        zero_e = np.zeros(S, np.int64)
+
+        def evolve(src, bl):
+            dst = np.empty((S, ns))
+            L.xp_multi_exp(P(ten), P(self.x), P(self.l), P(self.xit), P(self.rates), R, P(occ), bl)
+            L.xp_evolve(P(dst), P(src), S, P(cats), P(ten))
+            return dst
+
+        ed = {}                                  # finished node -> (evolved distal, exponents)
+        for v in order:
+            if v == self.root:                   # the root's own distal vector is not used
+                break
+            ch = self.children[v]
+            if not ch:
+                a, e = self.leaf_lv(v), zero_e
+            else:
+                a, e = ed.pop(ch[0])
+                if len(ch) > 1:                  # Glv.listwise_prod
+                    b, f = ed.pop(ch[1])
+                    d, de = np.empty((S, ns)), np.empty(S, np.int64)
+                    L.xp_pairwise(P(d), P(de), P(a), P(e), P(b), P(f), S)
+                    for c in ch[2:]:
+                        b, f = ed.pop(c)
+                        L.xp_pairwise(P(d), P(de), P(d), P(de), P(b), P(f), S)
+                    a, e = d, de
+                else:
+                    a, e = a.copy(), e.copy()
+                L.xp_pull_exponent(P(a), P(e), S, -50)
+            ed[v] = (evolve(a, self.bl[v]), e)
+        top = self.children[self.root]
+        if len(top) < 2:
+            raise GPlaceException('site_log_like_arr: degree two node')
+        (x, xe), (y, ye) = ed[top[0]], ed[top[1]]
+        if len(top) == 2:
+            z, ze = np.ones((S, ns)), zero_e     # Glv.set_unit
+        elif len(top) == 3:
+            z, ze = ed[top[2]]
+        else:
+            (a, e), (b, f) = ed[top[2]], ed[top[3]]
+            z, ze = np.empty((S, ns)), np.empty(S, np.int64)
+            L.xp_pairwise(P(z), P(ze), P(a), P(e), P(b), P(f), S)
+            for c in top[4:]:
+                b, f = ed[c]
+                L.xp_pairwise(P(z), P(ze), P(z), P(ze), P(b), P(f), S)
+        like = np.zeros(S)                       # site_log_like_arr3, state by state
+        for st in range(ns):
+            like = like + ((self.statd[st] * x[:, st]) * y[:, st]) * z[:, st]
+        bad = np.nonzero(like <= 0.)[0]
+        if len(bad):
+            raise GPlaceException(f'Site {int(bad[0])} has zero likelihood.')
+        log2 = L.xp_log(2.)
+        twoexp = xe + ye + ze
+        return np.array([L.xp_log(float(like[i])) + log2 * float(twoexp[i]) for i in range(S)])
+
+    def refine_site_categories(self):
+        """Gcat_model.refine: each site gets the category c with the largest
+        site log-likelihood (all sites in c) + 2 log(rate c) - 3 rate c, ties to the lower c."""
+        S, R = self.nsites, self.nrates
+        order = self._heavy_first_postorder()
+        with ThreadPoolExecutor(max(1, min(self.cpus, R))) as ex:
+            lls = list(ex.map(lambda c: self._site_log_likes(c, order), range(R)))
+        best, best_cat = np.full(S, -np.inf), np.full(S, -1, np.int32)
+        for c in range(R):                       # record_best_log_lks in category order
+            x = (lls[c] + 2. * self.lib.xp_log(float(self.rates[c]))) - 3. * float(self.rates[c])
+            up = x > best
+            best[up], best_cat[up] = x[up], c
+        if (best_cat < 0).any():
+            raise GPlaceException(f'No rate category for site {int(np.nonzero(best_cat < 0)[0][0])} '
+                                  f'(its log-likelihoods are not numbers).')
+        self.cats = np.ascontiguousarray(best_cat)
+        self.occupied = np.zeros(R, np.uint8)
+        self.occupied[np.unique(self.cats)] = 1
 
     def expand(self, results):
         """Results of the distinct sequences (run/place_all) -> one per query, in input order."""
@@ -290,12 +412,14 @@ class Placer(object):
         """jplace records for the queries `names` (one output file), as pplacer groups them:
         queries with the same pre-masked sequence share a record, names in input order. The mask is
         the file's own (columns with a residue in some reference and some query of the file), as
-        when pplacer places that file alone. Returns [[name, ...], ...] in first-occurrence order."""
+        when pplacer places that file alone (--no-pre-mask: the whole sequences). Returns
+        [[name, ...], ...] in first-occurrence order."""
         if self._name_index is None:
             self._name_index = {n: i for i, n in enumerate(self.all_names)}
         ii = np.array([self._name_index[n] for n in names], np.int64)
         rows = self.QM[self.rep_of[ii]]
-        rows = np.ascontiguousarray(rows[:, core.informative(rows).any(axis=0)])
+        if not self.search.no_pre_mask:
+            rows = np.ascontiguousarray(rows[:, core.informative(rows).any(axis=0)])
         rep_of, first = _distinct_rows(rows)
         out = [[] for _ in first]
         for n, r in zip(names, rep_of):
@@ -456,12 +580,12 @@ class Placer(object):
 
     # ---------------------------------------------------------------- prefilter --
     def _query_tables(self):
-        """Prefilter inputs: every query character evolved by START_PEND under every rate
+        """Prefilter inputs: every query character evolved by start_pend under every rate
         (qevtab), and the queries as character codes."""
         ns, alpha = self.ns, self.alpha
         ten = np.zeros((self.nrates, ns, ns))
         self.lib.xp_multi_exp(P(ten), P(self.x), P(self.l), P(self.xit), P(self.rates),
-                              self.nrates, P(self.occupied), core.START_PEND)
+                              self.nrates, P(self.occupied), self.search.start_pend)
         nc = len(alpha.codes)
         self.qevtab = np.zeros((self.nrates, nc, ns))
         one = np.zeros((1, ns)); outv = np.empty((1, ns))
@@ -615,7 +739,7 @@ class Placer(object):
             L.xp_tt_set(tt, P(D), P(De), P(Pp), P(Pe), P(reind), self.bl[loc], pend, dist)
 
         def optimize(tol):
-            st = L.xp_tt_optimize(tt, tol, core.MAX_PEND, core.MAX_ITER)
+            st = L.xp_tt_optimize(tt, tol, self.search.max_pend, core.MAX_ITER)
             if st in (core.XP_OK, core.XP_EXCEEDED):
                 L.xp_tt_results(tt, P(res))
                 return (float(res[0]), float(res[1]), float(res[2])), None
@@ -625,7 +749,7 @@ class Placer(object):
             set_edges(loc, pend, dist)
             r, st = optimize(tol)
             if st == core.XP_GSL:
-                set_edges(loc, core.START_PEND, self.bl[loc] / 2.)
+                set_edges(loc, self.search.start_pend, self.bl[loc] / 2.)
                 r, st = optimize(tol)
             return r, st
 
@@ -642,9 +766,9 @@ class Placer(object):
         name = self.query_names[qi]
         evaluate, free = self._query_evaluator(qi)
         try:
-            bb = Baseball()
+            bb = Baseball(self.search)
             for loc in self.ranking(qi):
-                r, st = evaluate(loc, core.START_PEND, self.bl[loc] / 2., core.INITIAL_TOL)
+                r, st = evaluate(loc, self.search.start_pend, self.bl[loc] / 2., self.search.ml_tolerance)
                 if not bb.add(loc, r, st):
                     break
             if not bb.results:

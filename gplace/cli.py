@@ -43,8 +43,9 @@ def arg_group(parser, name):
 
 def __msa_file(group, required):
     group.add_argument('--msa_file', required=required,
-                       help='FASTA file of aligned query sequences, protein or DNA as the reference '
-                            'package (e.g. GTDB-Tk user_msa_file.fasta for one class-level tree)')
+                       help='aligned query sequences, protein or DNA as the reference: FASTA, or '
+                            'Stockholm if the name ends in .sto or .sth (.gz: gzipped) as in pplacer '
+                            '(e.g. GTDB-Tk user_msa_file.fasta for one class-level tree)')
 
 
 def __refpkg(group, required):
@@ -104,16 +105,79 @@ def __fix_gamma(group):
 
 
 def __mrca_class(group):
-    group.add_argument('--mrca_class', action='store_true', default=False,
+    group.add_argument('--mrca_class', '--mrca-class', action='store_true', default=False,
                        help='reference packages with a taxonomy: classify each placement by the taxonomic '
                             'MRCA of the reference sequences below its edge, instead of by edge painting '
                             '(pplacer\'s --mrca-class)')
 
 
 def __discard_nonoverlapped(group):
-    group.add_argument('--discard_nonoverlapped', action='store_true', default=False,
+    group.add_argument('--discard_nonoverlapped', '--discard-nonoverlapped', action='store_true', default=False,
                        help='drop queries that have no residue in any column where a reference sequence '
                             'has one, instead of stopping (pplacer\'s --discard-nonoverlapped)')
+
+
+def __search(parser):
+    """pplacer's search settings, under gPlace's and pplacer's spellings (defaults: pplacer's)."""
+    with arg_group(parser, 'pplacer settings (default: pplacer\'s; results stay identical to '
+                           'pplacer run with the same settings)') as grp:
+        grp.add_argument('--ml_tolerance', '--ml-tolerance', type=float, default=0.01, metavar='FLOAT',
+                         help='tolerance of the first-stage branch length optimisation (the kept '
+                              'placements are refined to 1e-5)')
+        grp.add_argument('--start_pend', '--start-pend', type=float, default=0.1, metavar='FLOAT',
+                         help='starting pendant branch length')
+        grp.add_argument('--max_pend', '--max-pend', type=float, default=2.0, metavar='FLOAT',
+                         help='maximum pendant branch length')
+        grp.add_argument('--max_strikes', '--max-strikes', type=int, default=6, metavar='INT',
+                         help='stop trying edges after this many strikes (edges more than strike_box below '
+                              'the best so far); 0 tries every edge of the tree')
+        grp.add_argument('--strike_box', '--strike-box', type=float, default=3.0, metavar='FLOAT',
+                         help='size of the strike box in log-likelihood units')
+        grp.add_argument('--max_pitches', '--max-pitches', type=int, default=40, metavar='INT',
+                         help='try at most this many edges (plus one) per query')
+        grp.add_argument('--keep_at_most', '--keep-at-most', type=int, default=7, metavar='INT',
+                         help='maximum number of placements kept per query')
+        grp.add_argument('--keep_factor', '--keep-factor', type=float, default=0.01, metavar='FLOAT',
+                         help='keep placements whose likelihood is at least this fraction of the best '
+                              'one\'s')
+        grp.add_argument('--no_pre_mask', '--no-pre-mask', action='store_true', default=False,
+                         help='do not pre-mask: keep every alignment column (query residues where no '
+                              'reference has one then count), do not check that queries overlap the '
+                              'reference sequences, and merge only queries with identical whole sequences '
+                              'into one record')
+        grp.add_argument('--always_refine', '--always-refine', action='store_true', default=False,
+                         help='refine the model before placing: CAT models get new site rate categories '
+                              'on the reference tree (pplacer always does this when the query alignment '
+                              'holds the reference sequences); no effect on gamma models')
+
+
+def __reference_files(parser):
+    """pplacer's reference files (-t/-r/-s/-d), with or without --refpkg."""
+    with arg_group(parser, 'reference files (instead of, or replacing those of, --refpkg; pplacer\'s '
+                           '-t/-r/-s/-d)') as grp:
+        grp.add_argument('--tree', '-t', default=None,
+                         help='reference tree (Newick)')
+        grp.add_argument('--ref_aln', '-r', default=None,
+                         help='reference alignment (FASTA). Without it (and without --refpkg) the query '
+                              'alignment must contain every reference sequence')
+        grp.add_argument('--stats', '-s', default=None,
+                         help='model: a RAxML 7 info file, a PhyML 3.0 stats file or a JSON model file '
+                              '(as pplacer reads them; gamma rates). A --refpkg phylo_model takes precedence')
+        grp.add_argument('--ref_dir', '-d', default=None,
+                         help='directory containing the --tree, --ref_aln and --stats files')
+    with arg_group(parser, 'model settings (pplacer\'s; used only for what a --stats file does not set)') as grp:
+        grp.add_argument('--model', '-m', default='LG',
+                         help='substitution model name. pplacer v1.1.alpha19 always takes it from the '
+                              'statistics file or the reference package, so this has no effect (accepted '
+                              'for pplacer command lines)')
+        grp.add_argument('--model_freqs', '--model-freqs', action='store_true', default=False,
+                         help='protein models from a --stats file: the model\'s amino acid frequencies '
+                              'instead of the reference alignment\'s')
+        grp.add_argument('--gamma_cats', '--gamma-cats', type=int, default=1, metavar='INT',
+                         help='gamma categories, when the --stats file gives none (PhyML without gamma, '
+                              'JSON with a null ras_model)')
+        grp.add_argument('--gamma_alpha', '--gamma-alpha', type=float, default=1.0, metavar='FLOAT',
+                         help='gamma shape parameter, when the --stats file gives none')
 
 
 def __test_models(group):
@@ -188,12 +252,13 @@ def get_main_parser():
         prog='gplace', add_help=False, conflict_handler='resolve')
     sub_parsers = main_parser.add_subparsers(title="Subcommands", help="Available subcommands", dest='subparser_name')
 
-    with subparser(sub_parsers, 'place', 'Place aligned queries on a reference package '
-                                         '(bit-identical to pplacer -c <refpkg>).') as parser:
+    with subparser(sub_parsers, 'place', 'Place aligned queries on a reference package or reference '
+                                         'files (bit-identical to pplacer).') as parser:
         with arg_group(parser, 'required named arguments') as grp:
             __msa_file(grp, required=True)
-            __refpkg(grp, required=True)
             __out_file(grp, required=True)
+        with arg_group(parser, 'reference (--refpkg, or --tree with the files below)') as grp:
+            __refpkg(grp, required=False)
         with arg_group(parser, 'optional arguments') as grp:
             __cpus(grp)
             __fix_gamma(grp)
@@ -202,6 +267,8 @@ def get_main_parser():
             __temp_dir(grp)
             __help(grp)
         __tiling(parser)
+        __search(parser)
+        __reference_files(parser)
 
     with subparser(sub_parsers, 'place_batch', 'Place many alignments, pooling the queries of each '
                                                'reference package into one pass.') as parser:
@@ -216,6 +283,7 @@ def get_main_parser():
             __temp_dir(grp)
             __help(grp)
         __tiling(parser)
+        __search(parser)
 
     with subparser(sub_parsers, 'compare', 'Compare two jplace files placement by placement.') as parser:
         with arg_group(parser, 'required named arguments') as grp:

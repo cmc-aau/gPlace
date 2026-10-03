@@ -38,6 +38,18 @@ Major Changes:
 * ``tog`` (the same output as ``guppy tog``, byte for byte, Newick or phyloXML) and ``taxit create``,
   ``taxit check``, ``taxit info`` (as taxtastic's ``taxit``): a placement workflow needs neither
   pplacer nor taxtastic.
+* pplacer's settings as options of ``place`` and ``place_batch``, under gPlace's and pplacer's
+  names, with pplacer's results: ``--ml_tolerance``, ``--start_pend``, ``--max_pend``,
+  ``--max_strikes``, ``--strike_box``, ``--max_pitches``, ``--keep_at_most``, ``--keep_factor``,
+  ``--no_pre_mask`` and ``--always_refine``.
+* Model refinement as in pplacer: when the query alignment holds the reference sequences, or with
+  ``--always_refine``, CAT models get new site categories on the reference tree.
+* ``place`` without a reference package: ``--tree``, ``--ref_aln``, ``--stats``, ``--ref_dir``
+  (pplacer's ``-t``, ``-r``, ``-s``, ``-d``), with RAxML 7 info, PhyML 3.0 stats and JSON model files
+  read as pplacer reads them, and pplacer's model settings ``--model_freqs``, ``--gamma_cats``,
+  ``--gamma_alpha`` (``--model`` is accepted).
+* Stockholm query files (``.sto``, ``.sth``) and reference packages with ``aln_sto``; gzipped
+  alignments (``.gz``).
 * Gamma models with 21 or more categories (GSL calls ``log1p``: glibc 2.19's, as in pplacer) are
   supported; a GSL error while the gamma rates are computed (e.g. alpha 10^6) stops gPlace with
   pplacer's message, as pplacer stops.

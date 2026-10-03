@@ -8,11 +8,12 @@
 
 ## Features
 
-* **Drop-in placement:** `gplace place` takes the same inputs as pplacer (aligned queries + refpkg) and writes the same jplace.
+* **Drop-in placement:** `gplace place` takes the same inputs as pplacer (aligned queries + refpkg, or reference files) and writes the same jplace.
 * **pplacer's behaviour, also outside GTDB-Tk:** reference packages with a taxonomy get pplacer's `classification` field (edge painting, or `--mrca_class`); identical query sequences are placed once and written as one record; queries that don't overlap the reference alignment stop the run as in pplacer, or are dropped with `--discard_nonoverlapped`.
 * **Pooled batches:** `gplace place_batch` places many alignments at once; alignments sharing a reference package are placed in a single pass.
 * **Memory limits and huge trees:** `--max_memory 64G` keeps a run within a memory limit. gPlace places without tiles when that fits, and otherwise tile by tile, with the largest tiles that fit, and identical results. This places genomes on the full GTDB bacterial tree (273,290 nodes), which would need ~490 GiB untiled. `--tile_edges N` sets the tile size directly.
 * **Every pplacer model:** WAG, LG, JTT (protein) and GTR (DNA), with FastTree CAT or gamma rate variation and model or empirical frequencies, read from the reference package as pplacer does. `--fix_gamma_underflow` optionally avoids pplacer's gamma underflow on large trees (likelihood `-inf`).
+* **pplacer's options:** its search settings (`--max_strikes`, `--keep_at_most`, `--no_pre_mask`, ...), model refinement (`--always_refine`, or reference sequences in the query file), reference files without a package (`-t`/`-r`/`-s`/`-d` with RAxML 7, PhyML 3.0 or JSON models) and Stockholm query files, all with pplacer's results; pplacer's option spellings are accepted.
 * **No pplacer or taxtastic needed:** `gplace tog` writes the same tree as `guppy tog` (byte for byte, Newick or phyloXML), and `gplace taxit create/check/info` builds and checks reference packages as taxtastic's `taxit` does.
 * **Self-verifying installation:** `gplace check_install` checks the compiled engine bit for bit against values taken from GTDB-Tk's pplacer binary; `gplace test` places bundled genomes and compares them with pplacer's own output.
 

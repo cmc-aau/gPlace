@@ -201,6 +201,44 @@ correctly-rounded functions on 8,088 inputs (the arguments GSL passes for discre
 plus random ones): identical in every case, while the system glibc 2.39 differed in 7. gPlace binds
 GSL's calls to CORE-MATH, and ``gplace check_install`` checks these values.
 
+.. _validation/options:
+
+pplacer's options and inputs
+----------------------------
+
+Each of pplacer's settings and input modes that gPlace accepts was compared with the stock pplacer
+binary run with the same command line (``gplace place``, untiled and tiled; every placement record
+and the tree string textually identical):
+
+.. list-table::
+   :header-rows: 1
+
+   * - What
+     - Cases
+     - Result
+   * - ``--ml-tolerance``, ``--start-pend``, ``--max-pend``, ``--max-strikes`` (0, 1, 20),
+       ``--strike-box``, ``--max-pitches`` (0, 3, 200), ``--keep-at-most`` (0, 1, 50),
+       ``--keep-factor`` (0 to 2), combinations, ``--no-pre-mask`` (also with duplicate and
+       non-overlapping queries)
+     - 106, on WAG + CAT (protein), GTR + CAT (DNA), WAG + gamma and GTR + gamma packages
+     - identical, including the queries pplacer omits (nothing kept) and its errors
+   * - Stockholm and gzipped query files; a package with ``aln_sto``; reference order with
+       empirical frequencies and ambiguity codes (FASTA and Stockholm orders give different
+       placements in pplacer, and in gPlace)
+     - 14
+     - identical
+   * - ``-t``/``-r``/``-s``/``-d`` with PhyML 3.0 stats, RAxML 7 info files (both formats), JSON
+       models, ``--model-freqs``, ``--gamma-cats``/``--gamma-alpha``, ``-m``; a package without
+       ``phylo_model``; ``-t``/``-r``/``-s`` replacing a package's files; files pplacer cannot read
+     - 31
+     - identical (failures fail in both)
+   * - Model refinement: reference sequences in the query file (FASTA, Stockholm), ``--always-refine``
+       (CAT and gamma, with other settings)
+     - 11
+     - identical
+
+The unit tests (``tests/test_options.py``) repeat a subset against stored pplacer output.
+
 How exactness was established
 -----------------------------
 

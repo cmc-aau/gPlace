@@ -68,6 +68,18 @@ class OptionsParser(object):
             raise GPlaceExit(f'--max_memory: {e}')
         return tile_edges, max_memory
 
+    def _search_options(self, options):
+        """core.Search from the command line, checked as pplacer checks its preferences."""
+        from gplace.engine.core import Search
+        search = Search.from_options(options)
+        changed = search.changed()
+        if changed:
+            self.logger.info('pplacer search settings: ' + ', '.join(f'{k}={v}' for k, v in changed)
+                             + ' (the others are pplacer\'s defaults).')
+        if search.no_pre_mask and getattr(options, 'discard_nonoverlapped', False):
+            self.logger.info('--discard_nonoverlapped has no effect with --no_pre_mask (as in pplacer).')
+        return search
+
     def _log_plan(self, plan, max_memory):
         """Report how --max_memory was applied (see tiled.plan_tiling)."""
         GiB = 2 ** 30
@@ -82,7 +94,7 @@ class OptionsParser(object):
                              f'{plan.tile_edges:,} (estimated peak {plan.memory / GiB:.1f} GiB).')
 
     def _place_group(self, refpkg, queries, cpus, tile_edges=None, max_memory=None, fix_gamma=False,
-                     mrca_class=False, discard_nonoverlapped=False):
+                     mrca_class=False, discard_nonoverlapped=False, search=None, always_refine=False):
         """Run the engine on one reference package; returns (Placer, results, seconds, classifier):
         results has one entry per query (in input order; identical sequences are placed once),
         classifier is None unless the refpkg has a taxonomy (see taxonomy.Classifier)."""
@@ -90,25 +102,28 @@ class OptionsParser(object):
         from gplace.engine import resources, taxonomy
         from gplace.engine.factory import new_placer, tiled_placer
         from gplace.engine.tiled import plan_for_placer
+        from gplace.engine.reference import Reference
         t0 = time.time()
-        placer = new_placer(refpkg, queries, cpus, fix_gamma, discard_nonoverlapped)
+        reference = Reference.of(refpkg)
+        placer = new_placer(reference, queries, cpus, fix_gamma, discard_nonoverlapped, search, always_refine)
         if placer.discarded:
             self.logger.info(f'Discarded {len(placer.discarded):,} queries that do not overlap the reference '
                              f'sequences (--discard_nonoverlapped), e.g. {placer.discarded[0]}.')
         n_all, n_rep = len(placer.all_names), len(placer.query_names)
         if n_rep < n_all:
-            self.logger.info(f'{n_all:,} queries, {n_rep:,} distinct sequences after pre-masking: identical '
+            self.logger.info(f'{n_all:,} queries, {n_rep:,} distinct sequences'
+                             f'{"" if placer.search.no_pre_mask else " after pre-masking"}: identical '
                              f'sequences are placed once and written as one record (as pplacer does).')
         classifier = None
-        if taxonomy.tax_equipped(refpkg):
-            classifier = taxonomy.Classifier(refpkg, placer.tree, mrca_class)
+        if reference.refpkg and reference.tax_equipped():
+            classifier = taxonomy.Classifier(reference.refpkg, placer.tree, mrca_class)
             self.logger.info(f'Reference package has a taxonomy: placements are classified by '
                              f'{classifier.method} ("classification" field).')
             for rank in classifier.missing_ranks:
                 self.logger.warning(f'rank {rank} not represented in the lineage of any sequence in '
-                                    f'reference package {refpkg}.')
+                                    f'reference package {reference.describe()}.')
         elif mrca_class:
-            self.logger.info('--mrca_class has no effect: the reference package has no taxonomy.')
+            self.logger.info('--mrca_class has no effect: the reference has no taxonomy.')
         model = placer.model
         self.logger.info(f'Model: {model.describe()} ({model.alphabet.name})'
                          + (' [--fix_gamma_underflow]' if fix_gamma and model.ras == 'gamma' else ''))
@@ -122,7 +137,7 @@ class OptionsParser(object):
         tile_txt = (f'{len(placer.tiles):,} tiles of up to {placer.max_edges:,} edges; '
                     if plan.tile_edges is not None else '')
         mem = placer.memory_estimate()
-        self.logger.info(f'Placing {len(placer.query_names):,} queries on {refpkg} '
+        self.logger.info(f'Placing {len(placer.query_names):,} queries on {reference.describe()} '
                          f'({placer.nnodes:,} nodes, {placer.nsites:,} sites, {cpu_txt}; {tile_txt}'
                          f'estimated peak memory {mem / 2 ** 30:.1f} GiB).')
         avail = resources.available_memory() if tile_edges is None and max_memory is None else None
@@ -131,6 +146,13 @@ class OptionsParser(object):
                                 f'{avail / 2 ** 30:.1f} GiB available; use --max_memory to place tile by '
                                 f'tile within a memory limit.')
         results = placer.expand(placer.run())
+        unplaced = [r[0] for r in results if not r[1]]
+        if unplaced:                            # pplacer_run: "not placed and will be omitted"
+            msg = (f'{len(unplaced)} queries have no placement left after --keep_at_most/--keep_factor and '
+                   f'are omitted from the jplace (as pplacer does), e.g. {unplaced[0]}.')
+            self.logger.warning(msg)
+            self.warnings.info(msg)
+            results = [r for r in results if r[1]]
         n_warn = sum(1 for _, _, w in results if w)
         if n_warn:
             self.warnings.info(f'{n_warn} queries had locations skipped after a GSL error (as pplacer does).')
@@ -145,20 +167,47 @@ class OptionsParser(object):
             self.warnings.info(msg)
         return placer, results, time.time() - t0, classifier
 
+    def _reference(self, options):
+        """reference.Reference from --refpkg and/or pplacer's -t/-r/-s/-d files."""
+        from gplace.engine.reference import Reference, ModelSettings
+        if not options.refpkg and not options.tree:
+            raise FileNotFound('Give a reference package (--refpkg) or a reference tree (--tree, with '
+                               '--stats and optionally --ref_aln), as pplacer needs -c or -t.')
+        if options.refpkg:
+            self._check_refpkg(options.refpkg)
+        settings = ModelSettings.from_options(options)
+        ref = Reference(options.refpkg, options.tree, options.ref_aln, options.stats, options.ref_dir, settings)
+        for what, key, given in (('--tree', 'tree', options.tree), ('--ref_aln', 'aln_fasta', options.ref_aln),
+                                 ('--stats', 'tree_stats', options.stats)):
+            if given:
+                self._check_file(ref.files[key], f'{what} file')
+        given = [o for o, v, d in (('--model', settings.model, 'LG'), ('--model_freqs', settings.model_freqs, False),
+                                   ('--gamma_cats', settings.gamma_cats, 1), ('--gamma_alpha', settings.gamma_alpha, 1.0))
+                 if v != d]
+        if ref.has('phylo_model'):
+            if given or options.stats:
+                self.logger.info(f'{", ".join(given + (["--stats"] if options.stats else []))}: no effect, the '
+                                 f'reference package\'s phylo_model sets the model (as in pplacer).')
+        elif '--model' in given:
+            self.logger.info('--model: no effect, the statistics file names the model (as in pplacer v1.1.alpha19).')
+        return ref
+
     def place(self, options):
-        """Place the queries of one alignment on one reference package."""
-        from gplace.engine.core import read_fasta
+        """Place the queries of one alignment on one reference (package)."""
+        from gplace.engine.core import read_alignment
         from gplace.engine.jplace import write_jplace
         tiling = self._tiling_options(options)
+        search = self._search_options(options)
         self._check_file(options.msa_file, 'Query alignment')
-        self._check_refpkg(options.refpkg)
+        reference = self._reference(options)
         out_dir = os.path.dirname(os.path.abspath(options.out_file))
         make_sure_path_exists(out_dir)
-        queries = read_fasta(options.msa_file)
+        queries = read_alignment(options.msa_file)
         self.logger.info(f'Read {len(queries):,} sequences from {options.msa_file}')
         placer, results, secs, classify = self._place_group(
-            options.refpkg, queries, options.cpus, *tiling, fix_gamma=options.fix_gamma_underflow,
-            mrca_class=options.mrca_class, discard_nonoverlapped=options.discard_nonoverlapped)
+            reference, queries, options.cpus, *tiling, fix_gamma=options.fix_gamma_underflow,
+            mrca_class=options.mrca_class, discard_nonoverlapped=options.discard_nonoverlapped,
+            search=search, always_refine=options.always_refine)
         records = placer.records([r[0] for r in results])
         write_jplace(options.out_file, placer.jplace_tree(), results, ' '.join(sys.argv), records, classify)
         self.logger.info(f'Wrote {len(results):,} placements ({len(records):,} records) to '
@@ -166,9 +215,10 @@ class OptionsParser(object):
 
     def place_batch(self, options):
         """Place many alignments; queries sharing a reference package are placed in one pass."""
-        from gplace.engine.core import read_fasta
+        from gplace.engine.core import read_alignment
         from gplace.engine.jplace import write_jplace
         tiling = self._tiling_options(options)
+        search = self._search_options(options)
         self._check_file(options.batchfile, 'Batchfile')
         rows = []
         for i, line in enumerate(open(options.batchfile), 1):
@@ -193,7 +243,7 @@ class OptionsParser(object):
                              f'({len(entries)} alignment file(s))')
             pooled, owner = [], {}
             for msa, _, out in entries:
-                for nm, seq in read_fasta(msa):
+                for nm, seq in read_alignment(msa):
                     if nm in owner:
                         raise BatchfileMalformed(f'Query {nm} appears in more than one alignment for '
                                                  f'{entries[0][1]}; names must be unique per reference package.')
@@ -201,7 +251,8 @@ class OptionsParser(object):
                     pooled.append((nm, seq))
             placer, results, secs, classify = self._place_group(
                 entries[0][1], pooled, options.cpus, *tiling, fix_gamma=options.fix_gamma_underflow,
-                mrca_class=options.mrca_class, discard_nonoverlapped=options.discard_nonoverlapped)
+                mrca_class=options.mrca_class, discard_nonoverlapped=options.discard_nonoverlapped,
+                search=search, always_refine=options.always_refine)
             tree = placer.jplace_tree()
             by_out = OrderedDict((out, []) for _, _, out in entries)
             for r in results:
@@ -245,7 +296,7 @@ class OptionsParser(object):
         import random
         import numpy as np
         from gplace.engine import resources
-        from gplace.engine.core import read_fasta, informative
+        from gplace.engine.core import read_alignment, informative
         from gplace.engine.tiled import plan_tiling, load_tree
         self._check_refpkg(options.refpkg)
         tile_edges, max_memory = self._tiling_options(options)
@@ -285,7 +336,7 @@ class OptionsParser(object):
             return
 
         self._check_file(options.msa_file, 'Query alignment')
-        queries = read_fasta(options.msa_file)
+        queries = read_alignment(options.msa_file)
         q_full = options.queries or len(queries)
         rnd = random.Random(1)
         sample = queries if len(queries) <= options.max_queries else rnd.sample(queries, options.max_queries)
@@ -398,9 +449,11 @@ class OptionsParser(object):
     def _ref_informative(refpkg, L):
         import json
         import numpy as np
-        from gplace.engine.core import read_fasta, informative
-        files = json.load(open(os.path.join(refpkg, 'CONTENTS.json')))['files']
-        ref = read_fasta(os.path.join(refpkg, files['aln_fasta']))
+        from gplace.engine.core import informative
+        from gplace.engine.reference import Reference
+        ref = Reference(refpkg).alignment()
+        if ref is None:
+            raise GPlaceExit(f'{refpkg} has no reference alignment (aln_fasta or aln_sto).')
         RA = np.frombuffer(''.join(s.upper() for _, s in ref).encode(), np.uint8).reshape(len(ref), L)
         return informative(RA).any(axis=0)
 

@@ -29,13 +29,13 @@ import re
 import numpy as np
 
 from gplace.config.common import CONFIG, ENGINE_NAMES, ENGINE_VARIANTS, engine_file
-from gplace.exceptions import EngineNotBuilt
+from gplace.exceptions import EngineNotBuilt, GPlaceException
 
 NS = 20
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 
 # pplacer v1.1.alpha19 default preferences (prefs.ml), unchanged by GTDB-Tk's invocation
-# `pplacer -m WAG -j <cpus> -c <refpkg> -o <out.json> <msa>`.
+# `pplacer -m WAG -j <cpus> -c <refpkg> -o <out.json> <msa>`; Search holds a run's values.
 START_PEND = 0.1
 MAX_PEND = 2.0
 INITIAL_TOL = 0.01
@@ -46,6 +46,45 @@ KEEP_FACTOR = 0.01
 MAX_PITCHES = 40
 MAX_STRIKES = 6
 STRIKE_BOX = 3.0
+
+
+class Search(object):
+    """pplacer's search settings (--ml-tolerance, --start-pend, --max-pend, --max-strikes,
+    --strike-box, --max-pitches, --keep-at-most, --keep-factor, --no-pre-mask), checked as
+    Prefs.check does. The final tolerance (1e-5) and the iteration limit (200) are fixed in pplacer."""
+
+    def __init__(self, ml_tolerance=INITIAL_TOL, start_pend=START_PEND, max_pend=MAX_PEND,
+                 max_strikes=MAX_STRIKES, strike_box=STRIKE_BOX, max_pitches=MAX_PITCHES,
+                 keep_at_most=KEEP_AT_MOST, keep_factor=KEEP_FACTOR, no_pre_mask=False):
+        self.ml_tolerance, self.start_pend, self.max_pend = float(ml_tolerance), float(start_pend), float(max_pend)
+        self.max_strikes, self.strike_box, self.max_pitches = int(max_strikes), float(strike_box), int(max_pitches)
+        self.keep_at_most, self.keep_factor = int(keep_at_most), float(keep_factor)
+        self.no_pre_mask = bool(no_pre_mask)
+        for k in ('ml_tolerance', 'start_pend', 'max_pend', 'strike_box', 'keep_factor'):
+            if math.isnan(getattr(self, k)):
+                raise GPlaceException(f'{k} must be a number, not nan.')
+        if self.start_pend <= 0.:
+            raise GPlaceException('Starting pendant branch length must be strictly positive.')
+        if self.start_pend >= self.max_pend:
+            raise GPlaceException('Starting pendant branch length must be strictly less than maximum '
+                                  'pendant branch length.')
+        # core.ml: max_strikes = 0 disables ball playing (every location is evaluated)
+        if self.max_strikes == 0:
+            self.t_max_pitches = self.t_max_strikes = math.inf
+        else:
+            self.t_max_pitches, self.t_max_strikes = self.max_pitches, self.max_strikes
+
+    @classmethod
+    def from_options(cls, options):
+        """The settings of a parsed command line (attributes missing from it keep the defaults)."""
+        names = ('ml_tolerance', 'start_pend', 'max_pend', 'max_strikes', 'strike_box', 'max_pitches',
+                 'keep_at_most', 'keep_factor', 'no_pre_mask')
+        return cls(**{k: getattr(options, k) for k in names if getattr(options, k, None) is not None})
+
+    def changed(self):
+        """[(name, value)] of the settings that differ from pplacer's defaults."""
+        d = Search()
+        return [(k, v) for k, v in vars(self).items() if not k.startswith('t_') and v != getattr(d, k)]
 
 XP_OK, XP_EXCEEDED, XP_GSL, XP_FINDSTART, XP_INVALIDSTART, XP_ASSERT = range(6)
 
@@ -295,19 +334,93 @@ def build_diagd(R, pi, L=None):
     return np.ascontiguousarray(x), np.ascontiguousarray(l), np.ascontiguousarray(xit), M
 
 
-# ------------------------------------------------------------------------- FASTA --
+# -------------------------------------------------------------------- alignments --
+def _open_text(path):
+    """A text file, gunzipped if its name ends in .gz (pplacer's MaybeZipped)."""
+    if path.endswith('.gz'):
+        import gzip
+        return gzip.open(path, 'rt')
+    return open(path)
+
+
 def read_fasta(path):
-    """(name, sequence) pairs; the name is the first whitespace-delimited header token."""
+    """(name, sequence) pairs; the name is the first whitespace-delimited header token. As
+    pplacer's Fasta: ';' lines are comments, a .gz file is read gunzipped, and a sequence before
+    the first name is an error."""
     out, name, buf = [], None, []
-    with open(path) as fh:
+    with _open_text(path) as fh:
         for line in fh:
             line = line.rstrip('\n')
             if line.startswith('>'):
                 if name is not None:
                     out.append((name, ''.join(buf)))
                 name, buf = line[1:].split()[0] if line[1:].strip() else '', []
+            elif line.startswith(';'):
+                continue
+            elif name is None:
+                if line.strip():
+                    raise GPlaceException(f'Syntax error in {path}: sequence before name.')
             else:
                 buf.append(line.strip())
     if name is not None:
         out.append((name, ''.join(buf)))
     return out
+
+
+_STOCKHOLM_LINE = re.compile(r'(?:|(# STOCKHOLM 1\.0)|(//)|(#=.+)|(([^ \t\n\r#]+)[ \t]+([^ \t\n\r#]+)))'
+                             r'[ \t]*(?:[\r\n]+|$)')
+
+
+def read_stockholm(path):
+    """(name, sequence) pairs of a Stockholm alignment, as pplacer's Stockholm module reads it:
+    one alignment ("# STOCKHOLM 1.0" ... "//"), #= markup ignored, the blocks of a name
+    concatenated, '.' read as '-'; the result is in DESCENDING name order (pplacer folds a string
+    map into a list), which is the order pplacer uses everywhere after reading."""
+    def err(msg):
+        raise GPlaceException(f'Syntax error in {path}: {msg}')
+
+    seqs, state = {}, 'header'
+    with _open_text(path) as fh:
+        text = fh.read()
+    for lineno, line in enumerate(text.split('\n'), 1):
+        pos = 0
+        while pos < len(line):
+            m = _STOCKHOLM_LINE.match(line, pos)
+            if not m or m.end() == pos:
+                err(f'line {lineno} character {pos}')
+            pos = m.end()
+            kind = ('header' if m.group(1) else 'footer' if m.group(2) else 'markup' if m.group(3)
+                    else 'seq' if m.group(4) else None)
+            if kind is None:                         # blank
+                continue
+            if state == 'header':
+                if kind != 'header':
+                    err('something before header')
+                state = 'body'
+            elif state == 'body':
+                if kind == 'header':
+                    err('header unexpected')
+                elif kind == 'seq':
+                    seqs.setdefault(m.group(5), []).append(m.group(6).replace('.', '-'))
+                elif kind == 'footer':
+                    state = 'done'
+            else:
+                err('something after footer')
+    if state != 'done':
+        err("didn't reach footer by EOF")
+    out = []
+    for name in sorted(seqs):                        # StringMap.fold, consing: descending order
+        seq = ''.join(seqs[name])
+        if out and len(seq) != len(out[-1][1]):
+            err(f"{name} (length {len(seq)}) doesn't match the previous sequence lengths ({len(out[-1][1])})")
+        out.append((name, seq))
+    return out[::-1]
+
+
+def read_alignment(path):
+    """A query alignment as pplacer reads it (Alignment.list_of_any_file): Stockholm if the name
+    (without .gz) ends in .sto or .sth, otherwise FASTA."""
+    base = path[:-3] if path.endswith('.gz') else path
+    if base.endswith(('.sto', '.sth')):
+        return read_stockholm(path)
+    return read_fasta(path)

@@ -1,0 +1,22 @@
+
+
+This is RAxML version 7.2.6 released by Alexandros Stamatakis in February 2010.
+
+Alignment has 516 distinct alignment patterns
+
+Partition: 0
+Alignment Patterns: 516
+Name: No Name Provided
+DataType: AA
+Substitution Matrix: WAG
+
+
+
+RAxML was called as follows:
+
+raxmlHPC -m PROTGAMMAWAG -s actin.phy -n wag
+
+
+Inference[0]: Time 1.000000 GAMMA-based likelihood -2000.0, best rearrangement setting 5
+alpha[0]: 0.289000 
+

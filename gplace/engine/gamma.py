@@ -148,7 +148,7 @@ class GammaMixin(object):
             L.xp_gtt_set(tt, P(D), P(De), P(Pp), P(Pe), P(reind), self.bl[loc], pend, dist)
 
         def optimize(tol):
-            st = L.xp_tt_optimize(tt, tol, core.MAX_PEND, core.MAX_ITER)
+            st = L.xp_tt_optimize(tt, tol, self.search.max_pend, core.MAX_ITER)
             if st in (core.XP_OK, core.XP_EXCEEDED):
                 L.xp_tt_results(tt, P(res))
                 return (float(res[0]), float(res[1]), float(res[2])), None
@@ -158,7 +158,7 @@ class GammaMixin(object):
             set_edges(loc, pend, dist)
             r, st = optimize(tol)
             if st == core.XP_GSL:
-                set_edges(loc, core.START_PEND, self.bl[loc] / 2.)
+                set_edges(loc, self.search.start_pend, self.bl[loc] / 2.)
                 r, st = optimize(tol)
             return r, st
 

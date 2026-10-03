@@ -163,17 +163,22 @@ def available_memory():
 def refpkg_width(refpkg_dir):
     """Doubles per site of the likelihood vectors of a refpkg's model (models.width_of)."""
     from gplace.engine import models
-    return models.width_of(models.read_phylo_model(refpkg_dir))
+    from gplace.engine.reference import Reference
+    return models.width_of(Reference(refpkg_dir).phylo_model())
 
 
 def refpkg_dimensions(refpkg_dir):
     """(n_nodes, n_internal, n_leaves, aln_len, ref_informative_sites) without building anything."""
     import numpy as np
-    from gplace.engine.core import read_fasta, informative
+    from gplace.engine.core import informative
     from gplace.engine.newick import parse_newick
-    files = json.load(open(os.path.join(refpkg_dir, 'CONTENTS.json')))['files']
-    t = parse_newick(open(os.path.join(refpkg_dir, files['tree'])).read())
-    ref = read_fasta(os.path.join(refpkg_dir, files['aln_fasta']))
+    from gplace.engine.reference import Reference
+    from gplace.exceptions import RefpkgMalformed
+    R = Reference(refpkg_dir)
+    t = parse_newick(R.tree_text())
+    ref = R.alignment()
+    if ref is None:
+        raise RefpkgMalformed(f'{refpkg_dir} has no reference alignment (aln_fasta or aln_sto).')
     L = len(ref[0][1])
     RA = np.frombuffer(''.join(s for _, s in ref).encode(), np.uint8).reshape(len(ref), L)
     sites = int(informative(RA).any(axis=0).sum())

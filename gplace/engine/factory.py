@@ -15,28 +15,35 @@
 #                                                                             #
 ###############################################################################
 
-"""The right placer for a reference package: CAT models -> Placer / TiledPlacer, gamma models ->
+"""The right placer for a reference (package): CAT models -> Placer / TiledPlacer, gamma models ->
 GammaPlacer / GammaTiledPlacer."""
 
-from gplace.engine import models
+from gplace.engine.reference import Reference
 from gplace.engine.placer import Placer
 from gplace.engine.tiled import TiledPlacer
 
 
 def is_gamma(refpkg_dir):
-    return models.read_phylo_model(refpkg_dir).get('ras_model') == 'gamma'
+    """Whether the model of a reference (package directory or reference.Reference) is gamma."""
+    return Reference.of(refpkg_dir).phylo_model().get('ras_model') == 'gamma'
 
 
-def new_placer(refpkg_dir, queries, cpus=1, fix_gamma_underflow=False, discard_nonoverlapped=False):
-    """A loaded placer for refpkg_dir (untiled). fix_gamma_underflow only affects gamma models;
-    discard_nonoverlapped drops queries that do not overlap the reference alignment (pplacer's
-    --discard-nonoverlapped) instead of stopping."""
+def new_placer(refpkg_dir, queries, cpus=1, fix_gamma_underflow=False, discard_nonoverlapped=False,
+               search=None, always_refine=False):
+    """A loaded placer (untiled) for refpkg_dir, a reference package directory or a
+    reference.Reference. fix_gamma_underflow only affects gamma models; discard_nonoverlapped drops
+    queries that do not overlap the reference alignment (pplacer's --discard-nonoverlapped) instead
+    of stopping; search: core.Search (default: pplacer's); always_refine: refine the model as
+    pplacer's --always-refine (CAT models; also done when the query file holds the references)."""
+    refpkg_dir = Reference.of(refpkg_dir)
     if is_gamma(refpkg_dir):
         from gplace.engine.gamma import GammaPlacer
-        placer = GammaPlacer(refpkg_dir, queries, cpus, discard_nonoverlapped=discard_nonoverlapped)
+        placer = GammaPlacer(refpkg_dir, queries, cpus, discard_nonoverlapped=discard_nonoverlapped,
+                             search=search, always_refine=always_refine)
         placer.set_gamma_fix(fix_gamma_underflow)
         return placer
-    return Placer(refpkg_dir, queries, cpus, discard_nonoverlapped=discard_nonoverlapped)
+    return Placer(refpkg_dir, queries, cpus, discard_nonoverlapped=discard_nonoverlapped, search=search,
+                  always_refine=always_refine)
 
 
 def tiled_placer(placer, tile_edges, **kw):

@@ -59,6 +59,7 @@ gplace = [
     "tests/data/models/*.refpkg/*",
     "tests/data/parity/*",
     "tests/data/tools/*",
+    "tests/data/options/*",
 ]
 
 [tool.cibuildwheel]
