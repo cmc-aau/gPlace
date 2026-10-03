@@ -10,10 +10,10 @@ jobs:
     uses: ./.github/workflows/wheels.yml
 
   sdist:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       # Source distribution for platforms without a wheel: the engine is compiled at install.
@@ -21,19 +21,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip build
           python -m build --sdist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-sdist
           path: dist/*.tar.gz
 
   pypi:
     needs: [wheels, sdist]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       id-token: write
       contents: read
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: dist-*
           path: dist

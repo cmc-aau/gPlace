@@ -1,50 +1,54 @@
-# This workflow automatically generates the Sphinx documentation required for
-# GitHub pages. Executed when main is pushed to.
-name: Documentation update
+# Build the Sphinx documentation on every push to main, and publish it with GitHub Pages when the
+# repository is public (one-time setup: Settings > Pages > Source: "GitHub Actions"). For a private
+# repository the built site is attached to the run as the "github-pages" artifact (GitHub Pages for
+# private repositories needs a paid plan).
+name: Documentation
 on:
   push:
-    branches: main
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
-      # Checkout the main branch (docs will be built from this)
-      - uses: actions/checkout@v4
-        with:
-          path: main
-
-      # Checkout the documentation branch (docs will be pushed to this)
-      - uses: actions/checkout@v4
-        with:
-          ref: gh_pages
-          path: gh_pages
-
       - name: Install Sphinx requirements
-        working-directory: ${{ github.workspace }}/main/docs
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install -r docs/requirements.txt
 
       - name: Build documentation
-        working-directory: ${{ github.workspace }}/main/docs
+        working-directory: docs
         run: make html
 
-      - name: Move documentation
-        run: |
-          touch main/docs/build/html/.nojekyll
-          cp -a main/docs/build/html/. gh_pages/
+      - name: Attach the site to the run
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/build/html
 
-      - name: Upload documentation
-        working-directory: ${{ github.workspace }}/gh_pages
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add --all
-          git diff-index --quiet HEAD || git commit -m "docs update" -a
-          git push
+  deploy:
+    needs: build
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
