@@ -27,12 +27,12 @@ replace the package's.
     --model-freqs). As in pplacer, those settings and -s do not change a phylo_model.
 """
 
-import json
 import logging
 import os
 
 from gplace.engine import core
 from gplace.exceptions import RefpkgMalformed, FileNotFound
+from gplace.fileio import read_json, read_text
 
 
 class ModelSettings(object):
@@ -62,7 +62,7 @@ class Reference(object):
             cpath = os.path.join(refpkg, 'CONTENTS.json')
             if not os.path.isfile(cpath):
                 raise RefpkgMalformed(f'No CONTENTS.json in reference package: {refpkg}')
-            for k, v in json.load(open(cpath)).get('files', {}).items():
+            for k, v in read_json(cpath).get('files', {}).items():
                 self.files[k] = os.path.join(refpkg, v)
         prefix = ''
         if ref_dir:
@@ -98,7 +98,7 @@ class Reference(object):
         return key in self.files
 
     def tree_text(self):
-        return open(self._path('tree')).read().strip()
+        return read_text(self._path('tree')).strip()
 
     def alignment(self):
         """The reference alignment [(name, sequence)] in pplacer's order (Stockholm: descending
@@ -113,7 +113,7 @@ class Reference(object):
         """The model as a phylo_model dict (models.model_from_refpkg)."""
         if self._pm is None:
             if 'phylo_model' in self.files:
-                self._pm = json.load(open(self._path('phylo_model')))
+                self._pm = read_json(self._path('phylo_model'))
             elif 'tree_stats' in self.files:
                 from gplace.engine.stats import phylo_model_of_stats
                 if self.refpkg:

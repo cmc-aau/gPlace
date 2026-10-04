@@ -236,14 +236,15 @@ class OptionsParser(object):
         search = self._search_options(options)
         self._check_file(options.batchfile, 'Batchfile')
         rows = []
-        for i, line in enumerate(open(options.batchfile), 1):
-            if not line.strip() or line.startswith('#'):
-                continue
-            cols = line.rstrip('\n').split('\t')
-            if len(cols) != 3:
-                raise BatchfileMalformed(f'Line {i} of {options.batchfile} does not have 3 tab-separated '
-                                         f'columns (msa_file, refpkg, out_file).')
-            rows.append(cols)
+        with open(options.batchfile) as fh:
+            for i, line in enumerate(fh, 1):
+                if not line.strip() or line.startswith('#'):
+                    continue
+                cols = line.rstrip('\n').split('\t')
+                if len(cols) != 3:
+                    raise BatchfileMalformed(f'Line {i} of {options.batchfile} does not have 3 tab-separated '
+                                             f'columns (msa_file, refpkg, out_file).')
+                rows.append(cols)
         if not rows:
             raise BatchfileMalformed(f'No entries in {options.batchfile}.')
         groups = OrderedDict()

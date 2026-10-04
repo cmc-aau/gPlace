@@ -25,6 +25,7 @@ v1.1.alpha19; the mini.refpkg variants share its tree and alignment and are asse
 import json
 import os
 from collections import namedtuple
+from gplace.fileio import read_json
 
 TEST_DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'tests', 'data')
 MODELS = os.path.join(TEST_DATA, 'models')
@@ -48,7 +49,7 @@ def _mini_variant(tag, work_dir, taxonomy=None):
     model with parity/mini_<taxonomy>.{taxonomy,seq_info}.csv."""
     out = os.path.join(work_dir, f'mini_{tag}.refpkg')
     os.makedirs(out, exist_ok=True)
-    files = json.load(open(os.path.join(MINI, 'CONTENTS.json')))['files']
+    files = read_json(os.path.join(MINI, 'CONTENTS.json'))['files']
     contents = {'tree': os.path.join(MINI, files['tree']), 'aln_fasta': os.path.join(MINI, files['aln_fasta']),
                 'phylo_model': (os.path.join(MINI, files['phylo_model']) if taxonomy else
                                 os.path.join(MODELS, f'mini_{tag}.phylo_model.json'))}

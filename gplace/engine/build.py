@@ -243,9 +243,10 @@ def gsl_version(prefix):
     h = os.path.join(prefix, 'include', 'gsl', 'gsl_version.h')
     if not os.path.exists(h):
         return None
-    for line in open(h):
-        if line.startswith('#define GSL_VERSION'):
-            return line.split('"')[1]
+    with open(h) as fh:
+        for line in fh:
+            if line.startswith('#define GSL_VERSION'):
+                return line.split('"')[1]
     return None
 
 

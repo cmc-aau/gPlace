@@ -42,6 +42,7 @@ import time
 
 from gplace.engine.core import read_fasta
 from gplace.engine.newick import parse_newick
+from gplace.fileio import read_text
 
 FORMAT_VERSION = '1.1'
 MANIFEST = 'CONTENTS.json'
@@ -461,7 +462,7 @@ class Refpkg(object):
             except ValueError:
                 return 'aln_sto file is not valid Stockholm.'
         try:
-            t = parse_newick(open(self.resource_path('tree')).read())
+            t = parse_newick(read_text(self.resource_path('tree')))
             tree_names = {t.label[v] for v in t.leaves()}
         except Exception:
             return 'tree file is not valid Newick.'

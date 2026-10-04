@@ -8,6 +8,7 @@ from gplace.engine import core, resources
 from gplace.engine.newick import parse_newick
 from gplace.engine.tiled import tile_layout, plan_tiling, TiledPlacer, MIN_TILE_EDGES, PLAN_FRACTION
 from gplace.exceptions import GPlaceExit
+from gplace.fileio import read_text
 
 ENGINE = os.path.exists(core.engine_path())
 DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gplace', 'tests', 'data')
@@ -15,7 +16,7 @@ MINI = os.path.join(DATA, 'mini.refpkg')
 
 
 def mini_tree():
-    return parse_newick(open(os.path.join(MINI, 'mini_tree.tree')).read())
+    return parse_newick(read_text(os.path.join(MINI, 'mini_tree.tree')))
 
 
 class TestTileLayout(unittest.TestCase):

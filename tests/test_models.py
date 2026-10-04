@@ -1,4 +1,3 @@
-import json
 import math
 import os
 import tempfile
@@ -8,6 +7,7 @@ import numpy as np
 
 from gplace.engine import core, models, testsets
 from gplace.exceptions import RefpkgMalformed
+from gplace.fileio import read_json, write_json
 
 ENGINES = all(os.path.exists(core.engine_path(ns)) for ns in (20, 4))
 
@@ -147,14 +147,14 @@ class TestModelsEngine(unittest.TestCase):
         from gplace.engine.factory import new_placer
         with tempfile.TemporaryDirectory() as d:
             ts = testsets.model_sets(d)[0]
-            contents = json.load(open(os.path.join(ts.refpkg, 'CONTENTS.json')))
+            contents = read_json(os.path.join(ts.refpkg, 'CONTENTS.json'))
             for bad in ({'subs_model': 'HKY', 'ras_model': 'Price-CAT'},
                         {'subs_model': 'WAG', 'ras_model': 'free'},
                         {'subs_model': 'GTR', 'ras_model': 'gamma', 'gamma': {'alpha': 1, 'n_cats': 4}}):
                 pkg = os.path.join(d, 'bad.refpkg'); os.makedirs(pkg, exist_ok=True)
-                json.dump(bad, open(os.path.join(pkg, 'pm.json'), 'w'))
+                write_json(os.path.join(pkg, 'pm.json'), bad)
                 files = dict(contents['files'], phylo_model=os.path.join(pkg, 'pm.json'))
-                json.dump({'files': files}, open(os.path.join(pkg, 'CONTENTS.json'), 'w'))
+                write_json(os.path.join(pkg, 'CONTENTS.json'), {'files': files})
                 with self.assertRaises(RefpkgMalformed):
                     new_placer(pkg, core.read_fasta(ts.queries)[:2], 1)
 

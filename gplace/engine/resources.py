@@ -25,6 +25,7 @@ import socket
 import time
 
 from gplace.config.common import CONFIG
+from gplace.fileio import read_json, read_text
 
 NS = 20
 GiB = 2 ** 30
@@ -164,7 +165,7 @@ def available_memory():
         for i in range(len(parts), -1, -1):
             for name in files:
                 try:
-                    raw = open(os.path.join(root, *parts[:i], name)).read().strip()
+                    raw = read_text(os.path.join(root, *parts[:i], name)).strip()
                 except OSError:
                     continue
                 if raw.isdigit() and int(raw) < 2 ** 60:
@@ -219,7 +220,7 @@ def _tuning_path():
 def load_tuned_cpus():
     """--cpus chosen by `gplace benchmark` on this machine (same host, CPU model and CPU count)."""
     try:
-        data = json.load(open(_tuning_path()))
+        data = read_json(_tuning_path())
         return int(data[machine_key()]['cpus'])
     except (OSError, ValueError, KeyError, TypeError):
         return None
@@ -229,7 +230,7 @@ def save_tuned_cpus(cpus, details):
     path = _tuning_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
     try:
-        data = json.load(open(path))
+        data = read_json(path)
     except (OSError, ValueError):
         data = {}
     data[machine_key()] = dict(details, cpus=int(cpus), date=time.strftime('%Y-%m-%d %H:%M:%S'))

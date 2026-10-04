@@ -2,6 +2,7 @@ import os
 import unittest
 
 from gplace.engine.newick import parse_newick, to_newick, quote_label
+from gplace.fileio import read_text
 
 DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gplace', 'tests', 'data')
 
@@ -34,7 +35,7 @@ class TestNewick(unittest.TestCase):
     def test_expected_tree_string(self):
         """The bundled pplacer output's tree string is reproduced byte for byte."""
         import json
-        tree_txt = open(os.path.join(DATA, 'mini.refpkg', 'mini_tree.tree')).read()
+        tree_txt = read_text(os.path.join(DATA, 'mini.refpkg', 'mini_tree.tree'))
         with open(os.path.join(DATA, 'expected_pplacer.jplace')) as fh:
             expected = json.load(fh)['tree']
         self.assertEqual(to_newick(parse_newick(tree_txt)), expected)

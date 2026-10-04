@@ -53,15 +53,16 @@ def _bits(a):
 def check_libm(ns=NS):
     L = core.lib(ns)
     n = bad = 0
-    for line in open(os.path.join(core.DATA_DIR, 'stock_libm_vectors.tsv')):
-        if line.startswith('#') or not line.strip():
-            continue
-        op, a, b, want = line.split()
-        a, b, want = float.fromhex(a), float.fromhex(b), float.fromhex(want)
-        got = {'h': lambda: L.xp_hypot(a, b), 'e': lambda: L.xp_exp(a), 'l': lambda: L.xp_log(a),
-               'p': lambda: L.xp_pow(a, b), 's': lambda: L.xp_sin(a), 'q': lambda: L.xp_log1p(a)}[op]()
-        n += 1
-        bad += _bits(np.array([got]))[0] != _bits(np.array([want]))[0]
+    with open(os.path.join(core.DATA_DIR, 'stock_libm_vectors.tsv')) as fh:
+        for line in fh:
+            if line.startswith('#') or not line.strip():
+                continue
+            op, a, b, want = line.split()
+            a, b, want = float.fromhex(a), float.fromhex(b), float.fromhex(want)
+            got = {'h': lambda: L.xp_hypot(a, b), 'e': lambda: L.xp_exp(a), 'l': lambda: L.xp_log(a),
+                   'p': lambda: L.xp_pow(a, b), 's': lambda: L.xp_sin(a), 'q': lambda: L.xp_log1p(a)}[op]()
+            n += 1
+            bad += _bits(np.array([got]))[0] != _bits(np.array([want]))[0]
     return n, bad
 
 
@@ -69,13 +70,14 @@ def check_wag_eigen():
     """Same input matrix and bit-identical eigenvalues/eigenvectors as the stock binary."""
     L = core.lib()
     sec, vals = None, {'input': [], 'eval': [], 'evec': []}
-    for line in open(os.path.join(core.DATA_DIR, 'stock_wag_eigen.txt')):
-        line = line.strip()
-        if not line or line.startswith('#'):
-            continue
-        if line.startswith('['):
-            sec = line[1:-1]; continue
-        vals[sec].append(float.fromhex(line))
+    with open(os.path.join(core.DATA_DIR, 'stock_wag_eigen.txt')) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if line.startswith('['):
+                sec = line[1:-1]; continue
+            vals[sec].append(float.fromhex(line))
     R, pi = core.load_wag()
     _, _, _, M = core.build_diagd(R, pi)
     same_input = np.array_equal(_bits(M.ravel()), _bits(np.array(vals['input'])))

@@ -27,12 +27,12 @@ categories, PhyML files only set the categories and alpha when their lines read 
 3.0 writes them, and later RAxML/PhyML versions mostly fail as they do in pplacer.
 """
 
-import json
 import logging
 import math
 import re
 
 from gplace.exceptions import GPlaceException
+from gplace.fileio import read_json
 
 KNOWN_RAXML = ['7.0.4', '7.2.3', '7.2.5', '7.2.6', '7.2.7']
 KNOWN_PHYML = ['3.0', '3.0_246M']
@@ -239,7 +239,7 @@ def _phyml(version, lines, p):
 # -------------------------------------------------------------------------- JSON --
 def _json(path, p):
     try:
-        root = json.load(open(path))
+        root = read_json(path)
     except (OSError, ValueError) as e:
         raise StatsParsingError(f'{path}: {e}')
 

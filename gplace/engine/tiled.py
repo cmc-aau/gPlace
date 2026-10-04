@@ -38,7 +38,6 @@ pplacer's algorithm then runs tile by tile, with the work reordered but not chan
 """
 
 import gc
-import json
 import math
 import os
 import threading
@@ -55,6 +54,7 @@ from gplace.engine.newick import parse_newick
 from gplace.engine.placer import (Placer, Baseball, weighted_placements, shared_zeros, _fork_pool,
                                   candidates_needed, merge_candidates, _NO_EDGE)
 from gplace.exceptions import GPlaceException, GPlaceExit
+from gplace.fileio import read_json, read_text
 
 MIN_TILE_EDGES = 1000                   # smallest tiles --max_memory chooses
 PLAN_FRACTION = 0.95                    # --max_memory plans keep 5% headroom below the limit
@@ -160,8 +160,8 @@ def plan_for_placer(placer, tile_edges=None, max_memory=None):
 
 def load_tree(refpkg_dir):
     """The reference tree of a refpkg (for planning without loading the alignments)."""
-    files = json.load(open(os.path.join(refpkg_dir, 'CONTENTS.json')))['files']
-    return parse_newick(open(os.path.join(refpkg_dir, files['tree'])).read())
+    files = read_json(os.path.join(refpkg_dir, 'CONTENTS.json'))['files']
+    return parse_newick(read_text(os.path.join(refpkg_dir, files['tree'])))
 
 
 # -------------------------------------------------------------------- tiled placer --

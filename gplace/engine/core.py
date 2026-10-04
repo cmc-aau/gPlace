@@ -281,18 +281,19 @@ def load_protein_model(name):
     (WAG, LG or JTT), parsed from the verbatim pplacer v1.1.alpha19 strings in data/<name>.txt
     (float() == OCaml float_of_string)."""
     section, rows, statd = None, [], None
-    for line in open(os.path.join(DATA_DIR, name.lower() + '.txt')):
-        line = line.strip()
-        if not line or line.startswith('#'):
-            continue
-        if line in ('[trans]', '[statd]'):
-            section = line
-            continue
-        vals = [float(x) for x in re.split(r'[ \t]+', line)]
-        if section == '[trans]':
-            rows.append(vals)
-        else:
-            statd = vals
+    with open(os.path.join(DATA_DIR, name.lower() + '.txt')) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if line in ('[trans]', '[statd]'):
+                section = line
+                continue
+            vals = [float(x) for x in re.split(r'[ \t]+', line)]
+            if section == '[trans]':
+                rows.append(vals)
+            else:
+                statd = vals
     n = len(rows) + 1
     R = [[0.0 if i == j else rows[max(i, j) - 1][min(i, j)] for j in range(n)] for i in range(n)]
     return R, statd

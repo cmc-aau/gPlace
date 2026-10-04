@@ -30,6 +30,7 @@ from gplace.engine import testsets
 from gplace.exceptions import GPlaceExit
 from gplace.tools import taxit
 from gplace.tools.tog import tog
+from gplace.fileio import read_json
 
 TOOLS = os.path.join(testsets.TEST_DATA, 'tools')
 MINI = testsets.MINI
@@ -73,7 +74,7 @@ class TestTog(unittest.TestCase):
 
     def test_split_by_csv(self):
         jp = os.path.join(TOOLS, 'dups.jplace')
-        names = [r['nm'][0][0] for r in json.load(open(jp))['placements']][:6]
+        names = [r['nm'][0][0] for r in read_json(jp)['placements']][:6]
         csv_path = os.path.join(self.tmp, 'g.csv')
         with open(csv_path, 'w') as fh:
             fh.write(''.join(f'{n},{"b" if i % 2 else "a"}\n' for i, n in enumerate(names)))
@@ -92,7 +93,7 @@ class TestTaxit(unittest.TestCase):
     def test_phylo_models_identical_to_taxtastic(self):
         """RAxML, RAxML-NG, IQ-TREE, FastTree and PhyML (DNA and protein) stats files parse to the
         JSON taxtastic writes."""
-        expected = json.load(open(os.path.join(TOOLS, 'expected_phylo_models.json')))
+        expected = read_json(os.path.join(TOOLS, 'expected_phylo_models.json'))
         self.assertEqual(len(expected), 16)
         for f, e in expected.items():
             path = os.path.join(TOOLS, f)
@@ -101,7 +102,7 @@ class TestTaxit(unittest.TestCase):
                              e['phylo_model'], f)
 
     def test_create_check_info(self):
-        files = json.load(open(os.path.join(MINI, 'CONTENTS.json')))['files']
+        files = read_json(os.path.join(MINI, 'CONTENTS.json'))['files']
         pkg = os.path.join(self.tmp, 'p.refpkg')
         st = taxit.create(pkg, 'test locus', author='me', reroot=False,
                           aln_fasta=os.path.join(MINI, files['aln_fasta']), tree=os.path.join(MINI, files['tree']),
@@ -109,12 +110,12 @@ class TestTaxit(unittest.TestCase):
                           seq_info=os.path.join(PARITY, 'mini_full.seq_info.csv'),
                           taxonomy=os.path.join(PARITY, 'mini_full.taxonomy.csv'))
         self.assertEqual(st, 0)
-        c = json.load(open(os.path.join(pkg, 'CONTENTS.json')))
+        c = read_json(os.path.join(pkg, 'CONTENTS.json'))
         self.assertEqual(list(c), ['metadata', 'files', 'md5', 'log', 'rollback', 'rollforward'])
         self.assertEqual(list(c['files']), ['phylo_model', 'aln_fasta', 'seq_info', 'taxonomy', 'tree', 'tree_stats'])
         self.assertEqual(c['log'], ['Stripped refpkg (removed 0 files)', 'Loaded initial files into empty refpkg'])
         self.assertEqual(c['metadata']['author'], 'me')
-        model = json.load(open(os.path.join(pkg, c['files']['phylo_model'])))
+        model = read_json(os.path.join(pkg, c['files']['phylo_model']))
         self.assertEqual((model['subs_model'], model['ras_model']), ('WAG', 'Price-CAT'))
         out = io.StringIO()
         with redirect_stdout(out):

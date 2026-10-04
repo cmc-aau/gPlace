@@ -3,6 +3,7 @@ import tempfile
 import unittest
 
 from gplace.engine.jplace import write_jplace, read_jplace, compare_jplace
+from gplace.fileio import read_text
 
 DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'gplace', 'tests', 'data')
 
@@ -15,7 +16,7 @@ class TestJplace(unittest.TestCase):
             write_jplace(path, '(A:1{0},B:1{1}){2};',
                          [('q1', [[0.0758007809160999, 11, 1.0, -13036489.620231, 0.0629997563923999]], [])],
                          'test')
-            text = open(path).read()
+            text = read_text(path)
             self.assertIn('[0.0758007809161, 11, 1, -13036489.6202, 0.0629997563924]', text)
             _, pl, fields = read_jplace(path)
             self.assertEqual(fields, ['distal_length', 'edge_num', 'like_weight_ratio', 'likelihood', 'pendant_length'])

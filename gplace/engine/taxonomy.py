@@ -34,16 +34,16 @@ consecutive non-empty lineage columns (not from parent_id). seq_info needs ``seq
 """
 
 import csv
-import json
 import os
 
 from gplace.exceptions import RefpkgMalformed
+from gplace.fileio import read_json
 
 NOTAX = None
 
 
 def tax_equipped(refpkg_dir):
-    files = json.load(open(os.path.join(refpkg_dir, 'CONTENTS.json'))).get('files', {})
+    files = read_json(os.path.join(refpkg_dir, 'CONTENTS.json')).get('files', {})
     return 'taxonomy' in files and 'seq_info' in files
 
 
@@ -244,7 +244,7 @@ class Classifier(object):
     """Edge number -> tax_id (str) or None, for a tax-equipped reference package."""
 
     def __init__(self, refpkg_dir, tree, mrca_class=False):
-        files = json.load(open(os.path.join(refpkg_dir, 'CONTENTS.json')))['files']
+        files = read_json(os.path.join(refpkg_dir, 'CONTENTS.json'))['files']
         tax = Taxonomy(os.path.join(refpkg_dir, files['taxonomy']))
         seqinfo = read_seqinfo(os.path.join(refpkg_dir, files['seq_info']))
         for name, t in seqinfo.items():

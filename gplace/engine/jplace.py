@@ -29,6 +29,7 @@ import math
 import re
 
 from gplace.config.output import JPLACE_FIELDS
+from gplace.fileio import read_text
 
 _JSON_ESCAPE = re.compile(r'([\\"/\b\f\n\r\t])')
 _ESC = {'\\': '\\\\', '"': '\\"', '/': '\\/', '\b': '\\b', '\f': '\\f', '\n': '\\n', '\r': '\\r', '\t': '\\t'}
@@ -95,7 +96,7 @@ _NONFINITE = [(re.compile(r'(?<![\w."])-?nan(?![\w"])'), 'NaN'),
 def read_jplace(path):
     """Parse a jplace file (tolerating pplacer's nan/inf) into
     (tree, {name: [ {field: value, ...}, ... ]}, fields)."""
-    text = open(path).read()
+    text = read_text(path)
     for rx, rep in _NONFINITE:
         text = rx.sub(rep, text)
     js = json.loads(text)
@@ -111,7 +112,7 @@ def read_jplace(path):
 
 def _records(path):
     """The name lists of a file's records (pplacer writes identical queries as one record)."""
-    text = open(path).read()
+    text = read_text(path)
     for rx, rep in _NONFINITE:
         text = rx.sub(rep, text)
     return sorted(tuple(n[0] for n in pl['nm']) if 'nm' in pl else tuple(pl['n'])

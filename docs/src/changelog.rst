@@ -68,3 +68,5 @@ Major Changes:
 * Gamma models with 21 or more categories (GSL calls ``log1p``: glibc 2.19's, as in pplacer) are
   supported; a GSL error while the gamma rates are computed (e.g. alpha 10^6) stops gPlace with
   pplacer's message, as pplacer stops.
+* Every file gPlace opens is closed explicitly (``gplace.fileio`` helpers or ``with`` blocks): no
+  ``ResourceWarning: unclosed file`` in the unit-test log.

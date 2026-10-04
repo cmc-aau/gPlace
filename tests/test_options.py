@@ -20,7 +20,6 @@ without a reference package (-t/-r/-s and statistics files) and model refinement
 output of the stock pplacer v1.1.alpha19 run with the same options (tests/data/options)."""
 
 import gzip
-import json
 import math
 import os
 import shutil
@@ -34,6 +33,7 @@ from gplace.engine.jplace import write_jplace, compare_jplace
 from gplace.engine.reference import Reference, ModelSettings
 from gplace.engine.stats import parse_stats, StatsParsingError
 from gplace.exceptions import GPlaceException
+from gplace.fileio import read_json, write_json, write_text
 
 OPT = os.path.join(testsets.TEST_DATA, 'options')
 MINI = testsets.MINI
@@ -121,7 +121,7 @@ class TestAlignmentFiles(_Placing):
 
     def test_stockholm_reader(self):
         path = os.path.join(self.tmp, 'a.sto')
-        open(path, 'w').write('# STOCKHOLM 1.0\n#=GF ID x\n\nb  AC.-\na  ac--  \n#=GC SS_cons ....\n\n'
+        write_text(path, '# STOCKHOLM 1.0\n#=GF ID x\n\nb  AC.-\na  ac--  \n#=GC SS_cons ....\n\n'
                               'b  GT\na  gt\n//\n\n')
         self.assertEqual(core.read_stockholm(path), [('b', 'AC--GT'), ('a', 'ac--gt')])   # descending names
         self.assertEqual(core.read_alignment(path), core.read_stockholm(path))
@@ -130,7 +130,7 @@ class TestAlignmentFiles(_Placing):
                           ('a AC\n# STOCKHOLM 1.0\n//\n', 'something before header'),
                           ('# STOCKHOLM 1.0\na AC\n//\nb AC\n', 'something after footer'),
                           ('# STOCKHOLM 1.0\na AC x\n//\n', 'line 2')):
-            open(path, 'w').write(text)
+            write_text(path, text)
             with self.assertRaises(GPlaceException) as cm:
                 core.read_stockholm(path)
             self.assertIn(msg, str(cm.exception))
@@ -140,7 +140,7 @@ class TestAlignmentFiles(_Placing):
         with gzip.open(path, 'wt') as fh:
             fh.write(';comment\n>a desc\nAC\n;more\nGT\n>b\nAA\n')
         self.assertEqual(core.read_alignment(path), [('a', 'ACGT'), ('b', 'AA')])
-        open(os.path.join(self.tmp, 'b.fa'), 'w').write('AC\n>a\nAC\n')
+        write_text(os.path.join(self.tmp, 'b.fa'), 'AC\n>a\nAC\n')
         with self.assertRaises(GPlaceException):
             core.read_fasta(os.path.join(self.tmp, 'b.fa'))
 
@@ -168,14 +168,15 @@ class TestAlignmentFiles(_Placing):
         frequencies (which depend on the reference order: pplacer's descending names)."""
         pkg = os.path.join(self.tmp, 'sto.refpkg')
         os.makedirs(pkg)
-        files = json.load(open(os.path.join(MINI, 'CONTENTS.json')))['files']
+        files = read_json(os.path.join(MINI, 'CONTENTS.json'))['files']
         ref = core.read_fasta(os.path.join(MINI, files['aln_fasta']))
         with open(os.path.join(pkg, 'ref.sto'), 'w') as fh:
             fh.write('# STOCKHOLM 1.0\n' + ''.join(f'{n} {s}\n' for n, s in ref) + '//\n')
         shutil.copy(os.path.join(MINI, files['tree']), os.path.join(pkg, 'tree.nwk'))
         shutil.copy(os.path.join(MODELS, 'mini_WAG_emp.phylo_model.json'), os.path.join(pkg, 'pm.json'))
-        json.dump({'files': {'aln_sto': 'ref.sto', 'tree': 'tree.nwk', 'phylo_model': 'pm.json'},
-                   'metadata': {'format_version': '1.1'}}, open(os.path.join(pkg, 'CONTENTS.json'), 'w'))
+        write_json(os.path.join(pkg, 'CONTENTS.json'),
+                   {'files': {'aln_sto': 'ref.sto', 'tree': 'tree.nwk', 'phylo_model': 'pm.json'},
+                    'metadata': {'format_version': '1.1'}})
         self.assertPlacedAsPplacer(pkg, core.read_fasta(QUERIES), 'refpkg_aln_sto', 60)
 
 
@@ -220,7 +221,7 @@ class TestRefinement(_Placing):
     or with --always-refine (gamma models: no change)."""
 
     def test_identical_to_pplacer(self):
-        files = json.load(open(os.path.join(MINI, 'CONTENTS.json')))['files']
+        files = read_json(os.path.join(MINI, 'CONTENTS.json'))['files']
         mini_ref = core.read_fasta(os.path.join(MINI, files['aln_fasta']))
         mini_q, gtr_q = core.read_fasta(QUERIES), core.read_fasta(GTR_Q)
         self.assertPlacedAsPplacer(MINI, mini_q + mini_ref, 'refine_mini_refs', 60)

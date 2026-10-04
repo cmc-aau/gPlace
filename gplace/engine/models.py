@@ -28,13 +28,13 @@ ignored):
 """
 
 import ctypes
-import json
 import os
 
 import numpy as np
 
 from gplace.engine import core
 from gplace.exceptions import RefpkgMalformed
+from gplace.fileio import read_json
 
 PROTEIN_MODELS = ('WAG', 'LG', 'JTT')
 GTR_KEYS = ('ac', 'ag', 'at', 'cg', 'ct', 'gt')
@@ -140,10 +140,10 @@ def discrete_gamma(n_cats, alpha, lib=None):
 
 
 def read_phylo_model(refpkg_dir):
-    files = json.load(open(os.path.join(refpkg_dir, 'CONTENTS.json'))).get('files', {})
+    files = read_json(os.path.join(refpkg_dir, 'CONTENTS.json')).get('files', {})
     if 'phylo_model' not in files:
         raise RefpkgMalformed(f'Reference package {refpkg_dir} has no "phylo_model" file.')
-    return json.load(open(os.path.join(refpkg_dir, files['phylo_model'])))
+    return read_json(os.path.join(refpkg_dir, files['phylo_model']))
 
 
 def alphabet_of(pm):

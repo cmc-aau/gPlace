@@ -14,7 +14,8 @@ import sys
 def unit_tests(path):
     if not os.path.exists(path):
         return 'not run', 'lightgrey'
-    log = open(path).read()
+    with open(path) as fh:
+        log = fh.read()
     ran = re.search(r'^Ran (\d+) tests?', log, re.M)
     if not ran:
         return 'did not finish', 'red'
