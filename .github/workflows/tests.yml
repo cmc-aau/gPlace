@@ -42,7 +42,7 @@ jobs:
         run: gplace check_install
 
       - name: Placement test (bit-identical to pplacer)
-        run: gplace test --models --cpus 2
+        run: gplace test --models --cpus 2 --out_dir test_out
 
       - name: Portable engine (scalar kernels; same results as AVX2 / NEON)
         env:
@@ -52,4 +52,34 @@ jobs:
           gplace test --models --cpus 2
 
       - name: Unit tests
-        run: python -m unittest discover -s tests
+        shell: bash          # with pipefail: failing tests still fail the step through tee
+        run: python -m unittest discover -s tests 2>&1 | tee unit.log
+
+      # README badges (pushes to main, x86-64 job): counts written to a gist, shown by shields.io.
+      # Needs the repository secret GIST_SECRET (a token with the gist scope).
+      - name: Count results for the badges
+        id: count
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.runner == 'ubuntu-24.04'
+        run: python .github/badge_counts.py unit.log test_out/test/gplace_test_report.tsv >> "$GITHUB_OUTPUT"
+
+      - name: Update the unit-test badge
+        if: always() && steps.count.outcome == 'success'
+        uses: schneegans/dynamic-badges-action@v1.9.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: 08bdf557b640135e66112abccdc87bcc
+          filename: gplace-tests.json
+          label: unit tests
+          message: ${{ steps.count.outputs.tests_message }}
+          color: ${{ steps.count.outputs.tests_color }}
+
+      - name: Update the pplacer-parity badge
+        if: always() && steps.count.outcome == 'success'
+        uses: schneegans/dynamic-badges-action@v1.9.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: 08bdf557b640135e66112abccdc87bcc
+          filename: gplace-parity.json
+          label: pplacer parity
+          message: ${{ steps.count.outputs.parity_message }}
+          color: ${{ steps.count.outputs.parity_color }}
