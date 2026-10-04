@@ -38,7 +38,15 @@ Only what is stored and when it is computed:
   other queries.
 
 The memory needed drops from *3 x nodes x sites x 20 x 8 bytes* to about
-*2 x internal nodes x sites x 20 x 8 bytes* plus the prefilter scores.
+*2 x internal nodes x sites x 20 x 8 bytes* plus the prefilter scores (every query against every
+edge).
+
+With ``--ranked_edges N`` there is no queries x edges score table: the prefilter scores the queries
+in batches of 20,000 and each keeps only its first N ranked edges (164 covers pplacer's default
+search, which uses at most 41 successful ones), as tiled placement does. A query whose search goes
+past them, after many failed optimisations, is scored against every edge again and its ranking
+continues in the same order, so results are identical; memory then barely grows with the number of
+queries.
 
 Tiled placement
 ---------------

@@ -54,7 +54,17 @@ Major Changes:
   ``sin`` and ``pow`` no longer need ``__builtin_roundeven`` (gcc 10) or ``__builtin_mul_overflow``
   (gcc 5), and gcc < 5 compiles them as C11. Before, gcc < 10 built an engine that failed to load
   (``undefined symbol: __builtin_roundeven``); the build now stops on any unknown builtin and checks
-  that every engine loads.
+  that every engine loads. Rebuilds relink the engine whenever the compiled C changes (before, a link
+  cached in the build directory could be reused). A failed engine build now ends ``pip install`` with one
+  clear message (editable installs used to hide it behind a setuptools ``KeyError``).
+* ``--ranked_edges N`` (``place``, ``place_batch``): untiled placement without a queries x edges score
+  table; queries are scored in batches of 20,000 and keep their first N ranked edges, as in tiled
+  placement, so memory barely grows with the number of queries (all 127,343 GTDB-Tk genomes on
+  class-level tree 8: 17.5 GiB instead of 29.5 GiB with ``--ranked_edges 164``). Results are
+  identical; the default is unchanged.
+* ``gplace test`` places a test set tile by tile when its untiled placement would not fit in the
+  memory available (identical results); ``gplace test --models`` and the unit tests now run on
+  8 GB machines such as GitHub's standard runners.
 * Gamma models with 21 or more categories (GSL calls ``log1p``: glibc 2.19's, as in pplacer) are
   supported; a GSL error while the gamma rates are computed (e.g. alpha 10^6) stops gPlace with
   pplacer's message, as pplacer stops.

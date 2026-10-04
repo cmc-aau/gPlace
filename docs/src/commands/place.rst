@@ -147,6 +147,11 @@ Give at most one of:
   size rather than the tree size: about 8 GiB of likelihood vectors per 10,000 edges (5,036
   sites), plus the alignments and the queries' working data.
 
+Untiled placement keeps every query's prefilter score for every edge (8 bytes per edge and query),
+which matters with very many queries in one run. ``--ranked_edges 164`` keeps only each query's first
+164 ranked edges instead (enough for pplacer's default search), with identical results: all 127,343
+GTDB-Tk genomes on class-level tree 8 peak at 17.5 GiB instead of 29.5 GiB, about 7% slower.
+
 ``gplace benchmark --refpkg <refpkg> --queries <N> --max_memory 64G`` prints the tile size and
 peak memory gPlace would use, without placing anything. Without either option, gPlace warns
 when the estimated peak is more than the memory available to it (the machine's memory, or a

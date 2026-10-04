@@ -67,22 +67,34 @@ def parse_cpus(value):
     return v
 
 
-def estimate_memory(n_nodes, n_internal, n_sites, n_queries, n_leaves, aln_len, workers, width=NS):
+def estimate_memory(n_nodes, n_internal, n_sites, n_queries, n_leaves, aln_len, workers, width=NS,
+                    n_cand=None, query_batch=QUERY_BATCH):
     """Peak memory (bytes) of one gPlace pass over a reference package.
 
     shared arrays : 2 x internal x sites x width doubles (distal/proximal; width = 20 for protein CAT,
                     4 for DNA CAT, rates x states for gamma) + 2 x internal x sites
-                    int64 exponents + edges x queries doubles (prefilter scores)
+                    int64 exponents + the prefilter scores: every query against every edge, or
+                    with n_cand (--ranked_edges) one query batch against every edge
+    per query     : with n_cand, the ranked candidate edges (score + edge while ranking, then the edges)
     inputs        : alignments held as Python strings, bytes and masked arrays
     per worker    : private buffers and page tables for the shared arrays
     Calibrated on GTDB-Tk R226 class-level tree 2 (22,061 queries, 40 workers): measured cgroup
-    peak 43.8 GiB (47.0 GB), model 44.7 GiB (48.0 GB); the model errs on the safe side."""
-    shared = (2 * n_internal * n_sites * width * 8 + 2 * n_internal * n_sites * 8
-              + max(n_nodes - 1, 1) * n_queries * 8)
+    peak 43.8 GiB (47.0 GB), model 44.7 GiB (48.0 GB); with n_cand 164 (--ranked_edges): measured
+    43.4 GiB, model 44.3 GiB; class-level tree 8 with 127,343 queries: score table measured
+    29.5 GiB (model 28.4), n_cand 164 measured 17.5 GiB (model 17.8)."""
+    edges = max(n_nodes - 1, 1)
+    vectors = 2 * n_internal * n_sites * width * 8 + 2 * n_internal * n_sites * 8
+    if n_cand is None:                                  # the queries x edges score table
+        shared, per_query, merge = vectors + edges * n_queries * 8, 0, 0
+    else:
+        k = min(n_cand, edges)
+        shared = vectors + min(n_queries, query_batch) * edges * 8
+        per_query = k * 8 * 3
+        merge = MERGE_CELLS * 40 if k < edges else 0
     inputs = (n_leaves + n_queries) * aln_len * 3
     per_worker = 50e6 + 0.0005 * shared
     base = 400e6
-    return int(shared + inputs + workers * per_worker + base)
+    return int(shared + n_queries * per_query + merge + inputs + workers * per_worker + base)
 
 
 def estimate_memory_tiled(n_slots, max_edges, n_tiles, n_sites, n_queries, n_leaves, aln_len, workers,

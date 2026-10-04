@@ -32,7 +32,10 @@ FAQ
 **How much memory is needed?**
   ``gplace benchmark --refpkg <refpkg> --queries <N>`` prints the estimate (about
   *2 x internal nodes x sites x 168 bytes + edges x queries x 8 bytes*, plus a little per
-  worker): 43.8 GiB peak for GTDB-Tk R226 class-level tree 2 with 22,061 queries. To stay within
+  worker): 43.8 GiB peak for GTDB-Tk R226 class-level tree 2 with 22,061 queries. With many queries
+  in one run, ``--ranked_edges 164`` keeps only each query's first ranked edges instead of its score
+  for every edge (identical results): all 127,343 GTDB-Tk genomes on class-level tree 8 then peak
+  at 17.5 GiB instead of 29.5 GiB. To stay within
   a limit, pass ``--max_memory`` (e.g. ``64G``): gPlace places untiled if the estimate fits, and
   tile by tile otherwise, with identical results.
 

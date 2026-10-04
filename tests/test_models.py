@@ -104,8 +104,9 @@ class TestModelsEngine(unittest.TestCase):
 
     def test_model_test_sets_identical(self):
         """Every bundled model test set, untiled and tiled, identical to its expected output (the
-        stock pplacer v1.1.alpha19)."""
-        from gplace.engine import taxonomy
+        stock pplacer v1.1.alpha19). Sets whose untiled placement does not fit in the memory
+        available (many gamma categories on a small machine) are checked tiled only."""
+        from gplace.engine import resources, taxonomy
         from gplace.engine.factory import new_placer, tiled_placer
         from gplace.engine.jplace import write_jplace, compare_jplace
         with tempfile.TemporaryDirectory() as d:
@@ -113,6 +114,10 @@ class TestModelsEngine(unittest.TestCase):
                 for tiled in (False, True):
                     with self.subTest(test_set=ts.name, tiled=tiled):
                         p = new_placer(ts.refpkg, core.read_fasta(ts.queries), 2, ts.fix_gamma, ts.discard)
+                        avail = resources.available_memory()
+                        if not tiled and avail and p.memory_estimate(2) > avail:
+                            self.skipTest(f'untiled needs {p.memory_estimate(2) / 2 ** 30:.1f} GiB, '
+                                          f'{avail / 2 ** 30:.1f} GiB available (checked tiled)')
                         classify = (taxonomy.Classifier(ts.refpkg, p.tree, ts.mrca_class)
                                     if taxonomy.tax_equipped(ts.refpkg) else None)
                         if tiled:

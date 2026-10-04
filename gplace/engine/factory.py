@@ -29,21 +29,22 @@ def is_gamma(refpkg_dir):
 
 
 def new_placer(refpkg_dir, queries, cpus=1, fix_gamma_underflow=False, discard_nonoverlapped=False,
-               search=None, always_refine=False):
+               search=None, always_refine=False, ranked_edges=None):
     """A loaded placer (untiled) for refpkg_dir, a reference package directory or a
     reference.Reference. fix_gamma_underflow only affects gamma models; discard_nonoverlapped drops
     queries that do not overlap the reference alignment (pplacer's --discard-nonoverlapped) instead
     of stopping; search: core.Search (default: pplacer's); always_refine: refine the model as
-    pplacer's --always-refine (CAT models; also done when the query file holds the references)."""
+    pplacer's --always-refine (CAT models; also done when the query file holds the references);
+    ranked_edges: keep each query's first ranked edges instead of a queries x edges score table."""
     refpkg_dir = Reference.of(refpkg_dir)
     if is_gamma(refpkg_dir):
         from gplace.engine.gamma import GammaPlacer
         placer = GammaPlacer(refpkg_dir, queries, cpus, discard_nonoverlapped=discard_nonoverlapped,
-                             search=search, always_refine=always_refine)
+                             search=search, always_refine=always_refine, ranked_edges=ranked_edges)
         placer.set_gamma_fix(fix_gamma_underflow)
         return placer
     return Placer(refpkg_dir, queries, cpus, discard_nonoverlapped=discard_nonoverlapped, search=search,
-                  always_refine=always_refine)
+                  always_refine=always_refine, ranked_edges=ranked_edges)
 
 
 def tiled_placer(placer, tile_edges, **kw):

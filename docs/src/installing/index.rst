@@ -33,7 +33,8 @@ Hardware requirements
      - x86-64 (AVX2 kernels with AVX2 and FMA, otherwise the portable engine) or ARM64 (NEON).
    * - Memory
      - Depends on the reference tree and the number of queries: about
-       *2 x internal nodes x sites x 168 bytes + edges x queries x 8 bytes*.
+       *2 x internal nodes x sites x 168 bytes + edges x queries x 8 bytes* (with ``--ranked_edges``
+       the second term stops growing past 20,000 queries).
        43.8 GiB for GTDB-Tk R226 class-level tree 2 with 22,061 queries. ``gplace benchmark`` prints the estimate for your data.
    * - CPUs
      - Any; placement is memory-bandwidth bound. On a 64-vCPU AMD EPYC server, 40 worker

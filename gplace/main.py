@@ -94,10 +94,13 @@ class OptionsParser(object):
                              f'{plan.tile_edges:,} (estimated peak {plan.memory / GiB:.1f} GiB).')
 
     def _place_group(self, refpkg, queries, cpus, tile_edges=None, max_memory=None, fix_gamma=False,
-                     mrca_class=False, discard_nonoverlapped=False, search=None, always_refine=False):
+                     mrca_class=False, discard_nonoverlapped=False, search=None, always_refine=False,
+                     ranked_edges=None, fit_tile_edges=None):
         """Run the engine on one reference package; returns (Placer, results, seconds, classifier):
         results has one entry per query (in input order; identical sequences are placed once),
-        classifier is None unless the refpkg has a taxonomy (see taxonomy.Classifier)."""
+        classifier is None unless the refpkg has a taxonomy (see taxonomy.Classifier).
+        fit_tile_edges: without --tile_edges / --max_memory, place on tiles of at most this many
+        edges when the untiled estimate exceeds the memory available (gplace test)."""
         import math
         from gplace.engine import resources, taxonomy
         from gplace.engine.factory import new_placer, tiled_placer
@@ -105,7 +108,8 @@ class OptionsParser(object):
         from gplace.engine.reference import Reference
         t0 = time.time()
         reference = Reference.of(refpkg)
-        placer = new_placer(reference, queries, cpus, fix_gamma, discard_nonoverlapped, search, always_refine)
+        placer = new_placer(reference, queries, cpus, fix_gamma, discard_nonoverlapped, search, always_refine,
+                            ranked_edges)
         if placer.discarded:
             self.logger.info(f'Discarded {len(placer.discarded):,} queries that do not overlap the reference '
                              f'sequences (--discard_nonoverlapped), e.g. {placer.discarded[0]}.')
@@ -129,8 +133,19 @@ class OptionsParser(object):
                          + (' [--fix_gamma_underflow]' if fix_gamma and model.ras == 'gamma' else ''))
         if fix_gamma and model.ras != 'gamma':
             self.logger.info('--fix_gamma_underflow has no effect: the model is not gamma.')
+        if fit_tile_edges and tile_edges is None and max_memory is None:
+            avail, need = resources.available_memory(), placer.memory_estimate()
+            if avail and need > avail:
+                self.logger.info(f'Untiled this would need about {need / 2 ** 30:.1f} GiB, more than the '
+                                 f'{avail / 2 ** 30:.1f} GiB available: placing tile by tile (tiles of at most '
+                                 f'{fit_tile_edges:,} edges; identical results).')
+                tile_edges = fit_tile_edges
         plan = plan_for_placer(placer, tile_edges, max_memory)
         self._log_plan(plan, max_memory)
+        if ranked_edges is not None and plan.tile_edges is None:
+            self.logger.info(f'Keeping the first {min(ranked_edges, placer.nnodes - 1):,} ranked edges of each '
+                             f'query (--ranked_edges); queries are scored in batches of '
+                             f'{resources.QUERY_BATCH:,}.')
         if plan.tile_edges is not None:
             placer = tiled_placer(placer, plan.tile_edges)
         cpu_txt = f'{placer.workers} CPUs' if placer.workers else f'--cpus auto on {placer.cpus} CPUs'
@@ -207,7 +222,7 @@ class OptionsParser(object):
         placer, results, secs, classify = self._place_group(
             reference, queries, options.cpus, *tiling, fix_gamma=options.fix_gamma_underflow,
             mrca_class=options.mrca_class, discard_nonoverlapped=options.discard_nonoverlapped,
-            search=search, always_refine=options.always_refine)
+            search=search, always_refine=options.always_refine, ranked_edges=options.ranked_edges)
         records = placer.records([r[0] for r in results])
         write_jplace(options.out_file, placer.jplace_tree(), results, ' '.join(sys.argv), records, classify)
         self.logger.info(f'Wrote {len(results):,} placements ({len(records):,} records) to '
@@ -252,7 +267,7 @@ class OptionsParser(object):
             placer, results, secs, classify = self._place_group(
                 entries[0][1], pooled, options.cpus, *tiling, fix_gamma=options.fix_gamma_underflow,
                 mrca_class=options.mrca_class, discard_nonoverlapped=options.discard_nonoverlapped,
-                search=search, always_refine=options.always_refine)
+                search=search, always_refine=options.always_refine, ranked_edges=options.ranked_edges)
             tree = placer.jplace_tree()
             by_out = OrderedDict((out, []) for _, _, out in entries)
             for r in results:
@@ -480,7 +495,8 @@ class OptionsParser(object):
             placer, results, _, classify = self._place_group(ts.refpkg, read_fasta(ts.queries), options.cpus,
                                                              *tiling, fix_gamma=ts.fix_gamma,
                                                              mrca_class=ts.mrca_class,
-                                                             discard_nonoverlapped=ts.discard)
+                                                             discard_nonoverlapped=ts.discard,
+                                                             fit_tile_edges=ts.tile_edges)
             write_jplace(out, placer.jplace_tree(), results, ' '.join(sys.argv),
                          placer.records([r[0] for r in results]), classify)
             r = compare_jplace(out, ts.expected)

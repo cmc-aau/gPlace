@@ -104,6 +104,16 @@ def __fix_gamma(group):
                             '(slightly where pplacer is finite). Default: reproduce pplacer exactly')
 
 
+def __ranked_edges(group):
+    group.add_argument('--ranked_edges', type=int, default=None, metavar='N',
+                       help='untiled placement: keep only each query\'s first N edges of pplacer\'s ranking '
+                            '(164 covers pplacer\'s default search) instead of its prefilter score for every '
+                            'edge, scoring queries in batches of 20,000. Memory then barely grows with the '
+                            'number of queries; results are identical (a query that needs more edges is '
+                            'ranked again in full). Tiled placement always works this way. Default: keep '
+                            'every score')
+
+
 def __mrca_class(group):
     group.add_argument('--mrca_class', '--mrca-class', action='store_true', default=False,
                        help='reference packages with a taxonomy: classify each placement by the taxonomic '
@@ -264,6 +274,7 @@ def get_main_parser():
             __fix_gamma(grp)
             __mrca_class(grp)
             __discard_nonoverlapped(grp)
+            __ranked_edges(grp)
             __temp_dir(grp)
             __help(grp)
         __tiling(parser)
@@ -280,6 +291,7 @@ def get_main_parser():
             __fix_gamma(grp)
             __mrca_class(grp)
             __discard_nonoverlapped(grp)
+            __ranked_edges(grp)
             __temp_dir(grp)
             __help(grp)
         __tiling(parser)

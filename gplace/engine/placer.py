@@ -68,8 +68,8 @@ def _fork_pool(n):
     return multiprocessing.get_context('fork').Pool(n)
 
 
-def _prefilter_group(g):
-    _PLACER._prefilter_group(g)
+def _batch_prefilter_group(g):
+    _PLACER._batch_prefilter_group(g)
 
 
 def _place_chunk(qis):
@@ -122,6 +122,36 @@ def weighted_placements(lib, refined):
     return pl
 
 
+_NO_EDGE = np.iinfo(np.int64).max       # filler in the candidate lists: ranks after every edge
+
+
+def candidates_needed(search, n_edges, n_cand=resources.N_CAND):
+    """Ranked edges kept per query: n_cand, more when --max_pitches allows more pitches (4 per
+    pitch, as the default 160 for 40), every edge when --max_strikes 0 lifts the limit."""
+    tp = search.t_max_pitches
+    if tp == math.inf:
+        return n_edges
+    return min(max(int(n_cand), 4 * (tp + 1)), n_edges)
+
+
+def merge_candidates(cs, ce, b0, edges, sc):
+    """Merge the scores sc of the edges `edges` (rows b0.. of cs/ce) into the candidate lists,
+    keeping each query's first K edges in ranking order. The selection is by score; when equal
+    scores straddle the cut-off, that row is resolved by (score, edge number) exactly."""
+    K, E = cs.shape[1], len(edges)
+    step = max(1, resources.MERGE_CELLS // (K + E))
+    for a in range(0, sc.shape[0], step):
+        b = min(sc.shape[0], a + step)
+        s = np.concatenate([cs[b0 + a:b0 + b], sc[a:b]], axis=1)
+        e = np.concatenate([ce[b0 + a:b0 + b], np.broadcast_to(edges, (b - a, E))], axis=1)
+        part = np.argpartition(-s, K - 1, axis=1)[:, :K]
+        kth = np.take_along_axis(s, part, 1).min(axis=1)
+        for r in np.nonzero((s >= kth[:, None]).sum(axis=1) > K)[0]:
+            part[r] = np.lexsort((e[r], -s[r]))[:K]
+        cs[b0 + a:b0 + b] = np.take_along_axis(s, part, 1)
+        ce[b0 + a:b0 + b] = np.take_along_axis(e, part, 1)
+
+
 def _distinct_rows(A):
     """(row -> index of its distinct row, first row of every distinct row), distinct rows numbered
     in order of first occurrence. Rows are hashed (BLAKE2b), and equal hashes are verified."""
@@ -154,9 +184,13 @@ class Placer(object):
     see factory.new_placer)."""
 
     def __init__(self, refpkg_dir, queries, cpus=1, discard_nonoverlapped=False, search=None,
-                 always_refine=False):
+                 always_refine=False, ranked_edges=None):
         self.logger = logging.getLogger('timestamp')
         self.search = search = search or core.Search()
+        if ranked_edges is not None and int(ranked_edges) < 1:
+            raise GPlaceException('--ranked_edges must be at least 1.')
+        self.ranked_edges = None if ranked_edges is None else int(ranked_edges)
+        self.rank = None
         cpus = resources.parse_cpus(cpus)
         if cpus == 'auto':
             self.cpus = resources.available_cpus()          # threads for the cache
@@ -431,7 +465,7 @@ class Placer(object):
         w = workers or self.workers or resources.heuristic_cpus(self.cpus)
         return resources.estimate_memory(self.nnodes, len(self.internal), self.nsites,
                                          len(self.query_names), self.n_leaves, self.aln_len, w,
-                                         width=self.width)
+                                         width=self.width, n_cand=self.ranked_edges)
 
     # ------------------------------------------------------------------ helpers --
     def tl(self):
@@ -599,18 +633,56 @@ class Placer(object):
                 self.qevtab[c, k] = outv[0]
         self.codes = np.ascontiguousarray(alpha.code_of[self.QM])
 
-    def prefilter(self):
-        """Score every query against every edge (pplacer's h_ranking scores), 8 edges per call."""
+    def prefilter(self, n_cand=None, query_batch=resources.QUERY_BATCH):
+        """pplacer's ranking (h_ranking) for every query, scored 8 edges per call.
+
+        Default: every query's score against every edge is kept (a queries x edges table) and
+        ranking orders a query's edges when it is placed. With n_cand (or the placer's
+        ranked_edges, --ranked_edges): the queries are scored in batches of query_batch and each
+        keeps only its first n_cand edges in ranking order (score descending, ties by ascending
+        edge number); memory then barely grows with the number of queries. A query whose search
+        goes past them is ranked in full when it gets there (ranking); results are identical."""
         self._query_tables()
         Qn = len(self.query_names)
-        self.locs = np.array([v for v in range(self.nnodes) if v != self.root])
+        self.locs = np.array([v for v in range(self.nnodes) if v != self.root], np.int64)
         E = len(self.locs)
-        self.scores = shared_zeros((Qn, E))
+        self.max_edges = E
+        K = n_cand if n_cand is not None else self.ranked_edges
         groups = [(i, min(E, i + 8)) for i in range(0, E, 8)]
-        start = 0
-        if self.workers is None:                    # --cpus auto without a saved benchmark
-            start = self._calibrate(groups)
-        self._run_groups(groups[start:], self.workers)
+        if K is None:                                  # every score, one batch of all queries
+            self.rank = None
+            self.scores = shared_zeros((Qn, E))
+            self._bcodes, self._qb = self.codes, (Qn, E)
+            start = 0
+            if self.workers is None:                   # --cpus auto without a saved benchmark
+                start = self._calibrate(groups)
+            self._run_groups(groups[start:], self.workers)
+            self._bcodes = None
+            return
+        K = min(max(1, int(K)), E)
+        qb = max(1, min(int(query_batch), Qn))
+        full = K >= E                                  # every edge, in order
+        cs = None if full else np.full((Qn, K), -np.inf)
+        ce = np.full((Qn, K), _NO_EDGE, np.int64)
+        self.scores = shared_zeros((qb, E))
+        try:
+            for b0 in range(0, Qn, qb):
+                n = min(qb, Qn - b0)
+                self._bcodes = np.ascontiguousarray(self.codes[b0:b0 + n])
+                self._qb = (n, E)
+                start = 0
+                if self.workers is None:
+                    start = self._calibrate(groups)
+                self._run_groups(groups[start:], self.workers)
+                sc = self.scores[:n]
+                if full:
+                    ce[b0:b0 + n] = self.locs[np.lexsort((np.broadcast_to(self.locs, sc.shape), -sc), axis=1)]
+                else:
+                    merge_candidates(cs, ce, b0, self.locs, sc)
+        finally:
+            del self.scores
+            self._bcodes = None
+        self.rank = ce if full else np.take_along_axis(ce, np.lexsort((ce, -cs), axis=1), 1)
 
     def prefilter_seconds(self, n_queries, workers):
         """Benchmark helper: time a full prefilter sweep restricted to the first n_queries
@@ -636,7 +708,7 @@ class Placer(object):
         try:
             with _fork_pool(workers) as pool:
                 t0 = time.time()
-                for _ in pool.imap_unordered(_prefilter_group, groups, chunksize=chunksize):
+                for _ in pool.imap_unordered(_batch_prefilter_group, groups, chunksize=chunksize):
                     pass
                 return time.time() - t0
         finally:
@@ -686,30 +758,62 @@ class Placer(object):
                                        P(t.e[0]), P(t.b[3]), P(t.e[1]), S)
         return t
 
-    def _prefilter_group(self, g):
+    def _batch_prefilter_group(self, g):
+        """Prefilter scores of the current query batch (_bcodes, _qb) against edges locs[i0:i1]."""
         i0, i1 = g
-        S, Qn, E, nc = self.nsites, len(self.query_names), self.scores.shape[1], len(self.alpha.codes)
+        nq, _ = self._qb
         t = self._supernodes8(i0, i1)
-        st = self.lib.xp_edge_scores8(P(self.scores), E, i0, i1 - i0, P(t.sn8), P(t.se8),
-                                      P(self.qevtab), P(self.cats), S, nc, P(self.codes), Qn)
+        st = self.lib.xp_edge_scores8(P(self.scores), self.max_edges, i0, i1 - i0, P(t.sn8), P(t.se8),
+                                      P(self.qevtab), P(self.cats), self.nsites, len(self.alpha.codes),
+                                      P(self._bcodes), nq)
         if st != 0:
             raise GPlaceException(f'Prefilter kernel failed ({st}) for edges {i0}..{i1}.')
 
     def ranking(self, qi, K=96):
-        """h_ranking: edges by prefilter score (descending), ties by ascending edge id."""
-        row = self.scores[qi]
-        E = len(row)
-        if K < E:
-            kth = np.partition(row, E - K)[E - K]
-            cand = np.nonzero(row >= kth)[0]
-        else:
-            cand = np.arange(E)
-        for k in sorted(cand, key=lambda k: (-row[k], self.locs[k])):
-            yield int(self.locs[k])
-        if len(cand) < E:                                  # rare: exhausted candidates
-            rest = np.setdiff1d(np.arange(E), cand)
-            for k in sorted(rest, key=lambda k: (-row[k], self.locs[k])):
+        """h_ranking for query qi: edges by prefilter score (descending), ties by ascending edge
+        number. From the score table (default), or from the query's stored first edges
+        (--ranked_edges): a search that goes past them (rare: many failed optimisations) scores qi
+        against every edge again and continues in the same order."""
+        if self.rank is None:
+            row = self.scores[qi]
+            E = len(row)
+            if K < E:
+                kth = np.partition(row, E - K)[E - K]
+                cand = np.nonzero(row >= kth)[0]
+            else:
+                cand = np.arange(E)
+            for k in sorted(cand, key=lambda k: (-row[k], self.locs[k])):
                 yield int(self.locs[k])
+            if len(cand) < E:                              # rare: exhausted candidates
+                rest = np.setdiff1d(np.arange(E), cand)
+                for k in sorted(rest, key=lambda k: (-row[k], self.locs[k])):
+                    yield int(self.locs[k])
+            return
+        row = self.rank[qi]
+        for loc in row:
+            yield int(loc)
+        if len(row) < len(self.locs):
+            full = self._full_ranking(qi)
+            if not np.array_equal(full[:len(row)], row):
+                raise GPlaceException(f'Inconsistent edge ranking for {self.query_names[qi]}.')
+            for loc in full[len(row):]:
+                yield int(loc)
+
+    def _full_ranking(self, qi):
+        """Every edge in ranking order for query qi, scored in this process."""
+        E = len(self.locs)
+        saved = {k: getattr(self, k, None) for k in ('scores', '_bcodes', '_qb', 'max_edges')}
+        try:
+            self.scores = np.zeros((1, E))
+            self._bcodes = np.ascontiguousarray(self.codes[qi:qi + 1])
+            self._qb, self.max_edges = (1, E), E
+            for i in range(0, E, 8):
+                self._batch_prefilter_group((i, min(E, i + 8)))
+            row = self.scores[0].copy()
+        finally:
+            for k, v in saved.items():
+                setattr(self, k, v)
+        return self.locs[np.lexsort((self.locs, -row))]
 
     # ---------------------------------------------------------------- placement --
     def _query_evaluator(self, qi):
@@ -803,7 +907,7 @@ class Placer(object):
 
     def release(self):
         """Free the likelihood cache and prefilter scores (the shared-memory arrays)."""
-        for attr in ('darr', 'dexp', 'parr', 'pexp', 'scores', 'codes', 'qevtab'):
+        for attr in ('darr', 'dexp', 'parr', 'pexp', 'scores', 'codes', 'qevtab', 'rank'):
             if hasattr(self, attr):
                 delattr(self, attr)
         self.local = threading.local()

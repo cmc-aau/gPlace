@@ -38,6 +38,31 @@ class TestEngine(unittest.TestCase):
         self.assertTrue(r['same_tree'])
         self.assertEqual(r['identical'], 20)
 
+    def test_ranking_without_a_score_table(self):
+        """--ranked_edges: the untiled prefilter keeps only each query's first ranked edges, scoring
+        the queries in batches; a query that needs more is ranked in full when it gets there. With
+        one stored edge per query (every search goes past it) and batches of 3 queries, placements
+        are still pplacer's; memory no longer grows with queries x edges. Default: the score table."""
+        from gplace.engine import resources
+        from gplace.engine.placer import Placer
+        from gplace.engine.jplace import write_jplace, compare_jplace
+        placer = Placer(os.path.join(DATA, 'mini.refpkg'), core.read_fasta(os.path.join(DATA, 'queries.fasta')), 2)
+        placer.cache()
+        placer.prefilter()
+        self.assertIsNone(placer.rank)                                   # default: score table
+        self.assertEqual(placer.scores.shape, (20, placer.nnodes - 1))
+        placer.prefilter(n_cand=1, query_batch=3)
+        self.assertEqual(placer.rank.shape, (20, 1))
+        results = placer.expand(placer.place_all())
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, 'gplace.jplace')
+            write_jplace(out, placer.jplace_tree(), results, 'unittest')
+            r = compare_jplace(out, os.path.join(DATA, 'expected_pplacer.jplace'))
+        self.assertEqual(r['identical'], 20)
+        est = lambda q, k: resources.estimate_memory(273290, 136644, 5036, q, 136646, 5036, 40, n_cand=k)
+        self.assertLess(est(1_000_000, 164) - est(100_000, 164), 30 * 2 ** 30)
+        self.assertGreater(est(1_000_000, None) - est(100_000, None), 1500 * 2 ** 30)   # the table
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -103,18 +103,9 @@ class GammaMixin(object):
         """Informative sites of each query (n_used of ten_masked_logdot_c)."""
         return np.ascontiguousarray((codes != self.alpha.gap_code).sum(axis=1).astype(np.int32))
 
-    def _prefilter_group(self, g):
-        i0, i1 = g
-        S, Qn, E, nc = self.nsites, len(self.query_names), self.scores.shape[1], len(self.alpha.codes)
-        t = self._supernodes8(i0, i1)
-        st = self.lib.xp_g_edge_scores8(P(self.scores), E, i0, i1 - i0, P(t.sn8), P(t.se8),
-                                        P(self.qevtab), self.R, S, nc, P(self.codes), P(self.nused), Qn)
-        if st != 0:
-            raise GPlaceException(f'Prefilter kernel failed ({st}) for edges {i0}..{i1}.')
-
-    def _tile_prefilter_group(self, g):
-        """TiledPlacer's per-tile prefilter with the Gmix kernel; the informative-site counts of
-        the current query batch are computed once per batch in each process."""
+    def _batch_prefilter_group(self, g):
+        """The prefilter of a query batch with the Gmix kernel (untiled and tiled); the
+        informative-site counts of the batch are computed once per batch in each process."""
         i0, i1 = g
         nq, _ = self._qb
         if getattr(self, '_bnused_src', None) is not self._bcodes:

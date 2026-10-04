@@ -145,18 +145,24 @@ def c_std_flags(cc='gcc'):
     return ['-std=gnu11'] if name == 'gcc' and major < 5 else []
 
 
+def undefined_builtins(path):
+    """Compiler builtins a library leaves undefined (needs nm; empty if nm is missing)."""
+    nm = shutil.which('nm')
+    if not nm:
+        return []
+    out = subprocess.run([nm, '-D', '--undefined-only', path], capture_output=True, text=True).stdout
+    return sorted({l.split()[-1] for l in out.splitlines() if l.split() and l.split()[-1].startswith('__builtin_')})
+
+
 def check_engine(path, cc='gcc'):
     """Stop if a compiled engine cannot be used: an undefined __builtin_* symbol (a compiler builtin
     the C compiler did not know), or, when built for this machine, any load error."""
     name, major = compiler_id(cc)
     who = f'{name} {major}' if name else cc
-    nm = shutil.which('nm')
-    if nm:
-        out = subprocess.run([nm, '-D', '--undefined-only', path], capture_output=True, text=True).stdout
-        missing = sorted({l.split()[-1] for l in out.splitlines() if l.split() and l.split()[-1].startswith('__builtin_')})
-        if missing:
-            raise GPlaceExit(f'The engine {path} needs {", ".join(missing)}, which the C compiler ({who}) does not '
-                             f'provide. Please report this; a newer compiler (e.g. gcc >= 10) avoids it.')
+    missing = undefined_builtins(path)
+    if missing:
+        raise GPlaceExit(f'The engine {path} needs {", ".join(missing)}, which the C compiler ({who}) does not '
+                         f'provide. Please report this; a newer compiler (e.g. gcc >= 10) avoids it.')
     if target_arch(cc) == platform.machine():
         import ctypes
         try:
@@ -196,12 +202,18 @@ def rust_flags(variant, ns, cc='gcc'):
     return flags
 
 
-def build_rust_engine(out, variant, ns, gsl_prefix, objs, link_args, work_dir, cc='gcc', logger=None):
+def build_rust_engine(out, variant, ns, gsl_prefix, objs, link_args, work_dir, cc='gcc', logger=None, _relinked=False):
     """cargo build of the engine crate (gplace/engine/rust) for one variant and state count,
     linked with GSL 1.16 and the CORE-MATH / hypot objects; the library is copied to out."""
     arch = target_arch(cc)
     target_dir = os.path.join(work_dir, 'rust', f'{arch}-{variant}-{ns}')
-    env = dict(os.environ, XP_GSL_PREFIX=gsl_prefix, XP_DEPS_OBJS=' '.join(objs),
+    # cargo only relinks when the crate or these variables change: the hash of the linked C (objects
+    # and GSL archives) makes it relink after the C is recompiled with other code or another compiler
+    deps = hashlib.sha256()
+    for path in list(objs) + [os.path.join(gsl_prefix, 'lib', n) for n in ('libgsl.a', 'libgslcblas.a')]:
+        with open(path, 'rb') as fh:
+            deps.update(fh.read())
+    env = dict(os.environ, XP_GSL_PREFIX=gsl_prefix, XP_DEPS_OBJS=' '.join(objs), XP_DEPS_HASH=deps.hexdigest(),
                XP_LINK_ARGS=' '.join(link_args), RUSTFLAGS=' '.join(rust_flags(variant, ns, cc)),
                CARGO_TARGET_DIR=target_dir)
     cmd = [cargo_path(), 'build', '--release', '--offline', '--manifest-path',
@@ -217,6 +229,11 @@ def build_rust_engine(out, variant, ns, gsl_prefix, objs, link_args, work_dir, c
     p = subprocess.run(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if p.returncode != 0:
         raise GPlaceExit(f'cargo build failed ({p.returncode}):\n{p.stdout[-4000:]}')
+    if undefined_builtins(lib) and not _relinked:
+        # a link cached by an earlier build (e.g. before an update of the C, with source timestamps
+        # older than that link): link again from scratch, once
+        shutil.rmtree(target_dir, ignore_errors=True)
+        return build_rust_engine(out, variant, ns, gsl_prefix, objs, link_args, work_dir, cc, logger, _relinked=True)
     tmp = out + '.tmp'
     shutil.copy2(lib, tmp)
     os.replace(tmp, out)

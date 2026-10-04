@@ -28,6 +28,7 @@ Environment variables (all optional):
 
 import os
 import sys
+import traceback
 
 from setuptools import setup
 from setuptools.command.build_py import build_py
@@ -52,11 +53,19 @@ class BuildPyWithEngine(build_py):
             out_dir = os.path.join(self.build_lib, 'gplace', 'engine', 'lib')
         print('[gPlace] Compiling the placement engine (GSL 1.16 + glibc-2.19 hypot + CORE-MATH exp/log)',
               flush=True)
-        build_engine(out_dir=out_dir,
-                     gsl_prefix=os.environ.get('GPLACE_GSL_PREFIX') or None,
-                     gsl_tarball=os.environ.get('GPLACE_GSL_TARBALL') or None,
-                     work_dir=os.environ.get('GPLACE_BUILD_DIR') or None,
-                     jobs=int(os.environ.get('GPLACE_BUILD_JOBS', '8')))
+        try:
+            build_engine(out_dir=out_dir,
+                         gsl_prefix=os.environ.get('GPLACE_GSL_PREFIX') or None,
+                         gsl_tarball=os.environ.get('GPLACE_GSL_TARBALL') or None,
+                         work_dir=os.environ.get('GPLACE_BUILD_DIR') or None,
+                         jobs=int(os.environ.get('GPLACE_BUILD_JOBS', '8')))
+        except Exception as e:
+            # Exit with the message: in editable installs setuptools would turn the exception into a
+            # warning that embeds the traceback and fails on any {...} in it (KeyError), hiding it.
+            from gplace.exceptions import GPlaceExit
+            if not isinstance(e, GPlaceExit):
+                traceback.print_exc()
+            raise SystemExit(f'[gPlace] The placement engine could not be built: {e}')
 
 
 class BdistWheelPy3(_bdist_wheel):

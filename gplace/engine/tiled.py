@@ -52,12 +52,12 @@ from gplace.engine import core, resources
 from gplace.engine import placer as placer_mod
 from gplace.engine.core import P
 from gplace.engine.newick import parse_newick
-from gplace.engine.placer import Placer, Baseball, weighted_placements, shared_zeros, _fork_pool
+from gplace.engine.placer import (Placer, Baseball, weighted_placements, shared_zeros, _fork_pool,
+                                  candidates_needed, merge_candidates, _NO_EDGE)
 from gplace.exceptions import GPlaceException, GPlaceExit
 
 MIN_TILE_EDGES = 1000                   # smallest tiles --max_memory chooses
 PLAN_FRACTION = 0.95                    # --max_memory plans keep 5% headroom below the limit
-_NO_EDGE = np.iinfo(np.int64).max       # filler in the candidate lists: ranks after every edge
 
 TilePlan = namedtuple('TilePlan', 'tile_edges n_tiles max_edges n_slots memory untiled_memory')
 TilePlan.__doc__ = """How one reference package is placed: tile_edges None = untiled.
@@ -65,7 +65,7 @@ memory / untiled_memory: estimated peak bytes of the chosen / the untiled placem
 
 
 def _tile_prefilter_group(g):
-    placer_mod._PLACER._tile_prefilter_group(g)
+    placer_mod._PLACER._batch_prefilter_group(g)
 
 
 def _tile_eval(job):
@@ -101,7 +101,7 @@ def tile_layout(children, order, root, tile_edges):
 
 
 def plan_tiling(tree, n_sites, n_queries, n_leaves, aln_len, workers, tile_edges=None, max_memory=None,
-                width=resources.NS):
+                width=resources.NS, n_cand=None):
     """Choose how to place n_queries on `tree` (a newick.Tree).
 
     tile_edges : place on tiles of at most this many edges.
@@ -112,7 +112,7 @@ def plan_tiling(tree, n_sites, n_queries, n_leaves, aln_len, workers, tile_edges
     width      : doubles per site in a likelihood vector (20 for protein CAT; gamma: rates x states)."""
     n_internal = tree.n_nodes - n_leaves
     untiled = resources.estimate_memory(tree.n_nodes, n_internal, n_sites, n_queries, n_leaves,
-                                        aln_len, workers, width=width)
+                                        aln_len, workers, width=width, n_cand=n_cand)
     whole = TilePlan(None, 1, tree.n_nodes, n_internal, untiled, untiled)
     budget = None if max_memory is None else max_memory * PLAN_FRACTION
     if tile_edges is None and (budget is None or untiled <= budget):
@@ -154,7 +154,8 @@ def plan_for_placer(placer, tile_edges=None, max_memory=None):
     """plan_tiling for a loaded Placer (its masked sites and queries)."""
     workers = placer.workers or resources.heuristic_cpus(placer.cpus)
     return plan_tiling(placer.tree, placer.nsites, len(placer.query_names), placer.n_leaves,
-                       placer.aln_len, workers, tile_edges, max_memory, width=placer.width)
+                       placer.aln_len, workers, tile_edges, max_memory, width=placer.width,
+                       n_cand=placer.ranked_edges)
 
 
 def load_tree(refpkg_dir):
@@ -188,11 +189,8 @@ class TiledPlacer(Placer):
         self.n_cand = max(1, int(n_cand))
         self.round_size = max(1, int(round_size))
         tp = self.search.t_max_pitches                # more pitches: rank and try more edges at once
-        if tp == math.inf:
-            self.n_cand = self.round_size = self.nnodes - 1
-        else:
-            self.n_cand = min(max(self.n_cand, 4 * (tp + 1)), self.nnodes - 1)
-            self.round_size = max(self.round_size, (tp + 1) // 5)
+        self.n_cand = candidates_needed(self.search, self.nnodes - 1, self.n_cand)
+        self.round_size = self.nnodes - 1 if tp == math.inf else max(self.round_size, (tp + 1) // 5)
         layout = tile_layout(self.children, self.tree.postorder(), self.root, self.tile_edges)
         roots = {r for r, _, _ in layout}
         self.tile_of = [-1] * self.nnodes
@@ -377,33 +375,7 @@ class TiledPlacer(Placer):
         order = np.lexsort((ce, -cs), axis=1)
         return np.take_along_axis(ce, order, 1)
 
-    def _tile_prefilter_group(self, g):
-        i0, i1 = g
-        nq, _ = self._qb
-        t = self._supernodes8(i0, i1)
-        st = self.lib.xp_edge_scores8(P(self.scores), self.max_edges, i0, i1 - i0, P(t.sn8), P(t.se8),
-                                      P(self.qevtab), P(self.cats), self.nsites, len(self.alpha.codes),
-                                      P(self._bcodes), nq)
-        if st != 0:
-            raise GPlaceException(f'Prefilter kernel failed ({st}) for edges {i0}..{i1}.')
-
-    @staticmethod
-    def _merge(cs, ce, b0, edges, sc):
-        """Merge one tile's scores sc (rows b0.. of cs/ce) into the candidate lists, keeping each
-        query's first K edges in ranking order. The selection is by score; when equal scores
-        straddle the cut-off, that row is resolved by (score, edge number) exactly."""
-        K, E = cs.shape[1], len(edges)
-        step = max(1, resources.MERGE_CELLS // (K + E))
-        for a in range(0, sc.shape[0], step):
-            b = min(sc.shape[0], a + step)
-            s = np.concatenate([cs[b0 + a:b0 + b], sc[a:b]], axis=1)
-            e = np.concatenate([ce[b0 + a:b0 + b], np.broadcast_to(edges, (b - a, E))], axis=1)
-            part = np.argpartition(-s, K - 1, axis=1)[:, :K]
-            kth = np.take_along_axis(s, part, 1).min(axis=1)
-            for r in np.nonzero((s >= kth[:, None]).sum(axis=1) > K)[0]:
-                part[r] = np.lexsort((e[r], -s[r]))[:K]
-            cs[b0 + a:b0 + b] = np.take_along_axis(s, part, 1)
-            ce[b0 + a:b0 + b] = np.take_along_axis(e, part, 1)
+    _merge = staticmethod(merge_candidates)
 
     def _rank_row(self, qi):
         return self.rank_more.get(qi, self.rank[qi])

@@ -11,6 +11,10 @@ with LG, JTT, empirical frequencies and gamma (4 and 8 rates, alpha 0.05 to 1.3)
 PhyML test data (HIV DNA with GTR + gamma, actin with WAG + gamma) and a FastTree GTR + CAT DNA
 package. One more set checks ``--fix_gamma_underflow`` against gPlace's validated output.
 
+A test set whose untiled placement would need more memory than is available (the gamma sets with
+21 to 32 rate categories need 8 to 12 GiB) is placed tile by tile, with identical results, so
+``gplace test --models`` also runs on an 8 GB machine.
+
 Arguments
 ---------
 

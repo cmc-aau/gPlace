@@ -4,10 +4,11 @@
 //!   XP_DEPS_OBJS   CORE-MATH exp/log/pow/sin and glibc 2.19 hypot/log1p object files (space-separated)
 //!   XP_LINK_ARGS   linker arguments binding GSL's libm calls (exp, log, pow, sin) to CORE-MATH and
 //!                  the other libm functions GSL references to aborting traps (space-separated)
+//!   XP_DEPS_HASH   hash of the objects and GSL archives: relink when their contents change
 use std::env;
 
 fn main() {
-    for var in ["XP_GSL_PREFIX", "XP_DEPS_OBJS", "XP_LINK_ARGS"] {
+    for var in ["XP_GSL_PREFIX", "XP_DEPS_OBJS", "XP_DEPS_HASH", "XP_LINK_ARGS"] {
         println!("cargo:rerun-if-env-changed={var}");
     }
     let gsl = env::var("XP_GSL_PREFIX").expect("XP_GSL_PREFIX (GSL 1.16 prefix) is not set");
