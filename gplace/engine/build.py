@@ -15,19 +15,19 @@
 #                                                                             #
 ###############################################################################
 
-"""Build the engine: libgplace_core.so (20 states, protein) and libgplace_core_nt.so (4 states, DNA).
-The engine is the Rust crate gplace/engine/rust (cargo); this module compiles the third-party C it
-links (GSL 1.16, CORE-MATH, glibc 2.19's hypot) and runs cargo once per variant and state count.
-Variants, all with the same results: on x86-64 "avx2" (AVX2 kernels) and "portable" (scalar,
-*_portable.so; CPUs without AVX2); on ARM64 "neon" (NEON kernels) and "portable" (scalar,
---cfg xp_force_scalar); elsewhere "portable" only. The loader picks one per CPU (core.engine_variant).
+"""Build the engine: libgplace_core.so (20 states, protein) and libgplace_core_nt.so (4 states, DNA),
+compiled from gplace/engine/csrc/xp.c and linked with the third-party C it needs (GSL 1.16, built
+here; CORE-MATH; glibc 2.19's hypot and log1p). Variants, all with the same results: on x86-64
+"avx2" (AVX2 kernels) and "portable" (scalar, *_portable.so; CPUs without AVX2); on ARM64 "neon"
+(NEON kernels) and "portable" (scalar, -DXP_FORCE_SCALAR); elsewhere "portable" only. The loader
+picks one per CPU (core.engine_variant).
 
 Bit-identity with GTDB-Tk's pplacer requires the same numerical libraries as its statically
 linked binary: GSL 1.16 (whose eigen-solver differs from GSL 2.x in the last bits), glibc 2.19's
-hypot() (called by GSL; glibc >= 2.35 changed it) and correctly-rounded exp/log/pow/sin (glibc
-2.19's are; CORE-MATH provides the same correctly-rounded results, also for GSL's own calls). The C is
-compiled with -ffp-contract=off, and Rust never fuses a multiply and an add, so no multiply-add is
-fused implicitly.
+hypot() and log1p() (called by GSL; glibc >= 2.35 changed hypot) and correctly-rounded
+exp/log/pow/sin (glibc 2.19's are; CORE-MATH provides the same correctly-rounded results, also for
+GSL's own calls). Every object is compiled with -ffp-contract=off, so no multiply-add is fused
+implicitly.
 """
 
 import hashlib
@@ -42,9 +42,7 @@ import urllib.request
 from gplace.config.common import CONFIG, ENGINE_NAMES, engine_file
 from gplace.exceptions import GPlaceExit
 
-CSRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csrc')        # third-party C
-RUST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rust')   # the engine (Rust)
-RUST_TRIPLES = {'x86_64': 'x86_64-unknown-linux-gnu', 'aarch64': 'aarch64-unknown-linux-gnu'}
+CSRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'csrc')   # the engine and third-party C
 # -Werror=implicit-function-declaration: a builtin the compiler does not know (e.g. __builtin_roundeven
 # before gcc 10) would otherwise compile as a call to a missing function and only fail when the engine
 # is loaded
@@ -178,64 +176,15 @@ def variant_flags(variant, cc='gcc'):
     return VARIANT_FLAGS[variant]
 
 
-def cargo_path():
-    """The Rust build tool: $GPLACE_CARGO, else cargo on PATH or in ~/.cargo/bin."""
-    cargo = os.environ.get('GPLACE_CARGO') or shutil.which('cargo')
-    if not cargo and os.path.exists(os.path.expanduser('~/.cargo/bin/cargo')):
-        cargo = os.path.expanduser('~/.cargo/bin/cargo')
-    if not cargo:
-        raise GPlaceExit('The gPlace engine is written in Rust: install a Rust toolchain (cargo; '
-                         'https://rustup.rs or conda-forge "rust") or set GPLACE_CARGO.')
-    return cargo
-
-
-def rust_flags(variant, ns, cc='gcc'):
-    """RUSTFLAGS of an engine: the state count (--cfg xp_dna for 4), AVX2 kernels for avx2, the
-    scalar kernels for the ARM64 portable engine. Rust never fuses multiplies and adds."""
-    flags = []
-    if variant == 'avx2':
-        flags += ['-C', 'target-feature=+avx2,+fma']
-    if variant == 'portable' and target_arch(cc) in ('aarch64', 'arm64'):
-        flags += ['--cfg', 'xp_force_scalar']
-    if ns == 4:
-        flags += ['--cfg', 'xp_dna']
-    return flags
-
-
-def build_rust_engine(out, variant, ns, gsl_prefix, objs, link_args, work_dir, cc='gcc', logger=None, _relinked=False):
-    """cargo build of the engine crate (gplace/engine/rust) for one variant and state count,
-    linked with GSL 1.16 and the CORE-MATH / hypot objects; the library is copied to out."""
-    arch = target_arch(cc)
-    target_dir = os.path.join(work_dir, 'rust', f'{arch}-{variant}-{ns}')
-    # cargo only relinks when the crate or these variables change: the hash of the linked C (objects
-    # and GSL archives) makes it relink after the C is recompiled with other code or another compiler
-    deps = hashlib.sha256()
-    for path in list(objs) + [os.path.join(gsl_prefix, 'lib', n) for n in ('libgsl.a', 'libgslcblas.a')]:
-        with open(path, 'rb') as fh:
-            deps.update(fh.read())
-    env = dict(os.environ, XP_GSL_PREFIX=gsl_prefix, XP_DEPS_OBJS=' '.join(objs), XP_DEPS_HASH=deps.hexdigest(),
-               XP_LINK_ARGS=' '.join(link_args), RUSTFLAGS=' '.join(rust_flags(variant, ns, cc)),
-               CARGO_TARGET_DIR=target_dir)
-    cmd = [cargo_path(), 'build', '--release', '--offline', '--manifest-path',
-           os.path.join(RUST_DIR, 'Cargo.toml')]
-    lib = os.path.join(target_dir, 'release', 'libgplace_core.so')
-    if arch != target_arch('gcc'):                       # cross-compiling: Rust target + C linker
-        triple = RUST_TRIPLES[arch]
-        cmd += ['--target', triple]
-        env[f'CARGO_TARGET_{triple.upper().replace("-", "_")}_LINKER'] = cc
-        lib = os.path.join(target_dir, triple, 'release', 'libgplace_core.so')
-    if logger:
-        logger.debug(' '.join(cmd))
-    p = subprocess.run(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    if p.returncode != 0:
-        raise GPlaceExit(f'cargo build failed ({p.returncode}):\n{p.stdout[-4000:]}')
-    if undefined_builtins(lib) and not _relinked:
-        # a link cached by an earlier build (e.g. before an update of the C, with source timestamps
-        # older than that link): link again from scratch, once
-        shutil.rmtree(target_dir, ignore_errors=True)
-        return build_rust_engine(out, variant, ns, gsl_prefix, objs, link_args, work_dir, cc, logger, _relinked=True)
+def link_engine(out, variant, ns, gsl_prefix, objs, link_args, cc='gcc', logger=None):
+    """Compile the engine (xp.c) for one variant and state count, linked with GSL 1.16 and the
+    CORE-MATH / glibc 2.19 objects, into the shared library out."""
     tmp = out + '.tmp'
-    shutil.copy2(lib, tmp)
+    _run([cc] + FLAGS + c_std_flags(cc) + variant_flags(variant, cc)
+         + ['-shared', '-DXP_CR', f'-DNS={ns}', '-I' + os.path.join(gsl_prefix, 'include'), '-Wl,-Bsymbolic']
+         + list(link_args) + ['-o', tmp, os.path.join(CSRC, 'xp.c')] + list(objs)
+         + [os.path.join(gsl_prefix, 'lib', 'libgsl.a'), os.path.join(gsl_prefix, 'lib', 'libgslcblas.a'), '-lm'],
+         logger=logger)
     os.replace(tmp, out)
 
 
@@ -326,7 +275,7 @@ def build_engine(out_dir=None, gsl_prefix=None, gsl_tarball=None, work_dir=None,
         objs = [o('cr_exp.o'), o('cr_log.o'), o('cr_pow.o'), o('cr_sin.o'), o('hypot219.o'), o('log1p219.o')]
         for ns in sorted(ENGINE_NAMES, reverse=True):          # one engine per state count
             target = os.path.join(out_dir, engine_file(ns, variant))
-            build_rust_engine(target, variant, ns, gsl_prefix, objs, libm_map, work_dir, cc, logger)
+            link_engine(target, variant, ns, gsl_prefix, objs, libm_map, cc, logger)
             check_engine(target, cc)
             _say(logger, f'Engine ({variant}, {ns} states) written to {target}')
             targets.append(target)

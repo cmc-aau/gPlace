@@ -36,7 +36,7 @@ distribution with glibc >= 2.17 (CentOS 7 and newer) and every Python >= 3.12. T
 built in the manylinux2014 container and only published after it passes `gplace check_install`
 and `gplace test` there and on several distributions.
 
-From source (other platforms, or development), which needs a Rust toolchain (`cargo`, Rust 1.75 or newer) for the engine and a C compiler (gcc 4.8 or newer, e.g. CentOS 7's, or clang) and `make` for the third-party C it links (GSL 1.16, CORE-MATH, glibc 2.19's `hypot`):
+From source (other platforms, or development), which needs a C compiler (gcc 4.8 or newer, e.g. CentOS 7's, or clang) and `make` for the engine and the third-party C it links (GSL 1.16, CORE-MATH, glibc 2.19's `hypot` and `log1p`):
 ```bash
 git clone https://github.com/cmc-aau/gPlace.git
 cd gPlace

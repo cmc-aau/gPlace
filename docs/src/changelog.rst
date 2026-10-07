@@ -33,8 +33,9 @@ Major Changes:
 * Prebuilt ``manylinux2014`` wheels for x86-64 and ARM64 (one wheel per architecture for every
   Linux distribution and Python >= 3.12).
 * jplace output with pplacer's number formatting (``%.12g``) and a byte-identical tree string.
-* The engine is written in Rust (``gplace/engine/rust``, no dependencies; installing from source
-  needs Rust 1.75 or newer); GSL 1.16, CORE-MATH and glibc 2.19's ``hypot`` and ``log1p`` stay C.
+* The engine is written in C (``gplace/engine/csrc/xp.c``), like the libraries it links (GSL 1.16,
+  CORE-MATH, glibc 2.19's ``hypot`` and ``log1p``): installing from source needs only a C compiler and
+  ``make``.
 * ``tog`` (the same output as ``guppy tog``, byte for byte, Newick or phyloXML) and ``taxit create``,
   ``taxit check``, ``taxit info`` (as taxtastic's ``taxit``): a placement workflow needs neither
   pplacer nor taxtastic.

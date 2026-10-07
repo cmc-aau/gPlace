@@ -101,10 +101,9 @@ Exactness rules
 
 Every floating-point result keeps pplacer's operands, operation order and rounding:
 
-* the engine (Rust, ``gplace/engine/rust``) mirrors pplacer's ``linear_c.c`` loops and GSL's
-  ``dgemv`` loop order; Rust never fuses a multiply and an add, and SIMD lanes
-  only process *different* results, no reduction is reordered, and no multiply-add is fused
-  (``-ffp-contract=off``);
+* the engine (C, ``gplace/engine/csrc/xp.c``) mirrors pplacer's ``linear_c.c`` loops and GSL's
+  ``dgemv`` loop order; SIMD lanes only process *different* results, no reduction is reordered,
+  and no multiply-add is fused (``-ffp-contract=off``);
 * the numerical libraries match pplacer's statically linked binary: GSL 1.16 (GSL 2.x changes the
   eigendecomposition in its last bits), glibc 2.19's ``hypot`` (glibc >= 2.35 changed it) and
   ``log1p`` (GSL's inverse gamma CDF calls it for 21 or more gamma categories), and

@@ -16,4 +16,4 @@ Why one wheel is exact everywhere: the engine brings its own ``exp``, ``log``, `
 from the system it only uses ``sqrt``, ``frexp`` and ``ldexp``, which IEEE 754 defines exactly.
 
 On other platforms pip falls back to the source package and compiles the engine (this needs
-``cargo``, ``gcc`` and ``make``); the environment variables listed in :ref:`installing` apply.
+``gcc`` and ``make``); the environment variables listed in :ref:`installing` apply.

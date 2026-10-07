@@ -15,15 +15,14 @@
 #                                                                             #
 ###############################################################################
 
-"""Compile the gPlace placement engine (libgplace_core*.so: the Rust crate gplace/engine/rust, with the
-third-party C in gplace/engine/csrc) as part of the package build. Needs cargo, gcc and make.
+"""Compile the gPlace placement engine (libgplace_core*.so, from the C in gplace/engine/csrc) as part
+of the package build. Needs a C compiler (gcc or clang) and make.
 
 Environment variables (all optional):
   GPLACE_GSL_TARBALL   path to gsl-1.16.tar.gz (offline builds; otherwise downloaded, SHA-256 checked)
   GPLACE_GSL_PREFIX    existing static, -fPIC GSL 1.16 build (lib/libgsl.a, include/gsl)
   GPLACE_BUILD_DIR     scratch directory for the GSL build (default ~/.cache/gplace/build; reused)
   GPLACE_BUILD_JOBS    parallel make jobs for GSL (default 8)
-  GPLACE_CARGO         cargo to use (default: cargo on PATH, or ~/.cargo/bin/cargo)
 """
 
 import os

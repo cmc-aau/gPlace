@@ -46,9 +46,7 @@ include = ["gplace*"]
 
 [tool.setuptools.package-data]
 gplace = [
-    "engine/rust/Cargo.toml",
-    "engine/rust/build.rs",
-    "engine/rust/src/*.rs",
+    "engine/csrc/*.c",
     "engine/csrc/core-math/*",
     "engine/csrc/core-math/pow/*",
     "engine/csrc/glibc/*",
@@ -75,7 +73,5 @@ manylinux-aarch64-image = "manylinux2014"
 test-command = "gplace check_install && gplace test --models --cpus 2"
 
 [tool.cibuildwheel.linux]
-# the engine is Rust: install a minimal toolchain in the manylinux container
-before-all = "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal"
-environment = { GPLACE_BUILD_JOBS = "4", GPLACE_BUILD_DIR = "/tmp/gplace_build", PATH = "$HOME/.cargo/bin:$PATH" }
+environment = { GPLACE_BUILD_JOBS = "4", GPLACE_BUILD_DIR = "/tmp/gplace_build" }
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"

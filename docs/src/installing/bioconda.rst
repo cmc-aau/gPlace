@@ -1,7 +1,7 @@
 Bioconda
 ========
 
-A Bioconda package is planned. A recipe needs ``rust``, ``gcc`` and ``make`` at build time and the
+A Bioconda package is planned. A recipe needs ``gcc`` and ``make`` at build time and the
 ``gsl-1.16.tar.gz`` source as a second source; its build script runs:
 
 .. code-block:: bash
