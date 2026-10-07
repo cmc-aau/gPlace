@@ -26,7 +26,7 @@ Documentation for gPlace can be found [here](https://cmc-aau.github.io/gPlace/).
 
 ## Installation
 
-gPlace needs Python >= 3.12 on 64-bit Linux, x86-64 or ARM64 (the platforms pplacer runs on, except macOS for now). It uses SIMD kernels on x86-64 CPUs with AVX2 and FMA and on ARM64 (NEON), and a portable engine with the same results on other x86-64 CPUs.
+gPlace needs Python >= 3.12 on 64-bit Linux (x86-64 or ARM64) or macOS (Apple Silicon or Intel), the platforms pplacer runs on. It uses SIMD kernels on x86-64 CPUs with AVX2 and FMA and on ARM64 (NEON, including Apple Silicon), and a portable engine with the same results on other x86-64 CPUs.
 
 ```bash
 pip install gtdb-gplace
@@ -34,9 +34,10 @@ pip install gtdb-gplace
 On x86-64 and ARM64 Linux this installs a prebuilt wheel: no compiler needed, one wheel per architecture for every Linux
 distribution with glibc >= 2.17 (CentOS 7 and newer) and every Python >= 3.12. The wheel is
 built in the manylinux2014 container and only published after it passes `gplace check_install`
-and `gplace test` there and on several distributions.
+and `gplace test` there and on several distributions. On macOS, pip compiles gPlace from source:
+install Apple's command line tools first (`xcode-select --install`, which provides clang and `make`).
 
-From source (other platforms, or development), which needs a C compiler (gcc 4.8 or newer, e.g. CentOS 7's, or clang) and `make` for the engine and the third-party C it links (GSL 1.16, CORE-MATH, glibc 2.19's `hypot` and `log1p`):
+From source (macOS, or development), which needs a C compiler (gcc 4.8 or newer, e.g. CentOS 7's, or clang, including Apple's) and `make` for the engine and the third-party C it links (GSL 1.16, CORE-MATH, glibc 2.19's `hypot` and `log1p`):
 ```bash
 git clone https://github.com/cmc-aau/gPlace.git
 cd gPlace

@@ -5,8 +5,9 @@ Installing gPlace
 
 gPlace's placement engine is written in C (``gplace/engine/csrc/xp.c``) and links three third-party C
 libraries that exactness depends on: GSL 1.16, CORE-MATH and glibc 2.19's ``hypot`` and ``log1p``. On
-x86-64 and ARM64 Linux, ``pip install gtdb-gplace`` installs it prebuilt; installing from source
-compiles it automatically.
+x86-64 and ARM64 Linux, ``pip install gtdb-gplace`` installs it prebuilt; on macOS (Apple Silicon and
+Intel), and when installing from source, it is compiled automatically. The results are identical on
+every platform.
 
 
 Sources
@@ -30,7 +31,8 @@ Hardware requirements
    * - Resource
      - Requirement
    * - CPU
-     - x86-64 (AVX2 kernels with AVX2 and FMA, otherwise the portable engine) or ARM64 (NEON).
+     - x86-64 (AVX2 kernels with AVX2 and FMA, otherwise the portable engine) or ARM64 (NEON),
+       on Linux or macOS (Apple Silicon: NEON; Intel Macs: AVX2).
    * - Memory
      - Depends on the reference tree and the number of queries: about
        *2 x internal nodes x sites x 168 bytes + edges x queries x 8 bytes* (with ``--ranked_edges``
@@ -47,7 +49,8 @@ Build requirements
 Only needed when installing from source (not with the prebuilt wheel):
 
 * A C compiler (gcc 4.8 or newer, e.g. CentOS 7's, or clang) and ``make``, for the engine, GSL 1.16,
-  CORE-MATH, ``hypot`` and ``log1p``. Every compiler gives the same results.
+  CORE-MATH, ``hypot`` and ``log1p``. Every compiler gives the same results. On macOS, Apple's
+  command line tools provide both: ``xcode-select --install``.
 * Internet access to download ``gsl-1.16.tar.gz`` from ftp.gnu.org, or a local copy
   (``GPLACE_GSL_TARBALL``, SHA-256 verified), or an existing static GSL 1.16 build
   (``GPLACE_GSL_PREFIX``).

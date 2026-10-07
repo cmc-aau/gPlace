@@ -2,7 +2,8 @@ From source
 ===========
 
 Needs ``make`` and a C compiler for the engine and the third-party C it links (GSL 1.16, CORE-MATH,
-glibc 2.19's ``hypot`` and ``log1p``): gcc 4.8 or newer (CentOS 7's system gcc works) or clang. Every compiler gives the same results; the build
+glibc 2.19's ``hypot`` and ``log1p``): gcc 4.8 or newer (CentOS 7's system gcc works) or clang
+(on macOS, Apple's: ``xcode-select --install``). Every compiler gives the same results; the build
 stops with a message if the compiler lacks a builtin the C code needs, and checks that each engine
 loads.
 

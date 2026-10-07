@@ -1,0 +1,46 @@
+# Build gPlace from source on macOS (Apple Silicon and Intel) with Apple clang, and check that it is
+# bit-exact against GTDB-Tk's pplacer. Started by hand (Actions > macOS > Run workflow): macOS
+# minutes count ten times against a private repository's quota.
+name: macOS
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]     # Apple Silicon (neon engine), Intel (avx2 engine)
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install gPlace (compiles GSL 1.16 and the engine)
+        env:
+          GPLACE_BUILD_JOBS: 4
+        run: |
+          clang --version
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Check the engine
+        run: gplace check_install
+
+      - name: Placement test (bit-identical to pplacer)
+        run: gplace test --models --cpus 3 --out_dir test_out
+
+      - name: Portable engine (scalar kernels; same results)
+        env:
+          GPLACE_ENGINE_VARIANT: portable
+        run: |
+          gplace check_install
+          gplace test --models --cpus 3
+
+      # The engine's unit tests (incl. the libm-import check); the full suite runs on Linux, and
+      # macOS minutes are expensive
+      - name: Engine unit tests
+        run: python -m unittest tests.test_engine

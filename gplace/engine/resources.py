@@ -22,6 +22,7 @@ import os
 import platform
 import re
 import socket
+import subprocess
 import time
 
 from gplace.config.common import CONFIG
@@ -148,7 +149,10 @@ def available_memory():
                     limits.append(int(line.split()[1]) * 1024)
                     break
     except (OSError, ValueError):
-        pass
+        try:                                                    # macOS: no /proc
+            limits.append(os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES'))
+        except (AttributeError, OSError, ValueError):
+            pass
     try:
         with open('/proc/self/cgroup') as fh:
             entries = [line.rstrip('\n').split(':', 2) for line in fh]
@@ -209,7 +213,11 @@ def machine_key():
                     model = line.split(':', 1)[1].strip()
                     break
     except OSError:
-        pass
+        try:                                                    # macOS: e.g. "Apple M2 Pro"
+            model = subprocess.run(['sysctl', '-n', 'machdep.cpu.brand_string'], capture_output=True,
+                                   text=True).stdout.strip() or model
+        except OSError:
+            pass
     return f'{socket.gethostname()}|{model}|{available_cpus()} cpus'
 
 

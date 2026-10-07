@@ -24,8 +24,9 @@ Major Changes:
   full GTDB bacterial tree).
 * Prefilter kernel: exponent totals in 64-bit integers, so very large trees stay on the SIMD path
   (7-37x faster prefilter on the full GTDB bacterial tree; identical scores).
-* Runs where pplacer runs on Linux: x86-64 (AVX2 kernels with AVX2 + FMA, otherwise a portable
-  engine with identical results) and ARM64 (NEON kernels).
+* Runs where pplacer runs: Linux on x86-64 (AVX2 kernels with AVX2 + FMA, otherwise a portable
+  engine with identical results) and ARM64 (NEON kernels), and macOS on Apple Silicon (NEON) and
+  Intel (AVX2), compiled from source with Apple's clang, with the same results.
 * pplacer's taxonomic ``classification`` field for reference packages with a taxonomy (edge
   painting, or ``--mrca_class``); identical query sequences placed once and written as one record;
   queries that do not overlap the reference alignment stop the run, or are dropped with

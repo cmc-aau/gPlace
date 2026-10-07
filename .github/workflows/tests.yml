@@ -26,11 +26,6 @@ jobs:
           path: ~/.cache/gplace/build/gsl116
           key: gsl116-${{ runner.os }}-${{ runner.arch }}-v1
 
-      - name: Rust toolchain (the engine is Rust)
-        run: |
-          command -v cargo || curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-
       - name: Install gPlace (compiles the engine)
         env:
           GPLACE_BUILD_JOBS: 4

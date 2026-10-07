@@ -15,5 +15,6 @@ container and on other distributions (Ubuntu, Debian 11, Debian 12).
 Why one wheel is exact everywhere: the engine brings its own ``exp``, ``log``, ``hypot``, ``log1p`` and GSL;
 from the system it only uses ``sqrt``, ``frexp`` and ``ldexp``, which IEEE 754 defines exactly.
 
-On other platforms pip falls back to the source package and compiles the engine (this needs
-``gcc`` and ``make``); the environment variables listed in :ref:`installing` apply.
+On macOS and other platforms pip falls back to the source package and compiles the engine (this
+needs a C compiler and ``make``: on macOS, ``xcode-select --install``; it takes a few minutes, mostly
+building GSL 1.16); the environment variables listed in :ref:`installing` apply.

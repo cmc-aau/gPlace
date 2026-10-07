@@ -20,7 +20,7 @@ compiled from gplace/engine/csrc/xp.c and linked with the third-party C it needs
 here; CORE-MATH; glibc 2.19's hypot and log1p). Variants, all with the same results: on x86-64
 "avx2" (AVX2 kernels) and "portable" (scalar, *_portable.so; CPUs without AVX2); on ARM64 "neon"
 (NEON kernels) and "portable" (scalar, -DXP_FORCE_SCALAR); elsewhere "portable" only. The loader
-picks one per CPU (core.engine_variant).
+picks one per CPU (core.engine_variant). Linux and macOS (Apple clang; Apple Silicon and Intel).
 
 Bit-identity with GTDB-Tk's pplacer requires the same numerical libraries as its statically
 linked binary: GSL 1.16 (whose eigen-solver differs from GSL 2.x in the last bits), glibc 2.19's
@@ -59,6 +59,8 @@ LIBM_TRAPS = ('cos', 'cosh', 'sinh', 'tan', 'tanh', 'sincos', 'expm1', 'atan', '
               'tgamma', 'fma')     # log1p and hypot: glibc 2.19's own code (csrc/glibc), linked in
 LIBM_MAP = ([f'-Wl,--defsym={k}={v}' for k, v in LIBM_CR.items()]
             + [f'-Wl,--defsym={k}=xp_libm_trap_{k}' for k in LIBM_TRAPS])
+# macOS: Apple's linker has no --defsym; csrc/libm_bind.c defines these functions inside the engine
+# instead (the same bindings and traps; see that file).
 # The portable engine is compiled without -mfma, so on x86-64 CORE-MATH's fma() calls go to libm:
 # fma is correctly rounded by definition (IEEE 754), so the system's is exact like sqrt. On ARM64
 # fma() is an instruction.
@@ -94,6 +96,14 @@ def cpu_has_avx2():
     """True on an x86-64 CPU that reports AVX2 and FMA (the avx2 engine)."""
     if platform.machine().lower() not in ('x86_64', 'amd64'):
         return False
+    if platform.system() == 'Darwin':                    # Intel Macs: the CPU features from sysctl
+        sysctl = '/usr/sbin/sysctl' if os.path.exists('/usr/sbin/sysctl') else 'sysctl'
+        try:
+            out = subprocess.run([sysctl, '-n', 'machdep.cpu.features', 'machdep.cpu.leaf7_features'],
+                                 capture_output=True, text=True).stdout.upper().split()
+        except OSError:
+            return False
+        return 'AVX2' in out and 'FMA' in out
     try:
         with open('/proc/cpuinfo') as fh:
             for line in fh:
@@ -110,6 +120,15 @@ def target_arch(cc='gcc'):
         return subprocess.run([cc, '-dumpmachine'], capture_output=True, text=True).stdout.split('-')[0]
     except OSError:
         return platform.machine()
+
+
+def target_os(cc='gcc'):
+    """'darwin' when the compiler targets macOS, else 'linux'."""
+    try:
+        triple = subprocess.run([cc, '-dumpmachine'], capture_output=True, text=True).stdout
+    except OSError:
+        return 'darwin' if platform.system() == 'Darwin' else 'linux'
+    return 'darwin' if 'darwin' in triple else 'linux'
 
 
 def engine_variants(cc='gcc'):
@@ -143,13 +162,21 @@ def c_std_flags(cc='gcc'):
     return ['-std=gnu11'] if name == 'gcc' and major < 5 else []
 
 
-def undefined_builtins(path):
-    """Compiler builtins a library leaves undefined (needs nm; empty if nm is missing)."""
+def undefined_symbols(path):
+    """Symbols a library imports (needs nm; empty if nm is missing), without symbol versions."""
     nm = shutil.which('nm')
     if not nm:
         return []
+    if platform.system() == 'Darwin':                    # Mach-O: nm -u, C names with a leading _
+        out = subprocess.run([nm, '-u', path], capture_output=True, text=True).stdout
+        return [l.strip()[1:] for l in out.splitlines() if l.strip().startswith('_')]
     out = subprocess.run([nm, '-D', '--undefined-only', path], capture_output=True, text=True).stdout
-    return sorted({l.split()[-1] for l in out.splitlines() if l.split() and l.split()[-1].startswith('__builtin_')})
+    return [l.split()[-1].split('@')[0] for l in out.splitlines() if l.split()]
+
+
+def undefined_builtins(path):
+    """Compiler builtins a library leaves undefined (needs nm; empty if nm is missing)."""
+    return sorted({s for s in undefined_symbols(path) if s.startswith('__builtin_')})
 
 
 def check_engine(path, cc='gcc'):
@@ -180,8 +207,9 @@ def link_engine(out, variant, ns, gsl_prefix, objs, link_args, cc='gcc', logger=
     """Compile the engine (xp.c) for one variant and state count, linked with GSL 1.16 and the
     CORE-MATH / glibc 2.19 objects, into the shared library out."""
     tmp = out + '.tmp'
+    bind = [] if target_os(cc) == 'darwin' else ['-Wl,-Bsymbolic']     # macOS binds within the image anyway
     _run([cc] + FLAGS + c_std_flags(cc) + variant_flags(variant, cc)
-         + ['-shared', '-DXP_CR', f'-DNS={ns}', '-I' + os.path.join(gsl_prefix, 'include'), '-Wl,-Bsymbolic']
+         + ['-shared', '-DXP_CR', f'-DNS={ns}', '-I' + os.path.join(gsl_prefix, 'include')] + bind
          + list(link_args) + ['-o', tmp, os.path.join(CSRC, 'xp.c')] + list(objs)
          + [os.path.join(gsl_prefix, 'lib', 'libgsl.a'), os.path.join(gsl_prefix, 'lib', 'libgslcblas.a'), '-lm'],
          logger=logger)
@@ -221,9 +249,20 @@ def build_gsl116(work_dir, tarball=None, jobs=8, logger=None, cc='gcc'):
     with tarfile.open(tarball) as tf:
         tf.extractall(work_dir)
     _say(logger, 'Building GSL 1.16 (static, -fPIC, -ffp-contract=off); this takes a few minutes.')
-    env_cflags = 'CFLAGS=' + ' '.join(['-O2', '-ffp-contract=off'])
+    # GSL's configure checks call exit() without <stdlib.h>: gcc >= 14 and Apple clang reject that
+    # by default, which would turn its IEEE checks off. On macOS (no -Bsymbolic): -fvisibility=hidden
+    # keeps GSL's calls to its own functions and BLAS inside the engine (another BLAS loaded in the
+    # process, e.g. numpy's, must never answer them), and -fno-builtin keeps every libm call a call
+    # (bound to CORE-MATH, libm_bind.c): clang would otherwise fold constant arguments with the
+    # system's libm or merge sin and cos into one call.
+    cflags = ['-O2', '-ffp-contract=off', '-Wno-error=implicit-function-declaration']
+    if target_os(cc) == 'darwin':
+        cflags += ['-fvisibility=hidden', '-fno-builtin']
+    env_cflags = 'CFLAGS=' + ' '.join(cflags)
     cross = [] if cc == 'gcc' else ['CC=' + cc, '--host=' + subprocess.run(
         [cc, '-dumpmachine'], capture_output=True, text=True).stdout.strip()]
+    if target_os(cc) == 'darwin' and host in ('arm64', 'aarch64') and not cross:
+        cross = ['--build=aarch64-apple-darwin']          # GSL 1.16's config.guess predates Apple Silicon
     _run(['./configure', '--prefix=' + prefix, '--disable-shared', '--with-pic', env_cflags] + cross,
          cwd=src, logger=logger)
     _run(['make', f'-j{jobs}'], cwd=src, logger=logger)
@@ -257,22 +296,32 @@ def build_engine(out_dir=None, gsl_prefix=None, gsl_tarball=None, work_dir=None,
     gl = os.path.join(CSRC, 'glibc')
     targets = []
     std = c_std_flags(cc)
+    darwin = target_os(cc) == 'darwin'
     for variant in engine_variants(cc):
         flags = FLAGS + std + variant_flags(variant, cc)
+        # macOS: the third-party functions are hidden inside the engine, so every call to them (GSL's
+        # to hypot and log1p included) binds to these definitions, never to the system's
+        dep = flags + (['-fvisibility=hidden'] if darwin else [])
+        dep0 = FLAGS + std + (['-fvisibility=hidden'] if darwin else [])
         obj = os.path.join(work_dir, 'obj', f'{target_arch(cc)}-{variant}')
         os.makedirs(obj, exist_ok=True)
         o = lambda n: os.path.join(obj, n)
-        _run([cc] + flags + ['-c', '-o', o('cr_exp.o'), os.path.join(cm, 'exp.c')], logger=logger)
-        _run([cc] + flags + ['-I' + cm, '-c', '-o', o('cr_log.o'), os.path.join(cm, 'log.c')], logger=logger)
-        _run([cc] + flags + ['-I' + os.path.join(cm, 'pow'), '-c', '-o', o('cr_pow.o'),
+        _run([cc] + dep + ['-c', '-o', o('cr_exp.o'), os.path.join(cm, 'exp.c')], logger=logger)
+        _run([cc] + dep + ['-I' + cm, '-c', '-o', o('cr_log.o'), os.path.join(cm, 'log.c')], logger=logger)
+        _run([cc] + dep + ['-I' + os.path.join(cm, 'pow'), '-c', '-o', o('cr_pow.o'),
                              os.path.join(cm, 'pow', 'pow.c')], logger=logger)
-        _run([cc] + flags + ['-c', '-o', o('cr_sin.o'), os.path.join(cm, 'sin.c')], logger=logger)
-        _run([cc] + FLAGS + std + ['-I' + gl, '-D__ieee754_hypot=hypot', '-c', '-o', o('hypot219.o'),
+        _run([cc] + dep + ['-c', '-o', o('cr_sin.o'), os.path.join(cm, 'sin.c')], logger=logger)
+        _run([cc] + dep0 + ['-I' + gl, '-D__ieee754_hypot=hypot', '-c', '-o', o('hypot219.o'),
                              os.path.join(gl, 'e_hypot.c')], logger=logger)
-        _run([cc] + FLAGS + std + ['-I' + gl, '-D__log1p=log1p', '-c', '-o', o('log1p219.o'),
+        _run([cc] + dep0 + ['-I' + gl, '-D__log1p=log1p', '-c', '-o', o('log1p219.o'),
                              os.path.join(gl, 's_log1p.c')], logger=logger)
         libm_map = LIBM_MAP if variant == 'avx2' else LIBM_MAP_PORTABLE
         objs = [o('cr_exp.o'), o('cr_log.o'), o('cr_pow.o'), o('cr_sin.o'), o('hypot219.o'), o('log1p219.o')]
+        if darwin:                                     # no --defsym: the bindings are defined in the engine
+            _run([cc] + flags + ['-fno-builtin'] + (['-DXP_TRAP_FMA'] if variant == 'avx2' else [])
+                 + ['-c', '-o', o('libm_bind.o'), os.path.join(CSRC, 'libm_bind.c')], logger=logger)
+            objs.append(o('libm_bind.o'))
+            libm_map = []
         for ns in sorted(ENGINE_NAMES, reverse=True):          # one engine per state count
             target = os.path.join(out_dir, engine_file(ns, variant))
             link_engine(target, variant, ns, gsl_prefix, objs, libm_map, cc, logger)

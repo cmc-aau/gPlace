@@ -18,8 +18,8 @@ FAQ
   last bits, which is enough to change some secondary placements.
 
 **Which CPUs are supported?**
-  64-bit Linux on x86-64 or ARM64, the platforms pplacer runs on (macOS is not supported yet).
-  x86-64 CPUs with AVX2 and FMA use AVX2 kernels, ARM64 CPUs NEON kernels, and other x86-64 CPUs
+  64-bit Linux on x86-64 or ARM64 and macOS on Apple Silicon or Intel, the platforms pplacer runs on.
+  x86-64 CPUs with AVX2 and FMA use AVX2 kernels, ARM64 CPUs (including Apple Silicon) NEON kernels, and other x86-64 CPUs
   a portable engine with scalar kernels. All perform the same operations in the same order, so
   the results are identical. ``gplace check_install`` verifies the engine on your machine, and
   ``GPLACE_ENGINE_VARIANT=portable`` forces the portable engine (e.g. to check it).

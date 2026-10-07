@@ -94,7 +94,10 @@ The engine is built in variants from the same C source: ``avx2`` (x86-64; the ke
 SIMD kernels never fuse a multiply and an add: each lane does exactly what the scalar loop does. Neither depends on the CPU's floating-point details beyond IEEE
 754 double precision: no fused multiply-add is contracted implicitly, and the only libm
 functions taken from the system are exact by definition (``sqrt``, ``frexp``, ``ldexp``, and
-``fma`` for the portable engine on x86-64).
+``fma`` for the portable engine on x86-64). On macOS
+the engine is built the same way with Apple's clang; Apple's linker has no ``--defsym``, so GSL's
+libm calls are bound to CORE-MATH and the traps by definitions inside the engine
+(``csrc/libm_bind.c``) instead.
 
 Exactness rules
 ---------------
