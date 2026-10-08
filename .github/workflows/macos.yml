@@ -19,6 +19,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Cache GSL 1.16 build
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/gplace/build/gsl116
+          key: gsl116-${{ runner.os }}-${{ runner.arch }}-v1
+
       - name: Install gPlace (compiles GSL 1.16 and the engine)
         env:
           GPLACE_BUILD_JOBS: 4

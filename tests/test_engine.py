@@ -102,3 +102,31 @@ class TestEngineImports(unittest.TestCase):
                 '__sincos_stret', '__sincospi_stret', '__exp10'}         # macOS forms of sincos and exp10
         allowed = {'sqrt', 'frexp', 'ldexp', 'fabs', 'floor', 'ceil', 'trunc', 'modf', 'fmod', 'round'}
         self.assertEqual(imported & libm - allowed - allowed_extra, set())
+
+
+class TestGslDownload(unittest.TestCase):
+
+    def test_next_mirror_when_one_fails(self):
+        """An unreachable server and a file with the wrong SHA-256 are skipped; the first good copy
+        is kept, and no partial file is left behind when every mirror fails."""
+        import hashlib
+        from gplace.engine.build import download_gsl
+        from gplace.exceptions import GPlaceExit
+        with tempfile.TemporaryDirectory() as d:
+            good, bad = os.path.join(d, 'good.tar.gz'), os.path.join(d, 'bad.tar.gz')
+            with open(good, 'wb') as fh:
+                fh.write(b'gsl 1.16')
+            with open(bad, 'wb') as fh:
+                fh.write(b'an error page')
+            sha = hashlib.sha256(b'gsl 1.16').hexdigest()
+            out = os.path.join(d, 'gsl-1.16.tar.gz')
+            urls = ('http://127.0.0.1:9/gsl-1.16.tar.gz', 'file://' + bad, 'file://' + good)
+            self.assertEqual(download_gsl(out, urls=urls, sha256=sha, timeout=5, rounds=1), out)
+            with open(out, 'rb') as fh:
+                self.assertEqual(fh.read(), b'gsl 1.16')
+            os.remove(out)
+            with self.assertRaises(GPlaceExit) as ctx:
+                download_gsl(out, urls=urls[:2], sha256=sha, timeout=5, rounds=2)
+            self.assertIn('GPLACE_GSL_TARBALL', str(ctx.exception))
+            self.assertEqual(str(ctx.exception).count('127.0.0.1'), 2)
+            self.assertFalse(os.path.exists(out) or os.path.exists(out + '.part'))

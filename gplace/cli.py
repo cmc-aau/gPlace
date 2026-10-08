@@ -239,7 +239,7 @@ def __gsl_prefix(group):
 
 def __gsl_tarball(group):
     group.add_argument('--gsl_tarball', default=None,
-                       help='path to gsl-1.16.tar.gz (offline builds); downloaded from ftp.gnu.org if unset')
+                       help='path to gsl-1.16.tar.gz (offline builds); downloaded from a GNU mirror if unset')
 
 
 def __build_dir(group):

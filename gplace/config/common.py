@@ -65,8 +65,12 @@ class __GPlaceCommonConfig:
         return os.path.join(os.path.expanduser('~'), '.cache', 'gplace')
 
     @property
-    def GSL_URL(self):
-        return 'https://ftp.gnu.org/gnu/gsl/gsl-1.16.tar.gz'
+    def GSL_URLS(self):
+        """Where gsl-1.16.tar.gz is downloaded from, in order (GNU's mirror redirector, GNU's own server,
+        kernel.org's GNU mirror); its SHA-256 is checked, so any of them will do."""
+        return ('https://ftpmirror.gnu.org/gsl/gsl-1.16.tar.gz',
+                'https://ftp.gnu.org/gnu/gsl/gsl-1.16.tar.gz',
+                'https://mirrors.kernel.org/gnu/gsl/gsl-1.16.tar.gz')
 
     @property
     def GSL_SHA256(self):

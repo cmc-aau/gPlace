@@ -216,6 +216,32 @@ def link_engine(out, variant, ns, gsl_prefix, objs, link_args, cc='gcc', logger=
     os.replace(tmp, out)
 
 
+def download_gsl(tarball, logger=None, urls=None, sha256=None, timeout=60, rounds=2):
+    """Download gsl-1.16.tar.gz to tarball from the first mirror (CONFIG.GSL_URLS) that answers with
+    the expected SHA-256, trying the list `rounds` times (one server is sometimes unreachable)."""
+    urls, sha256 = urls or CONFIG.GSL_URLS, sha256 or CONFIG.GSL_SHA256
+    part, errors = tarball + '.part', []
+    for _ in range(rounds):
+        for url in urls:
+            _say(logger, f'Downloading {url}')
+            try:
+                with urllib.request.urlopen(url, timeout=timeout) as response, open(part, 'wb') as fh:
+                    shutil.copyfileobj(response, fh)
+            except OSError as e:                         # URLError, timeouts, refused connections
+                errors.append(f'{url}: {getattr(e, "reason", e)}')
+                continue
+            digest = _sha256(part)
+            if digest == sha256:
+                os.replace(part, tarball)
+                return tarball
+            errors.append(f'{url}: unexpected SHA-256 {digest}')
+    if os.path.exists(part):
+        os.remove(part)
+    raise GPlaceExit('Could not download gsl-1.16.tar.gz:\n  ' + '\n  '.join(errors) + '\nDownload it from one of '
+                     'these addresses yourself and set GPLACE_GSL_TARBALL=/path/to/gsl-1.16.tar.gz (gplace '
+                     'build_engine: --gsl_tarball).')
+
+
 def gsl_version(prefix):
     h = os.path.join(prefix, 'include', 'gsl', 'gsl_version.h')
     if not os.path.exists(h):
@@ -238,8 +264,7 @@ def build_gsl116(work_dir, tarball=None, jobs=8, logger=None, cc='gcc'):
     if tarball is None:
         tarball = os.path.join(work_dir, 'gsl-1.16.tar.gz')
         if not os.path.exists(tarball):
-            _say(logger, f'Downloading {CONFIG.GSL_URL}')
-            urllib.request.urlretrieve(CONFIG.GSL_URL, tarball)
+            download_gsl(tarball, logger)
     digest = _sha256(tarball)
     if digest != CONFIG.GSL_SHA256:
         raise GPlaceExit(f'Unexpected SHA-256 for {tarball}: {digest} (expected {CONFIG.GSL_SHA256}).')

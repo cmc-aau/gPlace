@@ -51,7 +51,8 @@ Only needed when installing from source (not with the prebuilt wheel):
 * A C compiler (gcc 4.8 or newer, e.g. CentOS 7's, or clang) and ``make``, for the engine, GSL 1.16,
   CORE-MATH, ``hypot`` and ``log1p``. Every compiler gives the same results. On macOS, Apple's
   command line tools provide both: ``xcode-select --install``.
-* Internet access to download ``gsl-1.16.tar.gz`` from ftp.gnu.org, or a local copy
+* Internet access to download ``gsl-1.16.tar.gz`` from a GNU mirror (ftpmirror.gnu.org, ftp.gnu.org or
+  mirrors.kernel.org, tried in turn), or a local copy
   (``GPLACE_GSL_TARBALL``, SHA-256 verified), or an existing static GSL 1.16 build
   (``GPLACE_GSL_PREFIX``).
 

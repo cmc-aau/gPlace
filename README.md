@@ -52,7 +52,7 @@ When installing from source, the engine is compiled during installation. Optiona
 
 | Variable | Use |
 |---|---|
-| `GPLACE_GSL_TARBALL` | path to `gsl-1.16.tar.gz` for offline installs (otherwise downloaded from ftp.gnu.org and SHA-256 checked) |
+| `GPLACE_GSL_TARBALL` | path to `gsl-1.16.tar.gz` for offline installs (otherwise downloaded from a GNU mirror and SHA-256 checked) |
 | `GPLACE_GSL_PREFIX` | reuse an existing static, `-fPIC` GSL 1.16 build |
 | `GPLACE_BUILD_DIR` | scratch directory for the GSL build (default `~/.cache/gplace/build`, reused between installs) |
 | `GPLACE_BUILD_JOBS` | parallel `make` jobs (default 8) |
