@@ -16,6 +16,7 @@
 * **Pooled batches:** `gplace place_batch` places many alignments at once; alignments sharing a reference package are placed in a single pass.
 * **Memory limits and huge trees:** `--max_memory 64G` keeps a run within a memory limit. gPlace places without tiles when that fits, and otherwise tile by tile, with the largest tiles that fit, and identical results. This places genomes on the full GTDB bacterial tree (273,290 nodes), which would need ~490 GiB untiled. `--tile_edges N` sets the tile size directly.
 * **Every pplacer model:** WAG, LG, JTT (protein) and GTR (DNA), with FastTree CAT or gamma rate variation and model or empirical frequencies, read from the reference package as pplacer does. `--fix_gamma_underflow` optionally avoids pplacer's gamma underflow on large trees (likelihood `-inf`).
+* **Trees from IQ-TREE and RAxML-NG:** reference packages built from their fits (`taxit create --tree-stats`), or the `.iqtree` file / RAxML-NG log given directly with `--stats`, place as pplacer places them; gPlace says which parts of the fitted model pplacer does not use. `--full_model` places with the fit's complete model instead (IQ-TREE: every reversible matrix, fitted frequencies, mean or median `+G`, `+I`, `+R`, protein mixtures such as C20 or LG4X; RAxML-NG: every DNA model and protein matrix, `+FC`/`+FU`, mean or median `+G`, `+I`, `+R`, LG4M, LG4X), checked against the fitting program's own likelihoods.
 * **pplacer's options:** its search settings (`--max_strikes`, `--keep_at_most`, `--no_pre_mask`, ...), model refinement (`--always_refine`, or reference sequences in the query file), reference files without a package (`-t`/`-r`/`-s`/`-d` with RAxML 7, PhyML 3.0 or JSON models) and Stockholm query files, all with pplacer's results; pplacer's option spellings are accepted.
 * **No pplacer or taxtastic needed:** `gplace tog` writes the same tree as `guppy tog` (byte for byte, Newick or phyloXML), and `gplace taxit create/check/info` builds and checks reference packages as taxtastic's `taxit` does.
 * **Self-verifying installation:** `gplace check_install` checks the compiled engine bit for bit against values taken from GTDB-Tk's pplacer binary; `gplace test` places bundled genomes and compares them with pplacer's own output.
@@ -91,6 +92,17 @@ All rows that use the same reference package are placed together, so the referen
 The model comes from the reference package's `phylo_model` JSON, as in pplacer (`-m` is ignored for reference packages): `subs_model` WAG, LG, JTT or GTR, `ras_model` Price-CAT or gamma, `empirical_frequencies`. Reference packages made with `taxit create` from FastTree, RAxML or PhyML runs work unchanged; DNA queries use pplacer's nucleotide alphabet (IUPAC codes included).
 
 pplacer's gamma model fails on large trees: once the slow rates of a fast-evolving site underflow to zero, pplacer stops rescaling that site and the likelihood becomes `-inf` (on the GTDB-Tk class-level tree 8 with gamma, for 342 of 343 genomes). gPlace reproduces this by default and warns; `--fix_gamma_underflow` fixes it, at the cost of no longer matching pplacer (its results elsewhere change only in the last digits). See the documentation's models page.
+
+### Trees from IQ-TREE or RAxML-NG
+```bash
+# as pplacer would place them (identical results); gPlace warns about the parts of the fit pplacer ignores
+gplace place --tree run.treefile --ref_aln ref.fasta --stats run.iqtree --msa_file queries.fasta --out_file q.jplace
+# with the complete fitted model (results differ from pplacer's): IQ-TREE reads run.ckp.gz next to run.iqtree,
+# RAxML-NG reads run.raxml.bestModel next to run.raxml.log
+gplace place --tree run.treefile --ref_aln ref.fasta --stats run.iqtree --full_model --msa_file queries.fasta --out_file q.jplace
+gplace place --tree run.raxml.bestTree --ref_aln ref.fasta --stats run.raxml.log --full_model --msa_file queries.fasta --out_file q.jplace
+```
+`--full_model` covers every reversible DNA model and protein matrix of IQ-TREE 3, fitted frequencies, `+G` (mean or median), `+I`, `+I+G`, `+R`, `+I+R` and protein mixtures (C10-C60, EX2/EX3/EHO, UL2/UL3, LG4M, LG4X, `MIX{...}`), and every DNA model and protein matrix of RAxML-NG 2 with `+FC`/`+FE`/`+FU`/`+FO`, `+G` (mean or median), `+I`/`+IC`, `+R`, LG4M and LG4X. **Not supported yet:** `+I` inside a mixture, partitioned models, GTR20 and user-defined matrices, DNA mixtures, and models outside reversible DNA/protein substitution (codon, binary, multi-state, morphology, non-reversible, heterotachy `+H`, PoMo, `+ASC`, site frequency models). See the FAQ.
 
 ### Compare jplace files
 ```bash

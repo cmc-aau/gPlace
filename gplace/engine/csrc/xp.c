@@ -189,6 +189,21 @@ void xp_dediag_ref(double *dst, const double *u, const double *lambda, const dou
 }
 
 /* Diagd.multi_exp: tensor[r] = X exp(rates[r]*bl*Lambda) X^-1 for rates with mask[r]. */
+/* --full_model (NOT pplacer behaviour): a category of rate exactly 0 (invariable sites, +I) gets the exact
+ * identity, as IQ-TREE and RAxML-NG compute it. X exp(0) X^-1 is the identity only up to rounding (~1e-16
+ * off the diagonal), and at a variable site, where the identity's likelihood is exactly 0, that noise is
+ * added to the other categories' likelihoods, which can be far smaller. pplacer models never set it (their
+ * gamma rates can underflow to 0.0, and pplacer then evolves with X X^-1). Per process, as xp_gamma_fix. */
+static int xp_zero_rate_identity = 0;
+void xp_set_zero_rate_identity(int on) { xp_zero_rate_identity = on; }
+
+static int zero_rate_identity(double *tensor_r, double rate)
+{
+  if (!xp_zero_rate_identity || rate != 0.0) return 0;
+  for (int i = 0; i < NS; i++) tensor_r[i * NS + i] = 1.0;     /* off the diagonal: the caller's zeros */
+  return 1;
+}
+
 void xp_multi_exp_ref(double *tensor, const double *x, const double *l, const double *xit,
                   const double *rates, int nrates, const uint8_t *mask, double bl)
 {
@@ -196,6 +211,7 @@ void xp_multi_exp_ref(double *tensor, const double *x, const double *l, const do
   memset(tensor, 0, sizeof(double) * nrates * NS * NS);
   for (int r = 0; r < nrates; r++) {
     if (!mask[r]) continue;
+    if (zero_rate_identity(tensor + (size_t)r * NS * NS, rates[r])) continue;
     for (int i = 0; i < NS; i++) util[i] = exp(rates[r] * bl * l[i]);
     xp_dediag_ref(tensor + (size_t)r * NS * NS, x, util, xit, NS);
   }
@@ -280,6 +296,7 @@ void xp_multi_exp(double *tensor, const double *x, const double *l, const double
   memset(tensor, 0, sizeof(double) * nrates * NS * NS);
   for (int r = 0; r < nrates; r++) {
     if (!mask[r]) continue;
+    if (zero_rate_identity(tensor + (size_t)r * NS * NS, rates[r])) continue;
     for (int i = 0; i < NS; i++) util[i] = exp(rates[r] * bl * l[i]);
     xp_dediag(tensor + (size_t)r * NS * NS, x, util, xit, NS);
   }
@@ -662,6 +679,8 @@ typedef struct {
   long n_calls;
   int assert_fail;
   int gmix, R;           /* gamma mixture (every site under all R rates), see xp_gtt_new */
+  int mix;               /* mixture model (--full_model): rate category r has its own eigen-system and */
+  const double *mx, *ml, *mxit, *mstatd;   /* frequencies: R x NS x NS, R x NS, R x NS x NS, R x NS */
 } TT;
 
 /* Gamma mixture (Gmix_model) three-taxon passes. Glv layout here is site-major [m][R][NS]
@@ -692,20 +711,31 @@ static void gtt_dist_pass(TT *t)
     for (int r = 0; r < R; r++) {
       double dv[NS], pv[NS];
       const size_t o = ((size_t)s * R + r) * NS, off = (size_t)r * NS * NS;
+      const double *sd = t->mix ? t->mstatd + (size_t)r * NS : t->statd;
       evolve_site(dv, t->dist_o + o, t->tensorD + off);
       evolve_site(pv, t->prox_o + o, t->tensorP + off);
       double *pd = t->PD + o;
-      for (int st = 0; st < NS; st++) pd[st] = (t->statd[st] * pv[st]) * dv[st];
+      for (int st = 0; st < NS; st++) pd[st] = (sd[st] * pv[st]) * dv[st];
     }
   gtt_ll_pass(t);
 }
 
 void xp_tt_free(TT *t);
 
+/* The transition tensor of every occupied rate category at branch length v: from the one
+ * eigen-system (pplacer), or, for a mixture, category by category from its own. */
+static void tt_tensor(TT *t, double *tensor, double v)
+{
+  if (!t->mix) { xp_multi_exp(tensor, t->x, t->l, t->xit, t->rates, t->nrates, t->rmask, v); return; }
+  for (int r = 0; r < t->nrates; r++)
+    xp_multi_exp(tensor + (size_t)r * NS * NS, t->mx + (size_t)r * NS * NS, t->ml + (size_t)r * NS,
+                 t->mxit + (size_t)r * NS * NS, t->rates + r, 1, t->rmask + r, v);
+}
+
 static void tt_build_QP(TT *t, double v)
 {
   t->pend_bl = v;
-  xp_multi_exp(t->tensorQ, t->x, t->l, t->xit, t->rates, t->nrates, t->rmask, v);
+  tt_tensor(t, t->tensorQ, v);
   for (int r = 0; r < t->nrates; r++) {
     if (!t->rmask[r]) continue;
     const double *PT = t->tensorQ + (size_t)r * NS * NS;
@@ -802,9 +832,9 @@ static void tt_set_dist(TT *t, double v)
   double prox = cut - v;
   if (!(prox >= 0.)) t->assert_fail = 1;           /* alpha19: assert(prox_bl >= 0.) */
   t->dist_bl = v;
-  xp_multi_exp(t->tensorD, t->x, t->l, t->xit, t->rates, t->nrates, t->rmask, v);
+  tt_tensor(t, t->tensorD, v);
   t->prox_bl = prox;
-  xp_multi_exp(t->tensorP, t->x, t->l, t->xit, t->rates, t->nrates, t->rmask, prox);
+  tt_tensor(t, t->tensorP, prox);
   tt_dist_pass(t);
 }
 
@@ -954,9 +984,9 @@ void xp_tt_set(TT *t, const double *darr_a, const int64_t *darr_e, const double 
   /* pendant first (Glv_edge.set_bl pend_edge), then dist edge, then prox edge */
   tt_build_QP(t, pendant);
   t->dist_bl = distal;
-  xp_multi_exp(t->tensorD, t->x, t->l, t->xit, t->rates, t->nrates, t->rmask, distal);
+  tt_tensor(t, t->tensorD, distal);
   t->prox_bl = cut_bl - distal;
-  xp_multi_exp(t->tensorP, t->x, t->l, t->xit, t->rates, t->nrates, t->rmask, cut_bl - distal);
+  tt_tensor(t, t->tensorP, cut_bl - distal);
   tt_dist_pass(t);
   t->assert_fail = 0;
 }
@@ -1143,6 +1173,32 @@ TT *xp_gtt_new(int m, int R, const double *statd, const double *x, const double 
   return t;
 }
 
+/* Mixture three-taxon tree (--full_model mixtures): xp_gtt_new with category r's own eigen-system
+ * (mx, ml, mxit) and frequencies (mstatd). */
+TT *xp_mtt_new(int m, int R, const double *mstatd, const double *mx, const double *ml, const double *mxit,
+               const double *rates, const double *query_masked)
+{
+  TT *t = xp_gtt_new(m, R, mstatd, mx, ml, mxit, rates, query_masked);
+  if (!t) return NULL;
+  t->mix = 1; t->mx = mx; t->ml = ml; t->mxit = mxit; t->mstatd = mstatd;
+  return t;
+}
+
+/* ten_statd_pairwise_prod with frequencies per rate category (mixtures): mstatd[r][st] * a * b */
+void xp_m_statd_pairwise(double *dst, int64_t *de, const double *mstatd, const double *a,
+                         const int64_t *ae, const double *b, const int64_t *be, int nsites, int R)
+{
+  for (int s = 0; s < nsites; s++)
+    for (int r = 0; r < R; r++) {
+      const double *sd = mstatd + (size_t)r * NS;
+      for (int st = 0; st < NS; st++) {
+        *dst = sd[st] * (*a) * (*b);
+        dst++; a++; b++;
+      }
+    }
+  for (int s = 0; s < nsites; s++) de[s] = ae[s] + be[s];
+}
+
 /* xp_tt_set for gmix: full-site glvs darr/parr are nsites x R x NS */
 void xp_gtt_set(TT *t, const double *darr_a, const int64_t *darr_e, const double *parr_a,
                 const int64_t *parr_e, const int32_t *reind, double cut_bl, double pendant, double distal)
@@ -1157,9 +1213,9 @@ void xp_gtt_set(TT *t, const double *darr_a, const int64_t *darr_e, const double
   t->etot = (xp_total_twoexp(t->prox_e, t->m) + xp_total_twoexp(t->dist_e, t->m)) + 0.0;
   tt_build_QP(t, pendant);
   t->dist_bl = distal;
-  xp_multi_exp(t->tensorD, t->x, t->l, t->xit, t->rates, t->nrates, t->rmask, distal);
+  tt_tensor(t, t->tensorD, distal);
   t->prox_bl = cut_bl - distal;
-  xp_multi_exp(t->tensorP, t->x, t->l, t->xit, t->rates, t->nrates, t->rmask, cut_bl - distal);
+  tt_tensor(t, t->tensorP, cut_bl - distal);
   tt_dist_pass(t);
   t->assert_fail = 0;
 }

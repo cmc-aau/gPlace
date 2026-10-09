@@ -48,8 +48,37 @@ FAQ
   See :ref:`validation` and :ref:`how_it_works`.
 
 **Can I place other kinds of data?**
-  No. gPlace reproduces the WAG + FastTree CAT protein refpkgs used by GTDB-Tk. Other models
-  (e.g. GTR, empirical frequencies, gamma rates) are rejected.
+  Protein and DNA alignments with every model pplacer v1.1.alpha19 has (WAG, LG, JTT, GTR; CAT or
+  gamma rates; model or empirical frequencies), with pplacer's results; see :ref:`models`. With
+  ``--full_model``, also IQ-TREE's and RAxML-NG's other models (next question). Other data types (codons,
+  binary, morphology) are not supported.
+
+**Which IQ-TREE and RAxML-NG models can gPlace use?**
+  By default gPlace places as pplacer does: a reference package built with ``taxit create`` from an
+  IQ-TREE or RAxML-NG fit, or the ``.iqtree`` file or RAxML-NG log given with ``--stats``, gives the
+  substitution matrix (WAG, LG, JTT or GTR), the gamma model and GTR's rates; the rest of the fit is not
+  used, and gPlace says so (see :ref:`commands/place`). ``--full_model`` places with the fit's complete
+  model instead (validated against the fitting program's likelihoods; results then differ from pplacer's):
+
+  * IQ-TREE: every reversible DNA model and protein matrix of IQ-TREE 3 (including the Q matrices), the
+    fitted frequencies, ``+G`` (mean or median), ``+I``, ``+I+G``, ``+R``, ``+I+R``, and the protein mixtures
+    C10 to C60, EX2,
+    EX3, EHO, UL2, UL3, LG4M, LG4X and ``MIX{...}``;
+  * RAxML-NG: every DNA model and protein matrix of RAxML-NG 2 (including the Q matrices and ``PROTGTR``),
+    ``+FC``, ``+FE``, ``+FU`` (and ``+FO`` fits), ``+G`` with mean or median rates, ``+I``, ``+IC``, ``+R``, and
+    the mixtures LG4M and LG4X.
+
+  Not supported yet, with ``--full_model``:
+
+  * invariable sites inside a mixture (e.g. ``LG+C20+I+G4``, ``LG4M+I``);
+  * partitioned models (IQ-TREE ``-p``, ``-q``, ``-Q``; RAxML-NG partition files): linked or proportional
+    branch lengths are feasible (each site would carry every partition's rate categories, so cost grows with
+    their total); unlinked branch lengths have no single placement position;
+  * IQ-TREE's fitted protein exchangeabilities (GTR20), user-defined matrices (``-mdef``, model files) and
+    DNA mixtures; RAxML-NG's custom protein symmetries (``PROT...``) and frequencies of 1e-6 or less;
+  * models outside reversible DNA and protein substitution: codon, binary, multi-state, genotype and
+    morphology models, non-reversible models (Lie Markov, UNREST, NONREV, NQ matrices), heterotachy (``+H``,
+    GHOST), PoMo, ascertainment bias (``+ASC``) and site frequency models (PMSF, ``--site-freq``).
 
 **Does the output file look exactly like pplacer's?**
   Every value and the tree string are identical. JSON whitespace, key order and the order of the

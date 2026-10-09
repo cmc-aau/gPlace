@@ -29,7 +29,11 @@ pplacer, it reads the model from the reference package's ``phylo_model`` JSON fi
        discrete-gamma rates, averaged)
 
 GTDB-Tk's reference packages are WAG + Price-CAT with model frequencies. Reference packages built
-with ``taxit create`` from FastTree logs (CAT) or RAxML/PhyML statistics (gamma) work as they are.
+with ``taxit create`` from FastTree logs (CAT), RAxML/PhyML statistics (gamma), or IQ-TREE and RAxML-NG
+fits (gamma) work as they are; for IQ-TREE and RAxML-NG see :ref:`commands/place` (which parts of a
+fitted model pplacer uses). ``place --full_model`` places with an IQ-TREE or RAxML-NG fit's complete model
+instead (the program's matrices, frequencies, +G/+I/+R and protein mixtures; results then differ from
+pplacer's).
 
 What the parts mean
 -------------------
@@ -47,6 +51,23 @@ What the parts mean
 
 Use the model the reference tree was built with: its branch lengths are only meaningful under that
 model.
+
+How the gamma categories are computed
+-------------------------------------
+
+The rate of each gamma category is the mean (or median) of the gamma distribution over that category.
+Programs compute it with different numerical routines, which agree to about 1e-8 to 1e-7 (relative) and
+much less for very small alpha. gPlace uses the routine of the program the model comes from, so that its
+likelihoods are that program's:
+
+* reference packages and ``--stats`` files (pplacer's models): pplacer's routine (GSL 1.16), for results
+  identical to pplacer's;
+* ``place --full_model`` with an IQ-TREE fit: IQ-TREE's (Yang's algorithm, as in IQ-TREE's
+  ``RateGamma``; mean or median rates);
+* ``place --full_model`` with a RAxML-NG fit: RAxML-NG's (the same algorithm, as in its coraxlib library;
+  it rescales the rates differently, which changes the last digits).
+
+The IQ-TREE and RAxML-NG rates are bit-identical to the programs' own code.
 
 DNA
 ---

@@ -1,0 +1,274 @@
+{
+ "note": "gPlace --full_model best placements of the first queries of each fit (queries.fasta, models/like_gtr_queries.fasta), and IQ-TREE 3.1.4's log-likelihood of the tree with that query attached there (fixed model, -blfix, pplacer's pre-mask and per-query columns); iqtree_gamma: [n, median, p_invar, alpha, rates] of IQ-TREE 3.1.4 RateGamma::computeRates (compiled from its source; rates starting at 1 / (1 - p_invar))",
+ "fits": {
+  "prot_Q_pfam_G4": {
+   "GEMOTU_01484": {
+    "edge_num": 347,
+    "likelihood": -155796.26533,
+    "iqtree_likelihood": -155796.26533
+   },
+   "GEMOTU_05359": {
+    "edge_num": 342,
+    "likelihood": -98675.1049963,
+    "iqtree_likelihood": -98675.1049963
+   },
+   "GEMOTU_05958": {
+    "edge_num": 248,
+    "likelihood": -162562.898907,
+    "iqtree_likelihood": -162562.898907
+   },
+   "GEMOTU_14417": {
+    "edge_num": 342,
+    "likelihood": -160901.94667,
+    "iqtree_likelihood": -160901.94667
+   },
+   "GEMOTU_17643": {
+    "edge_num": 342,
+    "likelihood": -164185.177279,
+    "iqtree_likelihood": -164185.177279
+   },
+   "GEMOTU_27006": {
+    "edge_num": 284,
+    "likelihood": -155964.925831,
+    "iqtree_likelihood": -155964.925831
+   }
+  },
+  "dna_HKY_F_I_R2": {
+   "Q0_AF004885": {
+    "edge_num": 0,
+    "likelihood": -1810.08137878,
+    "iqtree_likelihood": -1810.08137879
+   },
+   "Q1_AF004885": {
+    "edge_num": 0,
+    "likelihood": -1851.68685038,
+    "iqtree_likelihood": -1851.68685039
+   },
+   "Q2_AF004885": {
+    "edge_num": 0,
+    "likelihood": -913.450305916,
+    "iqtree_likelihood": -913.450305919
+   },
+   "Q0_AF069670": {
+    "edge_num": 1,
+    "likelihood": -1831.22297909,
+    "iqtree_likelihood": -1831.2229791
+   },
+   "Q1_AF069670": {
+    "edge_num": 1,
+    "likelihood": -1776.91442584,
+    "iqtree_likelihood": -1776.91442584
+   },
+   "Q2_AF069670": {
+    "edge_num": 1,
+    "likelihood": -536.701667328,
+    "iqtree_likelihood": -536.70166733
+   },
+   "Q0_M62320": {
+    "edge_num": 36,
+    "likelihood": -1745.6284607,
+    "iqtree_likelihood": -1745.6284607
+   },
+   "Q1_M62320": {
+    "edge_num": 36,
+    "likelihood": -1783.35604777,
+    "iqtree_likelihood": -1783.35604777
+   },
+   "Q2_M62320": {
+    "edge_num": 36,
+    "likelihood": -640.909140696,
+    "iqtree_likelihood": -640.909140694
+   },
+   "Q0_U51190": {
+    "edge_num": 2,
+    "likelihood": -1792.39478165,
+    "iqtree_likelihood": -1792.39478165
+   }
+  },
+  "mix_EX2": {
+   "GEMOTU_01484": {
+    "edge_num": 347,
+    "likelihood": -166491.59313,
+    "iqtree_likelihood": -166491.59313
+   },
+   "GEMOTU_05359": {
+    "edge_num": 342,
+    "likelihood": -105457.893681,
+    "iqtree_likelihood": -105457.893681
+   },
+   "GEMOTU_05958": {
+    "edge_num": 248,
+    "likelihood": -173842.816625,
+    "iqtree_likelihood": -173842.816625
+   },
+   "GEMOTU_14417": {
+    "edge_num": 342,
+    "likelihood": -172025.336059,
+    "iqtree_likelihood": -172025.336059
+   },
+   "GEMOTU_17643": {
+    "edge_num": 342,
+    "likelihood": -175432.04405,
+    "iqtree_likelihood": -175432.04405
+   },
+   "GEMOTU_27006": {
+    "edge_num": 283,
+    "likelihood": -166870.236043,
+    "iqtree_likelihood": -166870.236043
+   }
+  },
+  "mix_LG4X": {
+   "GEMOTU_01484": {
+    "edge_num": 347,
+    "likelihood": -154307.22944,
+    "iqtree_likelihood": -154307.22944
+   },
+   "GEMOTU_05359": {
+    "edge_num": 342,
+    "likelihood": -97731.0699836,
+    "iqtree_likelihood": -97731.0699836
+   },
+   "GEMOTU_05958": {
+    "edge_num": 248,
+    "likelihood": -160944.491149,
+    "iqtree_likelihood": -160944.491149
+   },
+   "GEMOTU_14417": {
+    "edge_num": 342,
+    "likelihood": -159258.617278,
+    "iqtree_likelihood": -159258.617278
+   },
+   "GEMOTU_17643": {
+    "edge_num": 342,
+    "likelihood": -162528.046134,
+    "iqtree_likelihood": -162528.046134
+   },
+   "GEMOTU_27006": {
+    "edge_num": 284,
+    "likelihood": -154313.052522,
+    "iqtree_likelihood": -154313.052522
+   }
+  },
+  "prot_LG_G4_median": {
+   "GEMOTU_01484": {
+    "edge_num": 347,
+    "likelihood": -155474.997322,
+    "iqtree_likelihood": -155474.997322
+   },
+   "GEMOTU_05359": {
+    "edge_num": 342,
+    "likelihood": -98499.0817262,
+    "iqtree_likelihood": -98499.0817262
+   },
+   "GEMOTU_05958": {
+    "edge_num": 248,
+    "likelihood": -162218.589617,
+    "iqtree_likelihood": -162218.589617
+   },
+   "GEMOTU_14417": {
+    "edge_num": 342,
+    "likelihood": -160567.886257,
+    "iqtree_likelihood": -160567.886257
+   },
+   "GEMOTU_17643": {
+    "edge_num": 342,
+    "likelihood": -163825.658577,
+    "iqtree_likelihood": -163825.658577
+   },
+   "GEMOTU_27006": {
+    "edge_num": 284,
+    "likelihood": -155629.722204,
+    "iqtree_likelihood": -155629.722204
+   }
+  }
+ },
+ "iqtree_gamma": [
+  [
+   4,
+   false,
+   0.0,
+   0.5,
+   [
+    0.03338775338361239,
+    0.2519159176270096,
+    0.8202684819537311,
+    2.894427847035647
+   ]
+  ],
+  [
+   4,
+   true,
+   0.0,
+   0.5,
+   [
+    0.02907775442778477,
+    0.28071453392572127,
+    0.9247730548197041,
+    2.76543465682679
+   ]
+  ],
+  [
+   4,
+   false,
+   0.2,
+   0.7,
+   [
+    0.09273534386995298,
+    0.4544127455164068,
+    1.1560855093542197,
+    3.2967664012594207
+   ]
+  ],
+  [
+   8,
+   true,
+   0.31,
+   1.3,
+   [
+    0.16368597281525343,
+    0.41808075908577497,
+    0.6790638877529204,
+    0.9719930973971806,
+    1.3221945180294472,
+    1.7743839615249393,
+    2.4396780234131388,
+    3.8251226785320727
+   ]
+  ],
+  [
+   16,
+   false,
+   0.0,
+   0.05,
+   [
+    4.604348879217614e-25,
+    9.656014856400065e-19,
+    4.815345952699274e-15,
+    2.0201977408596507e-12,
+    2.1752744943658734e-10,
+    9.880984936814058e-09,
+    2.4707345984667656e-07,
+    3.989589427749973e-06,
+    4.6133701025214244e-05,
+    0.0004100652824740545,
+    0.0029474282433281226,
+    0.01779366834243042,
+    0.09306924602140565,
+    0.4360648458930776,
+    1.9541966292348159,
+    13.495467736518018
+   ]
+  ],
+  [
+   3,
+   false,
+   0.0,
+   12.0,
+   [
+    0.7015925662593786,
+    0.9740353655201807,
+    1.3243720682204407
+   ]
+  ]
+ ]
+}

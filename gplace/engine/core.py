@@ -185,12 +185,15 @@ def lib(ns=NS):
     L.xp_gamma_gsl_error.argtypes = [ctypes.c_char_p, ctypes.c_size_t]; L.xp_gamma_gsl_error.restype = I
     L.xp_g_pairwise.argtypes = [V, V, V, V, V, V, I, I]
     L.xp_g_statd_pairwise.argtypes = [V, V, V, V, V, V, V, I, I]
+    L.xp_m_statd_pairwise.argtypes = [V, V, V, V, V, V, V, I, I]
     L.xp_g_pull_exponent.argtypes = [V, V, I, I, I]
     L.xp_g_edge_scores8.argtypes = [V, ctypes.c_long, ctypes.c_long, I, V, V, V, I, I, I, V, V, I]
     L.xp_g_edge_scores8.restype = I
     L.xp_gtt_new.argtypes = [I, I, V, V, V, V, V, V]; L.xp_gtt_new.restype = V
+    L.xp_mtt_new.argtypes = [I, I, V, V, V, V, V, V]; L.xp_mtt_new.restype = V
     L.xp_gtt_set.argtypes = [V, V, V, V, V, V, D, D, D]
     L.xp_set_gamma_fix.argtypes = [I]
+    L.xp_set_zero_rate_identity.argtypes = [I]
     L.xp_init()
     _libs[ns] = L
     return L

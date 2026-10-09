@@ -175,6 +175,12 @@ def __reference_files(parser):
                               '(as pplacer reads them; gamma rates). A --refpkg phylo_model takes precedence')
         grp.add_argument('--ref_dir', '-d', default=None,
                          help='directory containing the --tree, --ref_aln and --stats files')
+        grp.add_argument('--full_model', nargs='?', const='auto', default=None, metavar='MODEL_FILE',
+                         help='place with the complete model of an IQ-TREE or RAxML-NG fit instead of the part '
+                              'pplacer reads (results then differ from pplacer). MODEL_FILE: IQ-TREE\'s '
+                              '<prefix>.ckp.gz (its <prefix>.iqtree is read too) or RAxML-NG\'s '
+                              '<prefix>.raxml.bestModel (its <prefix>.raxml.log is read too); without it, the file '
+                              'next to the --stats .iqtree file or RAxML-NG log')
     with arg_group(parser, 'model settings (pplacer\'s; used only for what a --stats file does not set)') as grp:
         grp.add_argument('--model', '-m', default='LG',
                          help='substitution model name. pplacer v1.1.alpha19 always takes it from the '

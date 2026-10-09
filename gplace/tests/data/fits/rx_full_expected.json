@@ -1,0 +1,1000 @@
+{
+ "source": "RAxML-NG 2.0.3 fits (see README.md); fits: gPlace best placement and RAxML-NG log-likelihood (raxml-ng --evaluate --opt-model off --opt-branches off, 12 decimals) per query; gamma: [n, median, alpha, rates] of coraxlib corax_compute_gamma_cats",
+ "fits": {
+  "dna_HKY_FC_I_G4": {
+   "Q0_AF004885": {
+    "edge_num": 1,
+    "likelihood": -1810.75601968,
+    "raxmlng_likelihood": -1810.75601968384
+   },
+   "Q1_AF004885": {
+    "edge_num": 1,
+    "likelihood": -1852.4863347,
+    "raxmlng_likelihood": -1852.486334698491
+   },
+   "Q2_AF004885": {
+    "edge_num": 1,
+    "likelihood": -913.862987147,
+    "raxmlng_likelihood": -913.862987146597
+   },
+   "Q0_AF069670": {
+    "edge_num": 3,
+    "likelihood": -1831.98321277,
+    "raxmlng_likelihood": -1831.983212768963
+   },
+   "Q1_AF069670": {
+    "edge_num": 3,
+    "likelihood": -1777.5114654,
+    "raxmlng_likelihood": -1777.511465397856
+   },
+   "Q2_AF069670": {
+    "edge_num": 3,
+    "likelihood": -537.093568669,
+    "raxmlng_likelihood": -537.093568668933
+   },
+   "Q0_M62320": {
+    "edge_num": 0,
+    "likelihood": -1746.42390751,
+    "raxmlng_likelihood": -1746.423907507647
+   },
+   "Q1_M62320": {
+    "edge_num": 0,
+    "likelihood": -1783.80547999,
+    "raxmlng_likelihood": -1783.805479988094
+   },
+   "Q2_M62320": {
+    "edge_num": 0,
+    "likelihood": -641.312197429,
+    "raxmlng_likelihood": -641.31219742871
+   },
+   "Q0_U51190": {
+    "edge_num": 5,
+    "likelihood": -1792.88488172,
+    "raxmlng_likelihood": -1792.884881723901
+   },
+   "Q1_U51190": {
+    "edge_num": 5,
+    "likelihood": -1812.90452333,
+    "raxmlng_likelihood": -1812.90452333395
+   },
+   "Q2_U51190": {
+    "edge_num": 5,
+    "likelihood": -701.625466598,
+    "raxmlng_likelihood": -701.625466598008
+   },
+   "Q0_AF286241": {
+    "edge_num": 10,
+    "likelihood": -1809.88860072,
+    "raxmlng_likelihood": -1809.888600716416
+   },
+   "Q1_AF286241": {
+    "edge_num": 10,
+    "likelihood": -1782.27233354,
+    "raxmlng_likelihood": -1782.272333542986
+   },
+   "Q2_AF286241": {
+    "edge_num": 10,
+    "likelihood": -375.572042548,
+    "raxmlng_likelihood": -375.572042548371
+   },
+   "Q0_AF286238": {
+    "edge_num": 8,
+    "likelihood": -1803.03259686,
+    "raxmlng_likelihood": -1803.032596855783
+   },
+   "Q1_AF286238": {
+    "edge_num": 8,
+    "likelihood": -1856.58798375,
+    "raxmlng_likelihood": -1856.58798375133
+   },
+   "Q2_AF286238": {
+    "edge_num": 8,
+    "likelihood": -801.187510162,
+    "raxmlng_likelihood": -801.187510162098
+   },
+   "Q0_AF286237": {
+    "edge_num": 7,
+    "likelihood": -1781.35514991,
+    "raxmlng_likelihood": -1781.355149912316
+   },
+   "Q1_AF286237": {
+    "edge_num": 7,
+    "likelihood": -1799.01311339,
+    "raxmlng_likelihood": -1799.013113386945
+   },
+   "Q2_AF286237": {
+    "edge_num": 7,
+    "likelihood": -871.310902975,
+    "raxmlng_likelihood": -871.310902975283
+   },
+   "Q0_K03455": {
+    "edge_num": 27,
+    "likelihood": -1737.25663288,
+    "raxmlng_likelihood": -1737.256632881837
+   },
+   "Q1_K03455": {
+    "edge_num": 27,
+    "likelihood": -1717.6467343,
+    "raxmlng_likelihood": -1717.64673429652
+   },
+   "Q2_K03455": {
+    "edge_num": 27,
+    "likelihood": -855.168467015,
+    "raxmlng_likelihood": -855.168467015184
+   },
+   "Q0_M17451": {
+    "edge_num": 24,
+    "likelihood": -1789.88378166,
+    "raxmlng_likelihood": -1789.883781664045
+   },
+   "Q1_M17451": {
+    "edge_num": 24,
+    "likelihood": -1821.8224069,
+    "raxmlng_likelihood": -1821.822406897272
+   },
+   "Q2_M17451": {
+    "edge_num": 24,
+    "likelihood": -912.490807885,
+    "raxmlng_likelihood": -912.490807885208
+   },
+   "Q0_U63632": {
+    "edge_num": 26,
+    "likelihood": -1786.55473161,
+    "raxmlng_likelihood": -1786.554731610603
+   },
+   "Q1_U63632": {
+    "edge_num": 26,
+    "likelihood": -1802.68918533,
+    "raxmlng_likelihood": -1802.689185332111
+   },
+   "Q2_U63632": {
+    "edge_num": 26,
+    "likelihood": -585.985866168,
+    "raxmlng_likelihood": -585.985866167716
+   },
+   "Q0_U21135": {
+    "edge_num": 23,
+    "likelihood": -1805.67767508,
+    "raxmlng_likelihood": -1805.677675079892
+   },
+   "Q1_U21135": {
+    "edge_num": 23,
+    "likelihood": -1823.68872552,
+    "raxmlng_likelihood": -1823.688725524537
+   },
+   "Q2_U21135": {
+    "edge_num": 23,
+    "likelihood": -692.080451144,
+    "raxmlng_likelihood": -692.08045114449
+   },
+   "Q0_U52953": {
+    "edge_num": 20,
+    "likelihood": -1867.62324695,
+    "raxmlng_likelihood": -1867.623246949446
+   },
+   "Q1_U52953": {
+    "edge_num": 20,
+    "likelihood": -1808.99706529,
+    "raxmlng_likelihood": -1808.997065287814
+   },
+   "Q2_U52953": {
+    "edge_num": 20,
+    "likelihood": -942.128910727,
+    "raxmlng_likelihood": -942.128910726791
+   },
+   "Q0_AF110967": {
+    "edge_num": 16,
+    "likelihood": -1838.54321747,
+    "raxmlng_likelihood": -1838.543217467105
+   },
+   "Q1_AF110967": {
+    "edge_num": 16,
+    "likelihood": -1814.64238234,
+    "raxmlng_likelihood": -1814.64238233708
+   },
+   "Q2_AF110967": {
+    "edge_num": 16,
+    "likelihood": -865.357456559,
+    "raxmlng_likelihood": -865.357456559019
+   },
+   "Q0_U46016": {
+    "edge_num": 18,
+    "likelihood": -1791.5259615,
+    "raxmlng_likelihood": -1791.525961504904
+   },
+   "Q1_U46016": {
+    "edge_num": 18,
+    "likelihood": -1826.28313711,
+    "raxmlng_likelihood": -1826.283137107548
+   },
+   "Q2_U46016": {
+    "edge_num": 18,
+    "likelihood": -948.863736184,
+    "raxmlng_likelihood": -948.863736184477
+   },
+   "Q0_AF067155": {
+    "edge_num": 15,
+    "likelihood": -1811.27215196,
+    "raxmlng_likelihood": -1811.272151960345
+   },
+   "Q1_AF067155": {
+    "edge_num": 15,
+    "likelihood": -1788.57192344,
+    "raxmlng_likelihood": -1788.571923440109
+   },
+   "Q2_AF067155": {
+    "edge_num": 15,
+    "likelihood": -768.869107434,
+    "raxmlng_likelihood": -768.869107433797
+   },
+   "Q0_K03454": {
+    "edge_num": 36,
+    "likelihood": -1767.29818741,
+    "raxmlng_likelihood": -1767.298187405931
+   },
+   "Q1_K03454": {
+    "edge_num": 36,
+    "likelihood": -1795.49992782,
+    "raxmlng_likelihood": -1795.499927821454
+   },
+   "Q2_K03454": {
+    "edge_num": 36,
+    "likelihood": -548.461620461,
+    "raxmlng_likelihood": -548.461620460836
+   },
+   "Q0_M27323": {
+    "edge_num": 33,
+    "likelihood": -1772.42557682,
+    "raxmlng_likelihood": -1772.425576820869
+   },
+   "Q1_M27323": {
+    "edge_num": 33,
+    "likelihood": -1706.55913983,
+    "raxmlng_likelihood": -1706.559139830439
+   },
+   "Q2_M27323": {
+    "edge_num": 33,
+    "likelihood": -548.515144767,
+    "raxmlng_likelihood": -548.51514476707
+   },
+   "Q0_U88822": {
+    "edge_num": 35,
+    "likelihood": -1806.76508387,
+    "raxmlng_likelihood": -1806.765083873505
+   },
+   "Q1_U88822": {
+    "edge_num": 35,
+    "likelihood": -1802.72440188,
+    "raxmlng_likelihood": -1802.7244018822
+   },
+   "Q2_U88822": {
+    "edge_num": 35,
+    "likelihood": -555.882567131,
+    "raxmlng_likelihood": -555.88256713114
+   },
+   "Q0_U88824": {
+    "edge_num": 31,
+    "likelihood": -1794.28160512,
+    "raxmlng_likelihood": -1794.281605124342
+   },
+   "Q1_U88824": {
+    "edge_num": 31,
+    "likelihood": -1791.855451,
+    "raxmlng_likelihood": -1791.855450998966
+   },
+   "Q2_U88824": {
+    "edge_num": 31,
+    "likelihood": -852.809098053,
+    "raxmlng_likelihood": -852.809098052747
+   },
+   "Q0_AF077336": {
+    "edge_num": 13,
+    "likelihood": -1829.45771697,
+    "raxmlng_likelihood": -1829.457716969899
+   },
+   "Q1_AF077336": {
+    "edge_num": 13,
+    "likelihood": -1805.05933619,
+    "raxmlng_likelihood": -1805.059336191031
+   },
+   "Q2_AF077336": {
+    "edge_num": 13,
+    "likelihood": -577.02240279,
+    "raxmlng_likelihood": -577.022402790153
+   }
+  },
+  "dna_GTR_I_R3": {
+   "Q0_AF004885": {
+    "edge_num": 1,
+    "likelihood": -1804.63570208,
+    "raxmlng_likelihood": -1804.635702082806
+   },
+   "Q1_AF004885": {
+    "edge_num": 1,
+    "likelihood": -1845.55133835,
+    "raxmlng_likelihood": -1845.55133835218
+   },
+   "Q2_AF004885": {
+    "edge_num": 1,
+    "likelihood": -908.094305654,
+    "raxmlng_likelihood": -908.094305654278
+   },
+   "Q0_AF069670": {
+    "edge_num": 3,
+    "likelihood": -1825.86749886,
+    "raxmlng_likelihood": -1825.867498859077
+   },
+   "Q1_AF069670": {
+    "edge_num": 3,
+    "likelihood": -1771.44678313,
+    "raxmlng_likelihood": -1771.446783129946
+   },
+   "Q2_AF069670": {
+    "edge_num": 3,
+    "likelihood": -535.640902467,
+    "raxmlng_likelihood": -535.640902467023
+   },
+   "Q0_M62320": {
+    "edge_num": 0,
+    "likelihood": -1741.74921188,
+    "raxmlng_likelihood": -1741.749211883465
+   },
+   "Q1_M62320": {
+    "edge_num": 0,
+    "likelihood": -1778.33174607,
+    "raxmlng_likelihood": -1778.331746069161
+   },
+   "Q2_M62320": {
+    "edge_num": 0,
+    "likelihood": -638.952095614,
+    "raxmlng_likelihood": -638.952095613999
+   },
+   "Q0_U51190": {
+    "edge_num": 5,
+    "likelihood": -1787.09742074,
+    "raxmlng_likelihood": -1787.097420741638
+   },
+   "Q1_U51190": {
+    "edge_num": 5,
+    "likelihood": -1806.58551382,
+    "raxmlng_likelihood": -1806.585513815295
+   },
+   "Q2_U51190": {
+    "edge_num": 5,
+    "likelihood": -698.491352987,
+    "raxmlng_likelihood": -698.491352986963
+   },
+   "Q0_AF286241": {
+    "edge_num": 10,
+    "likelihood": -1802.49611099,
+    "raxmlng_likelihood": -1802.496110990749
+   },
+   "Q1_AF286241": {
+    "edge_num": 10,
+    "likelihood": -1775.69946186,
+    "raxmlng_likelihood": -1775.699461855937
+   },
+   "Q2_AF286241": {
+    "edge_num": 10,
+    "likelihood": -372.939760584,
+    "raxmlng_likelihood": -372.939760583614
+   },
+   "Q0_AF286238": {
+    "edge_num": 8,
+    "likelihood": -1797.28778928,
+    "raxmlng_likelihood": -1797.287789283337
+   },
+   "Q1_AF286238": {
+    "edge_num": 8,
+    "likelihood": -1850.51803408,
+    "raxmlng_likelihood": -1850.518034077646
+   },
+   "Q2_AF286238": {
+    "edge_num": 8,
+    "likelihood": -794.509879198,
+    "raxmlng_likelihood": -794.50987919765
+   },
+   "Q0_AF286237": {
+    "edge_num": 7,
+    "likelihood": -1774.63495858,
+    "raxmlng_likelihood": -1774.634958583074
+   },
+   "Q1_AF286237": {
+    "edge_num": 7,
+    "likelihood": -1791.44374367,
+    "raxmlng_likelihood": -1791.443743668597
+   },
+   "Q2_AF286237": {
+    "edge_num": 7,
+    "likelihood": -867.70379878,
+    "raxmlng_likelihood": -867.703798779892
+   },
+   "Q0_K03455": {
+    "edge_num": 27,
+    "likelihood": -1731.75237949,
+    "raxmlng_likelihood": -1731.75237949053
+   },
+   "Q1_K03455": {
+    "edge_num": 27,
+    "likelihood": -1712.13088422,
+    "raxmlng_likelihood": -1712.130884217663
+   },
+   "Q2_K03455": {
+    "edge_num": 27,
+    "likelihood": -848.533089754,
+    "raxmlng_likelihood": -848.533089753831
+   },
+   "Q0_M17451": {
+    "edge_num": 24,
+    "likelihood": -1784.59404564,
+    "raxmlng_likelihood": -1784.594045640266
+   },
+   "Q1_M17451": {
+    "edge_num": 24,
+    "likelihood": -1816.39210569,
+    "raxmlng_likelihood": -1816.392105688004
+   },
+   "Q2_M17451": {
+    "edge_num": 24,
+    "likelihood": -906.102655708,
+    "raxmlng_likelihood": -906.102655708117
+   },
+   "Q0_U63632": {
+    "edge_num": 26,
+    "likelihood": -1780.29982345,
+    "raxmlng_likelihood": -1780.299823445069
+   },
+   "Q1_U63632": {
+    "edge_num": 26,
+    "likelihood": -1796.76933589,
+    "raxmlng_likelihood": -1796.769335892405
+   },
+   "Q2_U63632": {
+    "edge_num": 26,
+    "likelihood": -584.608680738,
+    "raxmlng_likelihood": -584.608680737839
+   },
+   "Q0_U21135": {
+    "edge_num": 23,
+    "likelihood": -1798.51381269,
+    "raxmlng_likelihood": -1798.513812692825
+   },
+   "Q1_U21135": {
+    "edge_num": 23,
+    "likelihood": -1817.47568407,
+    "raxmlng_likelihood": -1817.475684065479
+   },
+   "Q2_U21135": {
+    "edge_num": 23,
+    "likelihood": -690.078760419,
+    "raxmlng_likelihood": -690.078760419488
+   },
+   "Q0_U52953": {
+    "edge_num": 20,
+    "likelihood": -1860.8789101,
+    "raxmlng_likelihood": -1860.878910099282
+   },
+   "Q1_U52953": {
+    "edge_num": 20,
+    "likelihood": -1802.50383089,
+    "raxmlng_likelihood": -1802.503830890692
+   },
+   "Q2_U52953": {
+    "edge_num": 20,
+    "likelihood": -935.524219676,
+    "raxmlng_likelihood": -935.524219676163
+   },
+   "Q0_AF110967": {
+    "edge_num": 16,
+    "likelihood": -1831.67904122,
+    "raxmlng_likelihood": -1831.67904122488
+   },
+   "Q1_AF110967": {
+    "edge_num": 16,
+    "likelihood": -1807.72596757,
+    "raxmlng_likelihood": -1807.725967570845
+   },
+   "Q2_AF110967": {
+    "edge_num": 16,
+    "likelihood": -860.9740465,
+    "raxmlng_likelihood": -860.974046500358
+   },
+   "Q0_U46016": {
+    "edge_num": 18,
+    "likelihood": -1786.0624063,
+    "raxmlng_likelihood": -1786.062406301929
+   },
+   "Q1_U46016": {
+    "edge_num": 18,
+    "likelihood": -1819.26521863,
+    "raxmlng_likelihood": -1819.265218629596
+   },
+   "Q2_U46016": {
+    "edge_num": 18,
+    "likelihood": -945.528449953,
+    "raxmlng_likelihood": -945.528449953102
+   },
+   "Q0_AF067155": {
+    "edge_num": 15,
+    "likelihood": -1806.05246726,
+    "raxmlng_likelihood": -1806.052467261447
+   },
+   "Q1_AF067155": {
+    "edge_num": 15,
+    "likelihood": -1782.79145882,
+    "raxmlng_likelihood": -1782.791458823897
+   },
+   "Q2_AF067155": {
+    "edge_num": 15,
+    "likelihood": -763.035407648,
+    "raxmlng_likelihood": -763.035407647675
+   },
+   "Q0_K03454": {
+    "edge_num": 36,
+    "likelihood": -1760.83023619,
+    "raxmlng_likelihood": -1760.830236194655
+   },
+   "Q1_K03454": {
+    "edge_num": 36,
+    "likelihood": -1789.0218473,
+    "raxmlng_likelihood": -1789.021847296909
+   },
+   "Q2_K03454": {
+    "edge_num": 36,
+    "likelihood": -543.919701217,
+    "raxmlng_likelihood": -543.919701217064
+   },
+   "Q0_M27323": {
+    "edge_num": 33,
+    "likelihood": -1767.51285458,
+    "raxmlng_likelihood": -1767.512854577876
+   },
+   "Q1_M27323": {
+    "edge_num": 33,
+    "likelihood": -1701.99598039,
+    "raxmlng_likelihood": -1701.995980387146
+   },
+   "Q2_M27323": {
+    "edge_num": 33,
+    "likelihood": -543.24882451,
+    "raxmlng_likelihood": -543.248824510115
+   },
+   "Q0_U88822": {
+    "edge_num": 35,
+    "likelihood": -1802.03732839,
+    "raxmlng_likelihood": -1802.037328389065
+   },
+   "Q1_U88822": {
+    "edge_num": 35,
+    "likelihood": -1796.43646991,
+    "raxmlng_likelihood": -1796.436469905234
+   },
+   "Q2_U88822": {
+    "edge_num": 35,
+    "likelihood": -555.967792592,
+    "raxmlng_likelihood": -555.967792591967
+   },
+   "Q0_U88824": {
+    "edge_num": 31,
+    "likelihood": -1788.45510694,
+    "raxmlng_likelihood": -1788.455106944413
+   },
+   "Q1_U88824": {
+    "edge_num": 31,
+    "likelihood": -1786.11047556,
+    "raxmlng_likelihood": -1786.110475560778
+   },
+   "Q2_U88824": {
+    "edge_num": 31,
+    "likelihood": -847.272289007,
+    "raxmlng_likelihood": -847.272289007279
+   },
+   "Q0_AF077336": {
+    "edge_num": 13,
+    "likelihood": -1823.64358895,
+    "raxmlng_likelihood": -1823.643588950094
+   },
+   "Q1_AF077336": {
+    "edge_num": 13,
+    "likelihood": -1798.71996067,
+    "raxmlng_likelihood": -1798.719960673129
+   },
+   "Q2_AF077336": {
+    "edge_num": 13,
+    "likelihood": -577.674977186,
+    "raxmlng_likelihood": -577.674977186413
+   }
+  },
+  "prot_LG4X": {
+   "GEMOTU_01484": {
+    "edge_num": 401,
+    "likelihood": -154307.205906,
+    "raxmlng_likelihood": -154307.20590627304
+   },
+   "GEMOTU_05359": {
+    "edge_num": 490,
+    "likelihood": -97731.0137247,
+    "raxmlng_likelihood": -97731.01372472895
+   },
+   "GEMOTU_05958": {
+    "edge_num": 153,
+    "likelihood": -160944.497907,
+    "raxmlng_likelihood": -160944.4979067614
+   },
+   "GEMOTU_14417": {
+    "edge_num": 490,
+    "likelihood": -159258.726925,
+    "raxmlng_likelihood": -159258.7269251335
+   },
+   "GEMOTU_17643": {
+    "edge_num": 490,
+    "likelihood": -162528.065567,
+    "raxmlng_likelihood": -162528.06556693863
+   },
+   "GEMOTU_27006": {
+    "edge_num": 409,
+    "likelihood": -154313.015003,
+    "raxmlng_likelihood": -154313.01500289753
+   },
+   "GOMCOTU_14244": {
+    "edge_num": 432,
+    "likelihood": -157867.198171,
+    "raxmlng_likelihood": -157867.1981707364
+   },
+   "MOTU40_028737": {
+    "edge_num": 457,
+    "likelihood": -155201.597497,
+    "raxmlng_likelihood": -155201.5974970068
+   },
+   "MOTU40_033985": {
+    "edge_num": 442,
+    "likelihood": -160209.226385,
+    "raxmlng_likelihood": -160209.2263854411
+   },
+   "MOTU40_076941": {
+    "edge_num": 325,
+    "likelihood": -155301.103642,
+    "raxmlng_likelihood": -155301.103642411
+   },
+   "MOTU40_089496": {
+    "edge_num": 194,
+    "likelihood": -134314.852436,
+    "raxmlng_likelihood": -134314.8524362237
+   },
+   "SPIREOTU_01041972": {
+    "edge_num": 450,
+    "likelihood": -112222.516757,
+    "raxmlng_likelihood": -112222.51675703081
+   },
+   "SPIREOTU_01104178": {
+    "edge_num": 435,
+    "likelihood": -156880.537537,
+    "raxmlng_likelihood": -156880.53753700678
+   },
+   "SPIREOTU_01456793": {
+    "edge_num": 119,
+    "likelihood": -150143.331509,
+    "raxmlng_likelihood": -150143.33150854093
+   },
+   "SPIREOTU_01754618": {
+    "edge_num": 442,
+    "likelihood": -122235.203545,
+    "raxmlng_likelihood": -122235.20354529642
+   },
+   "SPIREOTU_01759458": {
+    "edge_num": 419,
+    "likelihood": -72774.9923119,
+    "raxmlng_likelihood": -72774.9923118699
+   },
+   "BCRBG_01650": {
+    "edge_num": 422,
+    "likelihood": -115972.740368,
+    "raxmlng_likelihood": -115972.74036817905
+   },
+   "MOTU40_028641": {
+    "edge_num": 61,
+    "likelihood": -135711.192026,
+    "raxmlng_likelihood": -135711.19202581243
+   },
+   "MOTU40_047692": {
+    "edge_num": 143,
+    "likelihood": -126547.645256,
+    "raxmlng_likelihood": -126547.64525581393
+   },
+   "MOTU40_127942": {
+    "edge_num": 422,
+    "likelihood": -147426.964098,
+    "raxmlng_likelihood": -147426.96409771213
+   }
+  },
+  "prot_LG_G4a": {
+   "GEMOTU_01484": {
+    "edge_num": 401,
+    "likelihood": -155474.746913,
+    "raxmlng_likelihood": -155474.74691256945
+   },
+   "GEMOTU_05359": {
+    "edge_num": 490,
+    "likelihood": -98498.8566806,
+    "raxmlng_likelihood": -98498.85668058708
+   },
+   "GEMOTU_05958": {
+    "edge_num": 153,
+    "likelihood": -162218.540876,
+    "raxmlng_likelihood": -162218.5408755185
+   },
+   "GEMOTU_14417": {
+    "edge_num": 490,
+    "likelihood": -160567.913071,
+    "raxmlng_likelihood": -160567.91307144144
+   },
+   "GEMOTU_17643": {
+    "edge_num": 490,
+    "likelihood": -163825.599976,
+    "raxmlng_likelihood": -163825.59997599476
+   },
+   "GEMOTU_27006": {
+    "edge_num": 409,
+    "likelihood": -155629.727212,
+    "raxmlng_likelihood": -155629.72721184464
+   },
+   "GOMCOTU_14244": {
+    "edge_num": 432,
+    "likelihood": -159210.526565,
+    "raxmlng_likelihood": -159210.5265652972
+   },
+   "MOTU40_028737": {
+    "edge_num": 457,
+    "likelihood": -156492.881772,
+    "raxmlng_likelihood": -156492.88177180724
+   },
+   "MOTU40_033985": {
+    "edge_num": 442,
+    "likelihood": -161480.705355,
+    "raxmlng_likelihood": -161480.7053549626
+   },
+   "MOTU40_076941": {
+    "edge_num": 325,
+    "likelihood": -156500.415287,
+    "raxmlng_likelihood": -156500.41528694984
+   },
+   "MOTU40_089496": {
+    "edge_num": 194,
+    "likelihood": -135433.988635,
+    "raxmlng_likelihood": -135433.98863544397
+   },
+   "SPIREOTU_01041972": {
+    "edge_num": 450,
+    "likelihood": -113072.96051,
+    "raxmlng_likelihood": -113072.96050999043
+   },
+   "SPIREOTU_01104178": {
+    "edge_num": 435,
+    "likelihood": -158141.184215,
+    "raxmlng_likelihood": -158141.18421460714
+   },
+   "SPIREOTU_01456793": {
+    "edge_num": 119,
+    "likelihood": -151432.80805,
+    "raxmlng_likelihood": -151432.80805041429
+   },
+   "SPIREOTU_01754618": {
+    "edge_num": 442,
+    "likelihood": -123084.53145,
+    "raxmlng_likelihood": -123084.53144974419
+   },
+   "SPIREOTU_01759458": {
+    "edge_num": 419,
+    "likelihood": -73370.4615434,
+    "raxmlng_likelihood": -73370.46154335585
+   },
+   "BCRBG_01650": {
+    "edge_num": 422,
+    "likelihood": -117550.02334,
+    "raxmlng_likelihood": -117550.02334008101
+   },
+   "MOTU40_028641": {
+    "edge_num": 31,
+    "likelihood": -136846.286802,
+    "raxmlng_likelihood": -136846.2868017778
+   },
+   "MOTU40_047692": {
+    "edge_num": 143,
+    "likelihood": -128439.61342,
+    "raxmlng_likelihood": -128439.61341998326
+   },
+   "MOTU40_127942": {
+    "edge_num": 422,
+    "likelihood": -149208.236874,
+    "raxmlng_likelihood": -149208.23687367214
+   }
+  },
+  "prot_WAG_FC_IC_G4": {
+   "GEMOTU_01484": {
+    "edge_num": 401,
+    "likelihood": -154956.379685,
+    "raxmlng_likelihood": -154956.3796849405
+   },
+   "GEMOTU_05359": {
+    "edge_num": 490,
+    "likelihood": -98162.318283,
+    "raxmlng_likelihood": -98162.31828304045
+   },
+   "GEMOTU_05958": {
+    "edge_num": 153,
+    "likelihood": -161609.595121,
+    "raxmlng_likelihood": -161609.59512064303
+   },
+   "GEMOTU_14417": {
+    "edge_num": 490,
+    "likelihood": -159970.802028,
+    "raxmlng_likelihood": -159970.80202788426
+   },
+   "GEMOTU_17643": {
+    "edge_num": 490,
+    "likelihood": -163275.658895,
+    "raxmlng_likelihood": -163275.65889526263
+   },
+   "GEMOTU_27006": {
+    "edge_num": 409,
+    "likelihood": -155006.720373,
+    "raxmlng_likelihood": -155006.72037310948
+   },
+   "GOMCOTU_14244": {
+    "edge_num": 432,
+    "likelihood": -158557.073442,
+    "raxmlng_likelihood": -158557.07344238114
+   },
+   "MOTU40_028737": {
+    "edge_num": 457,
+    "likelihood": -155910.524473,
+    "raxmlng_likelihood": -155910.52447336866
+   },
+   "MOTU40_033985": {
+    "edge_num": 442,
+    "likelihood": -160893.662091,
+    "raxmlng_likelihood": -160893.66209082384
+   },
+   "MOTU40_076941": {
+    "edge_num": 325,
+    "likelihood": -155978.173511,
+    "raxmlng_likelihood": -155978.17351084034
+   },
+   "MOTU40_089496": {
+    "edge_num": 194,
+    "likelihood": -134972.205136,
+    "raxmlng_likelihood": -134972.20513640906
+   },
+   "SPIREOTU_01041972": {
+    "edge_num": 449,
+    "likelihood": -112657.423178,
+    "raxmlng_likelihood": -112657.42317773492
+   },
+   "SPIREOTU_01104178": {
+    "edge_num": 435,
+    "likelihood": -157566.21161,
+    "raxmlng_likelihood": -157566.21160996557
+   },
+   "SPIREOTU_01456793": {
+    "edge_num": 119,
+    "likelihood": -150873.42908,
+    "raxmlng_likelihood": -150873.42908048417
+   },
+   "SPIREOTU_01754618": {
+    "edge_num": 442,
+    "likelihood": -122632.321892,
+    "raxmlng_likelihood": -122632.32189178362
+   },
+   "SPIREOTU_01759458": {
+    "edge_num": 419,
+    "likelihood": -73050.3563125,
+    "raxmlng_likelihood": -73050.35631251226
+   },
+   "BCRBG_01650": {
+    "edge_num": 422,
+    "likelihood": -117980.514391,
+    "raxmlng_likelihood": -117980.51439083017
+   },
+   "MOTU40_028641": {
+    "edge_num": 36,
+    "likelihood": -136896.443676,
+    "raxmlng_likelihood": -136896.44367567595
+   },
+   "MOTU40_047692": {
+    "edge_num": 441,
+    "likelihood": -129102.494132,
+    "raxmlng_likelihood": -129102.49413178251
+   },
+   "MOTU40_127942": {
+    "edge_num": 422,
+    "likelihood": -149747.260521,
+    "raxmlng_likelihood": -149747.26052143588
+   }
+  }
+ },
+ "gamma": [
+  [
+   4,
+   false,
+   0.5,
+   [
+    0.03338775338361239,
+    0.2519159176270096,
+    0.8202684819537311,
+    2.894427847035647
+   ]
+  ],
+  [
+   4,
+   true,
+   0.5,
+   [
+    0.02907775442778477,
+    0.28071453392572127,
+    0.924773054819704,
+    2.76543465682679
+   ]
+  ],
+  [
+   8,
+   false,
+   0.05,
+   [
+    4.828009730374472e-19,
+    1.0125065434061751e-12,
+    5.049256193125323e-09,
+    2.1183314437983247e-06,
+    0.00022809949174963437,
+    0.010370548292879271,
+    0.2645670459572416,
+    7.724832182876417
+   ]
+  ],
+  [
+   16,
+   false,
+   1.7,
+   [
+    0.1007590033689318,
+    0.2150437996054198,
+    0.3076646314357583,
+    0.3950587048392489,
+    0.4817285104989426,
+    0.5702157338628475,
+    0.6625273129901821,
+    0.7606565476931944,
+    0.8669250784780731,
+    0.9843633463875978,
+    1.117309034096663,
+    1.2725538372843728,
+    1.461939277826553,
+    1.709528413560717,
+    2.0793666386865315,
+    3.0143601293849667
+   ]
+  ],
+  [
+   3,
+   true,
+   12.0,
+   [
+    0.7305049719056403,
+    0.9825421231167485,
+    1.2869529049776116
+   ]
+  ],
+  [
+   6,
+   false,
+   0.02,
+   [
+    6.921989051671909e-40,
+    1.5586933656886167e-24,
+    1.490784601747419e-15,
+    3.5098639380792307e-09,
+    0.00030740409841532504,
+    5.999692592391719
+   ]
+  ]
+ ]
+}

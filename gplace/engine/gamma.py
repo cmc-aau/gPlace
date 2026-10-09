@@ -43,8 +43,8 @@ class _GammaLib(object):
     """The engine seen through Gmix: the generic pairwise product, statd product and exponent pull
     take the site count and act on all R rates of each site (one exponent per site)."""
 
-    def __init__(self, lib, R):
-        self._l, self.R = lib, R
+    def __init__(self, lib, R, mstatd=None):
+        self._l, self.R, self.mstatd = lib, R, mstatd
 
     def __getattr__(self, name):
         return getattr(self._l, name)
@@ -53,7 +53,10 @@ class _GammaLib(object):
         self._l.xp_g_pairwise(dst, de, x, xe, y, ye, S, self.R)
 
     def xp_statd_pairwise(self, dst, de, statd, a, ae, b, be, S):
-        self._l.xp_g_statd_pairwise(dst, de, statd, a, ae, b, be, S, self.R)
+        if self.mstatd is not None:              # mixture: every category's own frequencies
+            self._l.xp_m_statd_pairwise(dst, de, P(self.mstatd), a, ae, b, be, S, self.R)
+        else:
+            self._l.xp_g_statd_pairwise(dst, de, statd, a, ae, b, be, S, self.R)
 
     def xp_pull_exponent(self, a, e, S, min_twoexp):
         self._l.xp_g_pull_exponent(a, e, S, self.R, min_twoexp)
@@ -73,8 +76,22 @@ class GammaMixin(object):
         self.occupied = np.ones(self.R, np.uint8)           # Diagd.multi_exp without a mask
         self.width = self.R * self.ns                        # doubles per site
         self.cat_v = np.ascontiguousarray(np.tile(np.arange(self.R, dtype=np.int32), self.nsites))
-        self.lib = _GammaLib(self.lib, self.R)
+        self.mix = self._mixture_setup() if getattr(self.model, 'components', None) else None
+        self.lib = _GammaLib(self.lib, self.R, self.mix['mstatd'] if self.mix else None)
         self.set_gamma_fix(False)
+        # --full_model: an invariable-sites category (rate 0) evolves with the exact identity (per process)
+        self.lib._l.xp_set_zero_rate_identity(1 if getattr(self.model, 'full_model', False) else 0)
+
+    def root_proximal(self):
+        """The root's proximal vector: ones (pplacer: likelihoods are the mean over the rate categories),
+        or, with category weights w (--full_model: +I, +R), R * w_r in category r, so that this mean is
+        the weighted sum. Every proximal vector, and so every likelihood, carries this factor once."""
+        w = getattr(self.model, 'weights', None)
+        if w is None:
+            return 1.0
+        v = np.empty((self.nsites, self.R, self.ns))
+        v[:] = (np.asarray(w, dtype=float) * self.R)[None, :, None]
+        return v.reshape(self.nsites, self.width)
 
     def set_gamma_fix(self, on):
         """pplacer's rescaling (False, default) or the underflow fix (True); per process, inherited
@@ -82,12 +99,34 @@ class GammaMixin(object):
         self.gamma_fix = bool(on)
         self.lib._l.xp_set_gamma_fix(1 if on else 0)
 
+    def _mixture_setup(self):
+        """A mixture (--full_model): every component's eigen-system, and per category the arrays of its
+        component (eigen-system, frequencies) for the engine; categories are grouped by component."""
+        eig = [core.build_diagd(Rk, list(pik), self.lib)[:3] for Rk, pik in self.model.components]
+        comp = self.model.cat_comp
+        mx = np.ascontiguousarray([eig[k][0] for k in comp], dtype=float)
+        ml = np.ascontiguousarray([eig[k][1] for k in comp], dtype=float)
+        mxit = np.ascontiguousarray([eig[k][2] for k in comp], dtype=float)
+        mstatd = np.ascontiguousarray([self.model.components[k][1] for k in comp], dtype=float)
+        blocks, c0 = [], 0
+        for c in range(1, len(comp) + 1):
+            if c == len(comp) or comp[c] != comp[c0]:
+                x, l, xit = (np.ascontiguousarray(a, dtype=float) for a in eig[comp[c0]])
+                blocks.append((c0, c, x, l, xit)); c0 = c
+        return {'mx': mx, 'ml': ml, 'mxit': mxit, 'mstatd': mstatd, 'blocks': blocks}
+
+    def _multi_exp(self, tensor, bl):
+        if self.mix is None:
+            return super()._multi_exp(tensor, bl)
+        for c0, c1, x, l, xit in self.mix['blocks']:     # each component's categories, its eigen-system
+            self.lib.xp_multi_exp(P(tensor[c0:c1]), P(x), P(l), P(xit), P(self.rates[c0:c1]), c1 - c0,
+                                  P(self.occupied[c0:c1]), bl)
+
     def evolve_t(self, dst, src, bl, tensor):
         """Gmix evolve_into: tensor_mul (gemmish, rate by rate) performs the same products and
         additions as the CAT evolve on nsites x R virtual sites where virtual site (s, r) uses
         rate r."""
-        self.lib.xp_multi_exp(P(tensor), P(self.x), P(self.l), P(self.xit), P(self.rates),
-                              self.R, P(self.occupied), bl)
+        self._multi_exp(tensor, bl)
         self.lib.xp_evolve(P(dst), P(src), self.nsites * self.R, P(self.cat_v), P(tensor))
 
     def leaf_lv(self, v):
@@ -126,7 +165,11 @@ class GammaMixin(object):
         reind = np.nonzero(core.informative(qrow))[0].astype(np.int32)
         m = len(reind)
         qm = np.ascontiguousarray(self.alpha.lut[qrow][reind])
-        tt = L.xp_gtt_new(m, self.R, P(self.statd), P(self.x), P(self.l), P(self.xit), P(self.rates), P(qm))
+        if self.mix:
+            mx = self.mix
+            tt = L.xp_mtt_new(m, self.R, P(mx['mstatd']), P(mx['mx']), P(mx['ml']), P(mx['mxit']), P(self.rates), P(qm))
+        else:
+            tt = L.xp_gtt_new(m, self.R, P(self.statd), P(self.x), P(self.l), P(self.xit), P(self.rates), P(qm))
         if not tt:
             raise GPlaceException(f'Could not set up the likelihood for {self.query_names[qi]}.')
         res = np.empty(4)

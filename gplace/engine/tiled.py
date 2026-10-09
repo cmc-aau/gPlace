@@ -279,7 +279,7 @@ class TiledPlacer(Placer):
             if not need_p:
                 return
             if r == self.root:
-                self.parr[kr] = 1.0; self.pexp[kr] = 0
+                self.parr[kr] = self.root_proximal(); self.pexp[kr] = 0
             else:
                 self.parr[kr] = self.bP[r]; self.pexp[kr] = self.bPe[r]
             count[0] = 0; done.clear()

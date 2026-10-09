@@ -24,13 +24,16 @@ replace the package's.
     the reference sequences must then be in the query file;
   * model: the package's phylo_model JSON, else a statistics file (tree_stats or -s; stats.py)
     read with the model settings of the command line (--gamma-cats, --gamma-alpha,
-    --model-freqs). As in pplacer, those settings and -s do not change a phylo_model.
+    --model-freqs). As in pplacer, those settings and -s do not change a phylo_model. An IQ-TREE
+    .iqtree file or a RAxML-NG log (which pplacer cannot read) gives the phylo_model that
+    `taxit create --tree-stats` writes from it. When the model comes from such a fit, fitted.py
+    says which parts of it pplacer does not use, or why it cannot be used.
 """
 
 import logging
 import os
 
-from gplace.engine import core
+from gplace.engine import core, fitted
 from gplace.exceptions import RefpkgMalformed, FileNotFound
 from gplace.fileio import read_json, read_text
 
@@ -54,8 +57,9 @@ class Reference(object):
     """Files of one reference: refpkg (directory, optional), tree / ref_aln / stats (paths that
     override the package's), ref_dir (prefix for those three, as pplacer's -d)."""
 
-    def __init__(self, refpkg=None, tree=None, ref_aln=None, stats=None, ref_dir=None, settings=None):
-        self.refpkg = refpkg
+    def __init__(self, refpkg=None, tree=None, ref_aln=None, stats=None, ref_dir=None, settings=None,
+                 full_model=None):
+        self.refpkg, self.full_model = refpkg, full_model
         self.settings = settings or ModelSettings()
         self.files = {}
         if refpkg:
@@ -87,6 +91,9 @@ class Reference(object):
             return self.refpkg
         return f'tree {self.files["tree"]}'
 
+    def tree_subject(self):
+        return f'The tree of {self.refpkg}' if self.refpkg else f'The tree {self.files["tree"]}'
+
     def _path(self, key):
         p = self.files[key]
         if not os.path.isfile(p):
@@ -111,9 +118,24 @@ class Reference(object):
 
     def phylo_model(self):
         """The model as a phylo_model dict (models.model_from_refpkg)."""
+        if self._pm is None and self.full_model:
+            self._pm = self._full_model()
         if self._pm is None:
+            from gplace.engine.models import validate_phylo_model
+            stats = self.files.get('tree_stats')
             if 'phylo_model' in self.files:
                 self._pm = read_json(self._path('phylo_model'))
+                fitted.check(self._pm, stats if stats and os.path.isfile(stats) else None, self.tree_subject(),
+                             validate_phylo_model)
+            elif 'tree_stats' in self.files and fitted.fit_program(self._path('tree_stats')):
+                # IQ-TREE or RAxML-NG: pplacer cannot read these files; the model is the one
+                # `taxit create --tree-stats` writes from them (the package pplacer would use)
+                from gplace.tools.taxit import phylo_model_of
+                program = fitted.fit_program(stats)
+                self._pm = phylo_model_of('IQTREE' if program == 'IQ-TREE' else 'RAxML-NG', stats)
+                logging.getLogger('timestamp').info(
+                    f'Model read from the {program} file {stats}, as `taxit create --tree-stats` writes it.')
+                fitted.check(self._pm, stats, self.tree_subject(), validate_phylo_model)
             elif 'tree_stats' in self.files:
                 from gplace.engine.stats import phylo_model_of_stats
                 if self.refpkg:
@@ -128,6 +150,45 @@ class Reference(object):
                                       else f'Reference package {self.refpkg} has no "phylo_model" or '
                                            f'"tree_stats" file.')
         return self._pm
+
+    def _full_model(self):
+        """The phylo_model of --full_model: the complete fit of IQ-TREE (iqtree.py) or RAxML-NG (raxmlng.py),
+        which models.py builds instead of a pplacer model."""
+        from gplace.engine import iqtree, raxmlng
+        stats = self.files.get('tree_stats')
+        if self.full_model == 'auto':
+            program = fitted.fit_program(stats) if stats and os.path.isfile(stats) else None
+            if program is None:
+                raise RefpkgMalformed('--full_model without a model file needs --stats with the fit\'s <prefix>.iqtree '
+                                      '(IQ-TREE: the checkpoint <prefix>.ckp.gz is read next to it) or '
+                                      '<prefix>.raxml.log (RAxML-NG: <prefix>.raxml.bestModel is read next to it).')
+            path = stats
+        else:
+            if not os.path.isfile(self.full_model):
+                raise FileNotFound(f'--full_model: no such file: {self.full_model}')
+            path = self.full_model
+            program = 'RAxML-NG' if '.raxml.' in os.path.basename(path) else 'IQ-TREE'
+        if program == 'RAxML-NG':
+            best, log = raxmlng.locate(path)
+            if best is None:
+                raise FileNotFound(f'--full_model: no RAxML-NG model file (<prefix>.raxml.bestModel) for {path}.')
+            if log is None and stats and os.path.isfile(stats) and fitted.fit_program(stats) == 'RAxML-NG':
+                log = stats                                  # the package's copy of the log
+            fit = raxmlng.read_fit(best, log)
+            words = raxmlng.describe(fit)
+        else:
+            ckp, iqt = iqtree.locate(path)
+            if ckp is None:
+                raise FileNotFound(f'--full_model: no IQ-TREE checkpoint (<prefix>.ckp.gz) for {path}.')
+            if iqt is None and stats and os.path.isfile(stats) and fitted.fit_program(stats) == 'IQ-TREE':
+                iqt = stats                                  # the package's copy of the .iqtree file
+            fit = iqtree.read_fit(ckp, iqt)
+            words = iqtree.describe(fit)
+        logging.getLogger('timestamp').info(f'Placing with the complete {program} model {words} '
+                                            f'(--full_model: results differ from pplacer).')
+        return {'subs_model': fit['matrix'], 'ras_model': 'gamma',
+                'gamma': {'n_cats': fit['categories'], 'alpha': fit['alpha'] if fit['alpha'] is not None else 1.0},
+                'empirical_frequencies': False, 'full_fit': fit}
 
     def tax_equipped(self):
         return 'taxonomy' in self.files and 'seq_info' in self.files

@@ -591,7 +591,7 @@ class Placer(object):
             ex.shutdown(); raise errs[0]
 
         kr = self.iidx[self.root]
-        self.parr[kr] = 1.0; self.pexp[kr] = 0
+        self.parr[kr] = self.root_proximal(); self.pexp[kr] = 0
         count[0] = 0; done.clear()
 
         def prox_task(v):
@@ -612,14 +612,22 @@ class Placer(object):
         if errs:
             raise errs[0]
 
+    def root_proximal(self):
+        """The root's proximal vector (Glv.set_unit): ones."""
+        return 1.0
+
+    def _multi_exp(self, tensor, bl):
+        """Diagd.multi_exp: the transition matrices of the occupied rates at branch length bl."""
+        self.lib.xp_multi_exp(P(tensor), P(self.x), P(self.l), P(self.xit), P(self.rates),
+                              self.nrates, P(self.occupied), bl)
+
     # ---------------------------------------------------------------- prefilter --
     def _query_tables(self):
         """Prefilter inputs: every query character evolved by start_pend under every rate
         (qevtab), and the queries as character codes."""
         ns, alpha = self.ns, self.alpha
         ten = np.zeros((self.nrates, ns, ns))
-        self.lib.xp_multi_exp(P(ten), P(self.x), P(self.l), P(self.xit), P(self.rates),
-                              self.nrates, P(self.occupied), self.search.start_pend)
+        self._multi_exp(ten, self.search.start_pend)
         nc = len(alpha.codes)
         self.qevtab = np.zeros((self.nrates, nc, ns))
         one = np.zeros((1, ns)); outv = np.empty((1, ns))

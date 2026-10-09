@@ -44,8 +44,12 @@ class Model(object):
     """subs_model, ras ('cat' or 'gamma'), alphabet, exchangeabilities R, frequencies statd, rates,
     site categories (CAT), gamma (alpha, n_cats) and empirical (bool)."""
 
-    def __init__(self, subs_model, ras, alphabet, R, statd, rates, site_categories, empirical, gamma=None):
+    def __init__(self, subs_model, ras, alphabet, R, statd, rates, site_categories, empirical, gamma=None,
+                 freqs_label=None, weights=None, full_model=False, components=None, cat_comp=None):
         self.subs_model, self.ras, self.alphabet = subs_model, ras, alphabet
+        self.freqs_label, self.full_model = freqs_label, full_model
+        self.components, self.cat_comp = components, cat_comp   # mixtures: [(R, statd)], category -> component
+        self.weights = weights            # rate-category weights (--full_model); None: equal, as pplacer
         self.R, self.statd, self.rates = R, statd, rates
         self.site_categories, self.empirical, self.gamma = site_categories, empirical, gamma
 
@@ -65,7 +69,7 @@ class Model(object):
     def describe(self):
         ras = (f'gamma ({self.n_rates} rates, alpha {self.gamma[0]:g})' if self.ras == 'gamma'
                else f'CAT ({self.n_rates} rates)')
-        freqs = 'empirical' if self.empirical else 'model'
+        freqs = self.freqs_label or ('empirical' if self.empirical else 'model')
         return f'{self.subs_model} + {ras}, {freqs} frequencies'
 
 
@@ -147,7 +151,9 @@ def read_phylo_model(refpkg_dir):
 
 
 def alphabet_of(pm):
-    """The alphabet a phylo_model JSON needs (GTR: DNA; WAG/LG/JTT: protein)."""
+    """The alphabet a phylo_model JSON needs (GTR: DNA; WAG/LG/JTT: protein; --full_model: the fit's)."""
+    if 'full_fit' in pm:
+        return pm['full_fit']['alphabet']
     subs = pm.get('subs_model')
     if subs == 'GTR':
         return core.DNA
@@ -155,6 +161,14 @@ def alphabet_of(pm):
         return core.PROTEIN
     raise RefpkgMalformed(f'Unsupported substitution model "{subs}": pplacer v1.1.alpha19 knows WAG, '
                           f'LG and JTT (protein) and GTR (DNA).')
+
+
+def validate_phylo_model(pm):
+    """The checks model_from_refpkg makes before building anything (where pplacer's model reading
+    stops): a known substitution model and rate model."""
+    alphabet_of(pm)
+    if pm.get('ras_model') not in ('Price-CAT', 'gamma'):
+        raise RefpkgMalformed(f'Unsupported rate model "{pm.get("ras_model")}": pplacer knows "Price-CAT" and "gamma".')
 
 
 def width_of(pm):
@@ -170,6 +184,20 @@ def model_from_refpkg(pm, ref_align, lib=None):
     [(name, sequence)] (uppercased; the model is built before pplacer's pre-masking)."""
     alphabet = alphabet_of(pm)
     subs, ras = pm.get('subs_model'), pm.get('ras_model')
+    if 'full_fit' in pm:                        # --full_model: the fitting program's matrix, frequencies and rates
+        fit = pm['full_fit']
+        if fit['program'].startswith('RAxML-NG'):
+            from gplace.engine import raxmlng
+            fit = raxmlng.complete(fit, ref_align)
+            rates, weights, comp = raxmlng.categories(fit)
+        else:
+            from gplace.engine.iqtree import categories, mixture_categories
+            rates, weights, comp = mixture_categories(fit) if fit.get('components') else categories(fit) + (None,)
+        equal = all(w == weights[0] for w in weights)
+        return Model(fit['matrix'], 'gamma', alphabet, fit['R'], list(fit['freqs']), rates, None, False,
+                     (fit['alpha'] if fit['alpha'] is not None else 1.0, len(rates)), freqs_label='fitted',
+                     weights=None if equal else weights, full_model=True,
+                     components=[(c['R'], c['freqs']) for c in fit['components']] if comp else None, cat_comp=comp)
     if subs == 'GTR':
         R = gtr_exchangeabilities(pm.get('subs_rates'))
         statd, empirical = emper_freq(ref_align, alphabet), True

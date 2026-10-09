@@ -1,0 +1,85 @@
+
+RAxML-NG v. 2.0.3 released on 03.09.2026 by The Exelixis Lab.
+Developed by: Oleksiy M. Kozlov and Alexandros Stamatakis.
+Contributors: Diego Darriba, Tomas Flouri, Benoit Morel, Sarah Lutteropp, Ben Bettisworth,
+              Julia Haag, Anastasis Togkousidis, Julius Wiegert, Christoph Stelz.
+Latest version: https://codeberg.org/amkozlov/raxml-ng
+Questions/problems/suggestions? Please visit: https://groups.google.com/forum/#!forum/raxml
+
+System: AMD EPYC Processor (with IBPB), 64 cores, 245 GB RAM
+
+RAxML-NG was called at 09-Oct-2026 09:51:02 as follows:
+
+/home/claudebot/.conda/envs/raxmlng/bin/raxml-ng --evaluate --msa /mnt/data/claude_playground/gPlace/gplace/tests/data/models/like_gtr.refpkg/aln.fasta --tree /mnt/data/claude_playground/gPlace/gplace/tests/data/models/like_gtr.refpkg/tree.nwk --model HKY+FC+I+G4 --threads 2 --seed 1 --prefix dna_HKY_FC_I_G4 --redo
+
+Analysis options:
+  run mode: Evaluate tree likelihood
+  start tree(s): user
+  random seed: 1
+  tip-inner: OFF
+  pattern compression: ON
+  per-rate scalers: OFF
+  site repeats: ON
+  logLH epsilon: general: 0.100000, brlen-triplet: 1000.000000
+  branch lengths: proportional (ML estimate, algorithm: NR-FAST)
+  FreeRate optimization method: AUTO
+  SIMD kernels: AVX2
+  parallelization: coarse-grained (auto), PTHREADS (2 threads), thread pinning: OFF
+
+WARNING: Running in REDO mode: existing checkpoints are ignored, and all result files will be overwritten!
+
+[00:00:00] Reading alignment from file: /mnt/data/claude_playground/gPlace/gplace/tests/data/models/like_gtr.refpkg/aln.fasta
+[00:00:00] Loaded alignment with 20 taxa and 216 sites
+
+Alignment comprises 1 partitions and 130 patterns
+
+Partition 0: noname
+Model: HKY+FC+I+G4m
+Alignment sites / patterns: 216 / 130
+Gaps: 0.72 %
+Invariant sites: 40.28 %
+
+
+NOTE: Binary MSA file created: dna_HKY_FC_I_G4.raxml.rba
+
+[00:00:00] Loading user starting tree(s) from: /mnt/data/claude_playground/gPlace/gplace/tests/data/models/like_gtr.refpkg/tree.nwk
+Parallelization scheme: 1 worker(s) x 2 thread(s)
+
+Parallel reduction/worker buffer size: 1 KB  / 0 KB
+
+[00:00:00] Data distribution: max. partitions/sites/weight per thread: 1 / 65 / 1040
+[00:00:00] Data distribution: max. searches per worker: 1
+
+Evaluating 1 trees
+
+[00:00:00] Tree #1, initial LogLikelihood: -1825.006118
+
+[00:00:00 -1825.006118] Initial branch length optimization
+[00:00:00 -1824.114972] Model parameter optimization (eps = 0.100000)
+
+[00:00:00] Tree #1, final logLikelihood: -1756.984413
+
+
+Optimized model parameters:
+
+   Partition 0: noname
+   Rate heterogeneity: GAMMA (4 cats, mean),  alpha: 1.493890 (ML),  weights&rates: (0.250000,0.224377) (0.250000,0.587536) (0.250000,1.050061) (0.250000,2.138026) 
+   P-inv (ML): 0.195313
+   Base frequencies (empirical): 0.425973 0.158778 0.186757 0.228491 
+   Substitution rates (ML): 1.000000 4.166402 1.000000 1.000000 4.166402 1.000000 
+
+
+Final LogLikelihood: -1756.984413
+
+AIC score: 3599.968826 / AICc score: 3621.968826 / BIC score: 3745.105797
+Free parameters (model + branch lengths): 43
+
+Best ML tree saved to: /mnt/data/claude_playground/pplacer_scampp/wildcard/raxmlng_full_poc/fits/dna_HKY_FC_I_G4.raxml.bestTree
+Optimized model saved to: /mnt/data/claude_playground/pplacer_scampp/wildcard/raxmlng_full_poc/fits/dna_HKY_FC_I_G4.raxml.bestModel
+
+Execution log saved to: /mnt/data/claude_playground/pplacer_scampp/wildcard/raxmlng_full_poc/fits/dna_HKY_FC_I_G4.raxml.log
+
+Analysis started: 09-Oct-2026 09:51:02 / finished: 09-Oct-2026 09:51:02
+
+Elapsed time: 0.032 seconds
+

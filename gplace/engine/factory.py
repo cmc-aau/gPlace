@@ -41,7 +41,9 @@ def new_placer(refpkg_dir, queries, cpus=1, fix_gamma_underflow=False, discard_n
         from gplace.engine.gamma import GammaPlacer
         placer = GammaPlacer(refpkg_dir, queries, cpus, discard_nonoverlapped=discard_nonoverlapped,
                              search=search, always_refine=always_refine, ranked_edges=ranked_edges)
-        placer.set_gamma_fix(fix_gamma_underflow)
+        # --full_model is not pplacer's model: always with the corrected rescaling (an invariable-sites
+        # category is zero at every variable site, which blocks pplacer's rescaling)
+        placer.set_gamma_fix(fix_gamma_underflow or placer.model.full_model)
         return placer
     return Placer(refpkg_dir, queries, cpus, discard_nonoverlapped=discard_nonoverlapped, search=search,
                   always_refine=always_refine, ranked_edges=ranked_edges)

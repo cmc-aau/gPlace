@@ -70,5 +70,26 @@ Major Changes:
 * Gamma models with 21 or more categories (GSL calls ``log1p``: glibc 2.19's, as in pplacer) are
   supported; a GSL error while the gamma rates are computed (e.g. alpha 10^6) stops gPlace with
   pplacer's message, as pplacer stops.
+* Trees fitted with IQ-TREE or RAxML-NG: packages built from them with ``taxit create`` place as in
+  pplacer (identical results), and the ``.iqtree`` file or RAxML-NG log can be given directly with
+  ``--stats``. gPlace warns about the parts of the fitted model pplacer does not use (``+I``, ``+R``,
+  ML-estimated frequencies, ...) and explains the fits pplacer cannot use.
+* ``place --full_model``: places with an IQ-TREE fit's complete model at its full precision (every
+  reversible DNA model and protein matrix of IQ-TREE 3, fitted frequencies, ``+G``, ``+I``, ``+R``, protein
+  mixtures C10-C60, EX2/EX3/EHO, UL2/UL3, LG4M, LG4X, ``MIX{...}``). Not pplacer's model, so results differ
+  from pplacer's; placement likelihoods equal IQ-TREE's own (83 fits). The default is unchanged.
+* ``place --full_model`` with RAxML-NG fits: reads ``<prefix>.raxml.bestModel`` as RAxML-NG reads it (every
+  DNA model and protein matrix of RAxML-NG 2, ``PROTGTR``, ``+FC``/``+FE``/``+FU``, ``+G`` with mean or median
+  rates computed with RAxML-NG's gamma algorithm, ``+I``/``+IC``, ``+R``, LG4M, LG4X). Placement likelihoods
+  equal RAxML-NG's own to the jplace file's precision (89 fits). ``--full_model`` also takes the
+  ``.raxml.bestModel`` file, or finds it next to a ``--stats`` RAxML-NG log.
+* ``place --full_model`` with IQ-TREE fits: gamma rates computed with IQ-TREE's own algorithm (Yang's, as in
+  IQ-TREE's ``RateGamma``; bit-identical) instead of pplacer's, so placement likelihoods equal IQ-TREE's to
+  its printed precision; median gamma rates (``--gamma-median``) are now supported. Reference packages and
+  pplacer's models keep pplacer's gamma rates.
+* ``place --full_model``: an invariable-sites category (``+I``) now evolves with the exact identity matrix
+  (it was the eigen-decomposition's, exact only to rounding, which at variable sites added noise to tiny
+  likelihoods): IQ-TREE LG+I fits now agree with IQ-TREE to 1e-7 instead of 3.4e-5. pplacer models are
+  unchanged.
 * Every file gPlace opens is closed explicitly (``gplace.fileio`` helpers or ``with`` blocks): no
   ``ResourceWarning: unclosed file`` in the unit-test log.

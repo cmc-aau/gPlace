@@ -191,7 +191,8 @@ class OptionsParser(object):
         if options.refpkg:
             self._check_refpkg(options.refpkg)
         settings = ModelSettings.from_options(options)
-        ref = Reference(options.refpkg, options.tree, options.ref_aln, options.stats, options.ref_dir, settings)
+        ref = Reference(options.refpkg, options.tree, options.ref_aln, options.stats, options.ref_dir, settings,
+                        full_model=getattr(options, 'full_model', None))
         for what, key, given in (('--tree', 'tree', options.tree), ('--ref_aln', 'aln_fasta', options.ref_aln),
                                  ('--stats', 'tree_stats', options.stats)):
             if given:

@@ -1,0 +1,90 @@
+
+RAxML-NG v. 2.0.3 released on 03.09.2026 by The Exelixis Lab.
+Developed by: Oleksiy M. Kozlov and Alexandros Stamatakis.
+Contributors: Diego Darriba, Tomas Flouri, Benoit Morel, Sarah Lutteropp, Ben Bettisworth,
+              Julia Haag, Anastasis Togkousidis, Julius Wiegert, Christoph Stelz.
+Latest version: https://codeberg.org/amkozlov/raxml-ng
+Questions/problems/suggestions? Please visit: https://groups.google.com/forum/#!forum/raxml
+
+System: AMD EPYC Processor (with IBPB), 64 cores, 245 GB RAM
+
+RAxML-NG was called at 09-Oct-2026 09:52:37 as follows:
+
+/home/claudebot/.conda/envs/raxmlng/bin/raxml-ng --evaluate --msa /mnt/data/claude_playground/gPlace/gplace/tests/data/mini.refpkg/mini_msa.fa --tree /mnt/data/claude_playground/pplacer_scampp/wildcard/iqtree_raxmlng_poc/mini_tree_clean.nwk --model WAG+FC+IC+G4 --threads 2 --seed 1 --prefix prot_WAG_FC_IC_G4 --redo
+
+Analysis options:
+  run mode: Evaluate tree likelihood
+  start tree(s): user
+  random seed: 1
+  tip-inner: OFF
+  pattern compression: ON
+  per-rate scalers: OFF
+  site repeats: ON
+  logLH epsilon: general: 0.100000, brlen-triplet: 1000.000000
+  branch lengths: proportional (ML estimate, algorithm: NR-FAST)
+  FreeRate optimization method: AUTO
+  SIMD kernels: AVX2
+  parallelization: coarse-grained (auto), PTHREADS (2 threads), thread pinning: OFF
+
+WARNING: Running in REDO mode: existing checkpoints are ignored, and all result files will be overwritten!
+
+[00:00:00] Reading alignment from file: /mnt/data/claude_playground/gPlace/gplace/tests/data/mini.refpkg/mini_msa.fa
+[00:00:00] Loaded alignment with 247 taxa and 5036 sites
+
+WARNING: Fully undetermined columns found: 145
+
+NOTE: Reduced alignment (with duplicates and gap-only sites/taxa removed) 
+NOTE: was saved to: /mnt/data/claude_playground/pplacer_scampp/wildcard/raxmlng_full_poc/fits/prot_WAG_FC_IC_G4.raxml.reduced.phy
+
+Alignment comprises 1 partitions and 3984 patterns
+
+Partition 0: noname
+Model: WAG+FC+IC+G4m
+Alignment sites / patterns: 4891 / 3984
+Gaps: 7.35 %
+Invariant sites: 49.27 %
+
+
+NOTE: Binary MSA file created: prot_WAG_FC_IC_G4.raxml.rba
+
+[00:00:00] Loading user starting tree(s) from: /mnt/data/claude_playground/pplacer_scampp/wildcard/iqtree_raxmlng_poc/mini_tree_clean.nwk
+Parallelization scheme: 1 worker(s) x 2 thread(s)
+
+Parallel reduction/worker buffer size: 1 KB  / 0 KB
+
+[00:00:00] Data distribution: max. partitions/sites/weight per thread: 1 / 1992 / 159360
+[00:00:00] Data distribution: max. searches per worker: 1
+
+Evaluating 1 trees
+
+[00:00:00] Tree #1, initial LogLikelihood: -165289.546020
+
+[00:00:00 -165289.546020] Initial branch length optimization
+[00:00:16 -164657.214236] Model parameter optimization (eps = 0.100000)
+
+[00:00:34] Tree #1, final logLikelihood: -164544.627469
+
+
+Optimized model parameters:
+
+   Partition 0: noname
+   Rate heterogeneity: GAMMA (4 cats, mean),  alpha: 0.763807 (ML),  weights&rates: (0.250000,0.087838) (0.250000,0.392144) (0.250000,0.946399) (0.250000,2.573620) 
+   P-inv (empirical): 0.492742
+   Base frequencies (empirical): 0.097305 0.059103 0.031629 0.052406 0.007572 0.047734 0.064757 0.056670 0.015300 0.080539 0.121298 0.050810 0.018382 0.028738 0.038242 0.050086 0.056107 0.005045 0.026550 0.091728 
+   Substitution rates (model): 0.551571 0.509848 0.738998 1.027040 0.908598 1.582850 1.416720 0.316954 0.193335 0.397915 0.906265 0.893496 0.210494 1.438550 3.370790 2.121110 0.113133 0.240735 2.006010 0.635346 0.147304 0.528191 3.035500 0.439157 0.584665 2.137150 0.186979 0.497671 5.351420 0.683162 0.102711 0.679489 1.224190 0.554413 1.163920 0.381533 0.251849 5.429420 0.265256 1.543640 0.947198 1.125560 3.956290 0.554236 0.131528 3.012010 0.198221 0.096162 0.195081 3.974230 2.030060 0.071917 1.086000 0.196246 0.030295 0.616783 6.174160 0.865584 0.930676 0.039437 0.084805 0.479855 0.103754 0.046730 0.423984 1.071760 0.374866 0.129767 0.325711 0.152335 0.098818 0.021352 0.306674 0.248972 0.170135 0.384287 0.074034 0.390482 0.398020 0.109404 1.407660 0.512984 0.717070 0.543833 1.002140 5.469470 0.330052 4.294110 0.113917 0.869489 3.894900 1.545260 0.099921 0.933372 1.028870 0.857928 0.215737 0.227710 0.301281 0.567717 0.570025 0.127395 0.154263 2.584430 0.315124 0.081134 0.682355 0.704939 0.822765 0.156557 0.196303 0.588731 0.249410 0.030450 0.061304 0.373558 0.174100 0.049931 0.243570 1.341820 0.225833 0.336983 0.103604 0.187247 0.138190 0.499462 0.890432 0.404141 0.679371 0.696198 0.740169 0.473307 0.262569 3.873440 0.118358 3.170970 0.323832 4.257460 1.059470 0.099929 0.319440 1.458160 0.212483 0.420170 7.821300 0.257555 4.854020 2.115170 0.415844 0.344739 0.326622 0.665309 0.398618 1.800340 0.934276 0.088836 0.556896 0.967130 1.386980 0.137505 0.133264 0.305434 1.190630 0.171329 0.493905 1.516120 0.515706 0.428437 2.058450 0.161444 0.545931 0.171903 1.529640 6.454280 0.649892 1.613280 0.795384 0.139405 0.216046 0.314887 4.378020 0.523742 0.786993 0.232739 0.110864 0.291148 1.388230 2.485390 0.365369 0.314730 
+
+
+Final LogLikelihood: -164544.627469
+
+AIC score: 330113.254937 / AICc score: 330233.243973 / BIC score: 333438.772792
+Free parameters (model + branch lengths): 512
+
+Best ML tree saved to: /mnt/data/claude_playground/pplacer_scampp/wildcard/raxmlng_full_poc/fits/prot_WAG_FC_IC_G4.raxml.bestTree
+Optimized model saved to: /mnt/data/claude_playground/pplacer_scampp/wildcard/raxmlng_full_poc/fits/prot_WAG_FC_IC_G4.raxml.bestModel
+
+Execution log saved to: /mnt/data/claude_playground/pplacer_scampp/wildcard/raxmlng_full_poc/fits/prot_WAG_FC_IC_G4.raxml.log
+
+Analysis started: 09-Oct-2026 09:52:37 / finished: 09-Oct-2026 09:53:11
+
+Elapsed time: 34.262 seconds
+
