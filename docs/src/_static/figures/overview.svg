@@ -2,114 +2,114 @@
 <title id="title">gPlace places query genomes on a reference tree</title>
 <desc id="desc">Three aligned query genomes move onto edges of a reference tree. Each placement is written to the jplace file, with every number identical to pplacer's.</desc>
 <style>text{font-family:"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif}.mono{font-family:Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace}.static-only{display:none}@keyframes growX{from{transform:scaleX(0)}}@keyframes growY{from{transform:scaleY(0)}}@keyframes fadein{from{opacity:0}}@keyframes draw{from{stroke-dashoffset:1}}.a1{animation:ka1 12s ease-in-out infinite}@keyframes ka1{0.000%{opacity:0}17.083%{opacity:0}19.583%{opacity:1}95.000%{opacity:1}97.500%{opacity:0}100.000%{opacity:0}}.a2{animation:ka2 12s ease-in-out infinite}@keyframes ka2{0.000%{opacity:0;transform:translate(-313.2px,-14px)}2.500%{opacity:1;transform:translate(-313.2px,-14px)}6.667%{opacity:1;transform:translate(-313.2px,-14px)}17.500%{opacity:1;transform:translate(0px,0px)}95.000%{opacity:1;transform:translate(0px,0px)}97.500%{opacity:0;transform:translate(0px,0px)}100.000%{opacity:0;transform:translate(0px,0px)}}.a3{animation:ka3 12s ease-in-out infinite}@keyframes ka3{0.000%{opacity:0}36.250%{opacity:0}38.750%{opacity:1}95.000%{opacity:1}97.500%{opacity:0}100.000%{opacity:0}}.a4{animation:ka4 12s ease-in-out infinite}@keyframes ka4{0.000%{opacity:0;transform:translate(-234px,-26.62px)}2.500%{opacity:1;transform:translate(-234px,-26.62px)}25.833%{opacity:1;transform:translate(-234px,-26.62px)}36.667%{opacity:1;transform:translate(0px,0px)}95.000%{opacity:1;transform:translate(0px,0px)}97.500%{opacity:0;transform:translate(0px,0px)}100.000%{opacity:0;transform:translate(0px,0px)}}.a5{animation:ka5 12s ease-in-out infinite}@keyframes ka5{0.000%{opacity:0}55.417%{opacity:0}57.917%{opacity:1}95.000%{opacity:1}97.500%{opacity:0}100.000%{opacity:0}}.a6{animation:ka6 12s ease-in-out infinite}@keyframes ka6{0.000%{opacity:0;transform:translate(-270px,-30.75px)}2.500%{opacity:1;transform:translate(-270px,-30.75px)}45.000%{opacity:1;transform:translate(-270px,-30.75px)}55.833%{opacity:1;transform:translate(0px,0px)}95.000%{opacity:1;transform:translate(0px,0px)}97.500%{opacity:0;transform:translate(0px,0px)}100.000%{opacity:0;transform:translate(0px,0px)}}.a7{animation:ka7 12s ease-in-out infinite}@keyframes ka7{0.000%{opacity:0}19.583%{opacity:0}22.083%{opacity:1}95.000%{opacity:1}97.500%{opacity:0}100.000%{opacity:0}}.a8{animation:ka8 12s ease-in-out infinite}@keyframes ka8{0.000%{opacity:0}38.750%{opacity:0}41.250%{opacity:1}95.000%{opacity:1}97.500%{opacity:0}100.000%{opacity:0}}.a9{animation:ka9 12s ease-in-out infinite}@keyframes ka9{0.000%{opacity:0}57.917%{opacity:0}60.417%{opacity:1}95.000%{opacity:1}97.500%{opacity:0}100.000%{opacity:0}}.a10{animation:ka10 12s ease-in-out infinite}@keyframes ka10{0.000%{opacity:0}68.333%{opacity:0}70.833%{opacity:1}95.000%{opacity:1}97.500%{opacity:0}100.000%{opacity:0}}@media (prefers-reduced-motion:reduce){*{animation:none!important}.transient{display:none}.static-only{display:inline}}</style>
-<text x="30" y="34" font-size="15" fill="#2f3b45" font-weight="bold">Query alignment</text>
-<text x="30" y="52" font-size="12" fill="#66727c">aligned genomes to place</text>
-<text x="300" y="34" font-size="15" fill="#2f3b45" font-weight="bold">Reference tree</text>
-<text x="300" y="52" font-size="12" fill="#66727c">from the reference package</text>
-<text x="660" y="34" font-size="15" fill="#2f3b45" font-weight="bold">jplace file</text>
-<text x="660" y="52" font-size="12" fill="#66727c">pplacer's output format</text>
-<path d="M538 96.75 V84 H610" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="610" cy="84" r="3" fill="#2b8a5a"/>
-<path d="M538 96.75 V109.5 H610" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="610" cy="109.5" r="3" fill="#2b8a5a"/>
-<path d="M466 115.88 V96.75 H538" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M466 115.88 V135 H610" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="610" cy="135" r="3" fill="#2b8a5a"/>
-<path d="M322 165.28 V115.88 H466" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M466 179.62 V160.5 H610" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="610" cy="160.5" r="3" fill="#2b8a5a"/>
-<path d="M538 198.75 V186 H610" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="610" cy="186" r="3" fill="#2b8a5a"/>
-<path d="M538 198.75 V211.5 H610" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="610" cy="211.5" r="3" fill="#2b8a5a"/>
-<path d="M466 179.62 V198.75 H538" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M394 214.69 V179.62 H466" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M538 249.75 V237 H610" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="610" cy="237" r="3" fill="#2b8a5a"/>
-<path d="M538 249.75 V262.5 H610" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="610" cy="262.5" r="3" fill="#2b8a5a"/>
-<path d="M394 214.69 V249.75 H538" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M322 165.28 V214.69 H394" fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-<line x1="308" y1="165.28" x2="322" y2="165.28" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round"/>
-<text x="30" y="90" font-size="11.5" fill="#66727c" class="mono">genome A</text>
-<rect x="30" y="97" width="6" height="14" fill="#eef1f3" rx="1"/>
-<rect x="37" y="97" width="6" height="14" fill="#d9bfd6" rx="1"/>
-<rect x="44" y="97" width="6" height="14" fill="#d9bfd6" rx="1"/>
-<rect x="51" y="97" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="58" y="97" width="6" height="14" fill="#a8d5ba" rx="1"/>
-<rect x="65" y="97" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="72" y="97" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="79" y="97" width="6" height="14" fill="#eef1f3" rx="1"/>
-<rect x="86" y="97" width="6" height="14" fill="#eef1f3" rx="1"/>
-<rect x="93" y="97" width="6" height="14" fill="#eef1f3" rx="1"/>
-<rect x="100" y="97" width="6" height="14" fill="#a8d5ba" rx="1"/>
-<rect x="107" y="97" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="114" y="97" width="6" height="14" fill="#a8d5ba" rx="1"/>
-<rect x="121" y="97" width="6" height="14" fill="#a8d5ba" rx="1"/>
-<rect x="128" y="97" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="135" y="97" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="142" y="97" width="6" height="14" fill="#eef1f3" rx="1"/>
-<rect x="149" y="97" width="6" height="14" fill="#a8d5ba" rx="1"/>
-<rect x="156" y="97" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="163" y="97" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="170" y="97" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="177" y="97" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<line x1="509.2" y1="135" x2="509.2" y2="118" stroke="#e39b2d" stroke-width="2.5" stroke-dasharray="3 3" class="a1"/>
-<circle cx="509.2" cy="118" r="5.5" fill="#e39b2d" class="a2"/>
-<text x="30" y="156" font-size="11.5" fill="#66727c" class="mono">genome B</text>
-<rect x="30" y="163" width="6" height="14" fill="#cdd3d8" rx="1"/>
-<rect x="37" y="163" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="44" y="163" width="6" height="14" fill="#a8d5ba" rx="1"/>
-<rect x="51" y="163" width="6" height="14" fill="#d9bfd6" rx="1"/>
-<rect x="58" y="163" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="65" y="163" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="72" y="163" width="6" height="14" fill="#a8d5ba" rx="1"/>
-<rect x="79" y="163" width="6" height="14" fill="#eef1f3" rx="1"/>
-<rect x="86" y="163" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="93" y="163" width="6" height="14" fill="#cdd3d8" rx="1"/>
-<rect x="100" y="163" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="107" y="163" width="6" height="14" fill="#d9bfd6" rx="1"/>
-<rect x="114" y="163" width="6" height="14" fill="#d9bfd6" rx="1"/>
-<rect x="121" y="163" width="6" height="14" fill="#cdd3d8" rx="1"/>
-<rect x="128" y="163" width="6" height="14" fill="#d9bfd6" rx="1"/>
-<rect x="135" y="163" width="6" height="14" fill="#cdd3d8" rx="1"/>
-<rect x="142" y="163" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="149" y="163" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="156" y="163" width="6" height="14" fill="#cdd3d8" rx="1"/>
-<rect x="163" y="163" width="6" height="14" fill="#d9bfd6" rx="1"/>
-<rect x="170" y="163" width="6" height="14" fill="#cdd3d8" rx="1"/>
-<rect x="177" y="163" width="6" height="14" fill="#a8d5ba" rx="1"/>
-<line x1="430" y1="179.62" x2="430" y2="196.62" stroke="#e39b2d" stroke-width="2.5" stroke-dasharray="3 3" class="a3"/>
-<circle cx="430" cy="196.62" r="5.5" fill="#e39b2d" class="a4"/>
-<text x="30" y="222" font-size="11.5" fill="#66727c" class="mono">genome C</text>
-<rect x="30" y="229" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="37" y="229" width="6" height="14" fill="#cdd3d8" rx="1"/>
-<rect x="44" y="229" width="6" height="14" fill="#eef1f3" rx="1"/>
-<rect x="51" y="229" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="58" y="229" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="65" y="229" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="72" y="229" width="6" height="14" fill="#eef1f3" rx="1"/>
-<rect x="79" y="229" width="6" height="14" fill="#a8d5ba" rx="1"/>
-<rect x="86" y="229" width="6" height="14" fill="#cdd3d8" rx="1"/>
-<rect x="93" y="229" width="6" height="14" fill="#cdd3d8" rx="1"/>
-<rect x="100" y="229" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="107" y="229" width="6" height="14" fill="#a8d5ba" rx="1"/>
-<rect x="114" y="229" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="121" y="229" width="6" height="14" fill="#b9cfe6" rx="1"/>
-<rect x="128" y="229" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="135" y="229" width="6" height="14" fill="#a8d5ba" rx="1"/>
-<rect x="142" y="229" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="149" y="229" width="6" height="14" fill="#eef1f3" rx="1"/>
-<rect x="156" y="229" width="6" height="14" fill="#d9bfd6" rx="1"/>
-<rect x="163" y="229" width="6" height="14" fill="#f0cf96" rx="1"/>
-<rect x="170" y="229" width="6" height="14" fill="#d9bfd6" rx="1"/>
-<rect x="177" y="229" width="6" height="14" fill="#cdd3d8" rx="1"/>
-<line x1="466" y1="249.75" x2="466" y2="266.75" stroke="#e39b2d" stroke-width="2.5" stroke-dasharray="3 3" class="a5"/>
-<circle cx="466" cy="266.75" r="5.5" fill="#e39b2d" class="a6"/>
-<rect x="660" y="72" width="220" height="196" fill="#f6f8f9" stroke="#e6eaed" rx="8"/>
-<text x="676" y="98" font-size="12" fill="#66727c" class="mono">"placements": [</text>
-<g class="a7"><circle cx="682" cy="122" r="4.5" fill="#e39b2d"/><text x="694" y="126" font-size="12" fill="#2f3b45" class="mono">genome A: edge 3</text></g>
-<g class="a8"><circle cx="682" cy="150" r="4.5" fill="#e39b2d"/><text x="694" y="154" font-size="12" fill="#2f3b45" class="mono">genome B: edge 9</text></g>
-<g class="a9"><circle cx="682" cy="178" r="4.5" fill="#e39b2d"/><text x="694" y="182" font-size="12" fill="#2f3b45" class="mono">genome C: edge 12</text></g>
-<g class="a10"><circle cx="684" cy="222" r="8" fill="#2b8a5a"/><path d="M680.4 222 l2.56 2.56 l4.64 -4.96" fill="none" stroke="#ffffff" stroke-width="2.08" stroke-linecap="round" stroke-linejoin="round"/><text x="700" y="218" font-size="13" fill="#2b8a5a" font-weight="bold">identical to pplacer</text><text x="700" y="236" font-size="11.5" fill="#66727c">every number, digit for digit</text></g>
+<text x="30" y="34" font-size="15" fill="#2a2018" font-weight="bold">Query alignment</text>
+<text x="30" y="52" font-size="12" fill="#6b6258">aligned genomes to place</text>
+<text x="300" y="34" font-size="15" fill="#2a2018" font-weight="bold">Reference tree</text>
+<text x="300" y="52" font-size="12" fill="#6b6258">from the reference package</text>
+<text x="660" y="34" font-size="15" fill="#2a2018" font-weight="bold">jplace file</text>
+<text x="660" y="52" font-size="12" fill="#6b6258">pplacer's output format</text>
+<path d="M538 96.75 V84 H610" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="610" cy="84" r="3" fill="#2a2018"/>
+<path d="M538 96.75 V109.5 H610" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="610" cy="109.5" r="3" fill="#2a2018"/>
+<path d="M466 115.88 V96.75 H538" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M466 115.88 V135 H610" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="610" cy="135" r="3" fill="#2a2018"/>
+<path d="M322 165.28 V115.88 H466" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M466 179.62 V160.5 H610" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="610" cy="160.5" r="3" fill="#2a2018"/>
+<path d="M538 198.75 V186 H610" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="610" cy="186" r="3" fill="#2a2018"/>
+<path d="M538 198.75 V211.5 H610" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="610" cy="211.5" r="3" fill="#2a2018"/>
+<path d="M466 179.62 V198.75 H538" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M394 214.69 V179.62 H466" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M538 249.75 V237 H610" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="610" cy="237" r="3" fill="#2a2018"/>
+<path d="M538 249.75 V262.5 H610" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="610" cy="262.5" r="3" fill="#2a2018"/>
+<path d="M394 214.69 V249.75 H538" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M322 165.28 V214.69 H394" fill="none" stroke="#2a2018" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="308" y1="165.28" x2="322" y2="165.28" stroke="#2a2018" stroke-width="3" stroke-linecap="round"/>
+<text x="30" y="90" font-size="11.5" fill="#6b6258" class="mono">genome A</text>
+<rect x="30" y="97" width="6" height="14" fill="#f1ede6" rx="1"/>
+<rect x="37" y="97" width="6" height="14" fill="#cdd8bd" rx="1"/>
+<rect x="44" y="97" width="6" height="14" fill="#cdd8bd" rx="1"/>
+<rect x="51" y="97" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="58" y="97" width="6" height="14" fill="#ecc887" rx="1"/>
+<rect x="65" y="97" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="72" y="97" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="79" y="97" width="6" height="14" fill="#f1ede6" rx="1"/>
+<rect x="86" y="97" width="6" height="14" fill="#f1ede6" rx="1"/>
+<rect x="93" y="97" width="6" height="14" fill="#f1ede6" rx="1"/>
+<rect x="100" y="97" width="6" height="14" fill="#ecc887" rx="1"/>
+<rect x="107" y="97" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="114" y="97" width="6" height="14" fill="#ecc887" rx="1"/>
+<rect x="121" y="97" width="6" height="14" fill="#ecc887" rx="1"/>
+<rect x="128" y="97" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="135" y="97" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="142" y="97" width="6" height="14" fill="#f1ede6" rx="1"/>
+<rect x="149" y="97" width="6" height="14" fill="#ecc887" rx="1"/>
+<rect x="156" y="97" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="163" y="97" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="170" y="97" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="177" y="97" width="6" height="14" fill="#c3d2da" rx="1"/>
+<line x1="509.2" y1="135" x2="509.2" y2="118" stroke="#d89a3a" stroke-width="2.5" stroke-dasharray="3 3" class="a1"/>
+<circle cx="509.2" cy="118" r="5.5" fill="#d89a3a" class="a2"/>
+<text x="30" y="156" font-size="11.5" fill="#6b6258" class="mono">genome B</text>
+<rect x="30" y="163" width="6" height="14" fill="#ddd3c5" rx="1"/>
+<rect x="37" y="163" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="44" y="163" width="6" height="14" fill="#ecc887" rx="1"/>
+<rect x="51" y="163" width="6" height="14" fill="#cdd8bd" rx="1"/>
+<rect x="58" y="163" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="65" y="163" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="72" y="163" width="6" height="14" fill="#ecc887" rx="1"/>
+<rect x="79" y="163" width="6" height="14" fill="#f1ede6" rx="1"/>
+<rect x="86" y="163" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="93" y="163" width="6" height="14" fill="#ddd3c5" rx="1"/>
+<rect x="100" y="163" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="107" y="163" width="6" height="14" fill="#cdd8bd" rx="1"/>
+<rect x="114" y="163" width="6" height="14" fill="#cdd8bd" rx="1"/>
+<rect x="121" y="163" width="6" height="14" fill="#ddd3c5" rx="1"/>
+<rect x="128" y="163" width="6" height="14" fill="#cdd8bd" rx="1"/>
+<rect x="135" y="163" width="6" height="14" fill="#ddd3c5" rx="1"/>
+<rect x="142" y="163" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="149" y="163" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="156" y="163" width="6" height="14" fill="#ddd3c5" rx="1"/>
+<rect x="163" y="163" width="6" height="14" fill="#cdd8bd" rx="1"/>
+<rect x="170" y="163" width="6" height="14" fill="#ddd3c5" rx="1"/>
+<rect x="177" y="163" width="6" height="14" fill="#ecc887" rx="1"/>
+<line x1="430" y1="179.62" x2="430" y2="196.62" stroke="#d89a3a" stroke-width="2.5" stroke-dasharray="3 3" class="a3"/>
+<circle cx="430" cy="196.62" r="5.5" fill="#d89a3a" class="a4"/>
+<text x="30" y="222" font-size="11.5" fill="#6b6258" class="mono">genome C</text>
+<rect x="30" y="229" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="37" y="229" width="6" height="14" fill="#ddd3c5" rx="1"/>
+<rect x="44" y="229" width="6" height="14" fill="#f1ede6" rx="1"/>
+<rect x="51" y="229" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="58" y="229" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="65" y="229" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="72" y="229" width="6" height="14" fill="#f1ede6" rx="1"/>
+<rect x="79" y="229" width="6" height="14" fill="#ecc887" rx="1"/>
+<rect x="86" y="229" width="6" height="14" fill="#ddd3c5" rx="1"/>
+<rect x="93" y="229" width="6" height="14" fill="#ddd3c5" rx="1"/>
+<rect x="100" y="229" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="107" y="229" width="6" height="14" fill="#ecc887" rx="1"/>
+<rect x="114" y="229" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="121" y="229" width="6" height="14" fill="#c3d2da" rx="1"/>
+<rect x="128" y="229" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="135" y="229" width="6" height="14" fill="#ecc887" rx="1"/>
+<rect x="142" y="229" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="149" y="229" width="6" height="14" fill="#f1ede6" rx="1"/>
+<rect x="156" y="229" width="6" height="14" fill="#cdd8bd" rx="1"/>
+<rect x="163" y="229" width="6" height="14" fill="#dcc19e" rx="1"/>
+<rect x="170" y="229" width="6" height="14" fill="#cdd8bd" rx="1"/>
+<rect x="177" y="229" width="6" height="14" fill="#ddd3c5" rx="1"/>
+<line x1="466" y1="249.75" x2="466" y2="266.75" stroke="#d89a3a" stroke-width="2.5" stroke-dasharray="3 3" class="a5"/>
+<circle cx="466" cy="266.75" r="5.5" fill="#d89a3a" class="a6"/>
+<rect x="660" y="72" width="220" height="196" fill="#f7f7f4" stroke="#ebe6dc" rx="8"/>
+<text x="676" y="98" font-size="12" fill="#6b6258" class="mono">"placements": [</text>
+<g class="a7"><circle cx="682" cy="122" r="4.5" fill="#d89a3a"/><text x="694" y="126" font-size="12" fill="#2a2018" class="mono">genome A: edge 3</text></g>
+<g class="a8"><circle cx="682" cy="150" r="4.5" fill="#d89a3a"/><text x="694" y="154" font-size="12" fill="#2a2018" class="mono">genome B: edge 9</text></g>
+<g class="a9"><circle cx="682" cy="178" r="4.5" fill="#d89a3a"/><text x="694" y="182" font-size="12" fill="#2a2018" class="mono">genome C: edge 12</text></g>
+<g class="a10"><circle cx="684" cy="222" r="8" fill="#9a5f16"/><path d="M680.4 222 l2.56 2.56 l4.64 -4.96" fill="none" stroke="#ffffff" stroke-width="2.08" stroke-linecap="round" stroke-linejoin="round"/><text x="700" y="218" font-size="13" fill="#9a5f16" font-weight="bold">identical to pplacer</text><text x="700" y="236" font-size="11.5" fill="#6b6258">every number, digit for digit</text></g>
 </svg>

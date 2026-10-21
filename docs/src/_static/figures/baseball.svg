@@ -2,105 +2,105 @@
 <title id="title">pplacer's baseball search for one query</title>
 <desc id="desc">Edges are optimised in prefilter order. An edge more than 3 log-likelihood units below the best so far is a strike; after 6 strikes the search stops. The best 7 edges within a factor 0.01 of the best are kept and get like-weight ratios.</desc>
 <style>text{font-family:"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif}.mono{font-family:Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace}.static-only{display:none}@keyframes growX{from{transform:scaleX(0)}}@keyframes growY{from{transform:scaleY(0)}}@keyframes fadein{from{opacity:0}}@keyframes draw{from{stroke-dashoffset:1}}.a1{animation:ka1 22s ease-in-out infinite}@keyframes ka1{0.000%{opacity:0}4.545%{opacity:0}5.091%{opacity:1}8.864%{opacity:1}9.409%{opacity:0}100.000%{opacity:0}}.a2{animation:ka2 22s ease-in-out infinite}@keyframes ka2{0.000%{opacity:0}9.091%{opacity:0}9.636%{opacity:1}13.409%{opacity:1}13.955%{opacity:0}100.000%{opacity:0}}.a3{animation:ka3 22s ease-in-out infinite}@keyframes ka3{0.000%{opacity:0}13.636%{opacity:0}14.182%{opacity:1}17.955%{opacity:1}18.500%{opacity:0}100.000%{opacity:0}}.a4{animation:ka4 22s ease-in-out infinite}@keyframes ka4{0.000%{opacity:0}18.182%{opacity:0}18.727%{opacity:1}22.500%{opacity:1}23.045%{opacity:0}100.000%{opacity:0}}.a5{animation:ka5 22s ease-in-out infinite}@keyframes ka5{0.000%{opacity:0}22.727%{opacity:0}23.273%{opacity:1}27.045%{opacity:1}27.591%{opacity:0}100.000%{opacity:0}}.a6{animation:ka6 22s ease-in-out infinite}@keyframes ka6{0.000%{opacity:0}27.273%{opacity:0}27.818%{opacity:1}31.591%{opacity:1}32.136%{opacity:0}100.000%{opacity:0}}.a7{animation:ka7 22s ease-in-out infinite}@keyframes ka7{0.000%{opacity:0}31.818%{opacity:0}32.364%{opacity:1}36.136%{opacity:1}36.682%{opacity:0}100.000%{opacity:0}}.a8{animation:ka8 22s ease-in-out infinite}@keyframes ka8{0.000%{opacity:0}36.364%{opacity:0}36.909%{opacity:1}40.682%{opacity:1}41.227%{opacity:0}100.000%{opacity:0}}.a9{animation:ka9 22s ease-in-out infinite}@keyframes ka9{0.000%{opacity:0}40.909%{opacity:0}41.455%{opacity:1}45.227%{opacity:1}45.773%{opacity:0}100.000%{opacity:0}}.a10{animation:ka10 22s ease-in-out infinite}@keyframes ka10{0.000%{opacity:0}45.455%{opacity:0}46.000%{opacity:1}49.773%{opacity:1}50.318%{opacity:0}100.000%{opacity:0}}.a11{animation:ka11 22s ease-in-out infinite}@keyframes ka11{0.000%{opacity:0}50.000%{opacity:0}50.545%{opacity:1}54.318%{opacity:1}54.864%{opacity:0}100.000%{opacity:0}}.a12{animation:ka12 22s ease-in-out infinite}@keyframes ka12{0.000%{opacity:0}6.136%{opacity:0}7.045%{opacity:1}15.227%{opacity:1}16.136%{opacity:0}100.000%{opacity:0}}.a13{animation:ka13 22s ease-in-out infinite}@keyframes ka13{0.000%{opacity:0}15.227%{opacity:0}16.136%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a14{animation:ka14 22s ease-in-out infinite}@keyframes ka14{0.000%{opacity:0}6.136%{opacity:0}7.045%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a15{animation:ka15 22s ease-in-out infinite}@keyframes ka15{0.000%{opacity:0}10.682%{opacity:0}11.591%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a16{animation:ka16 22s ease-in-out infinite}@keyframes ka16{0.000%{opacity:0}15.227%{opacity:0}16.136%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a17{animation:ka17 22s ease-in-out infinite}@keyframes ka17{0.000%{opacity:0}19.773%{opacity:0}20.682%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a18{animation:ka18 22s ease-in-out infinite}@keyframes ka18{0.000%{opacity:0}20.227%{opacity:0}21.136%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a19{animation:ka19 22s ease-in-out infinite}@keyframes ka19{0.000%{opacity:0}24.318%{opacity:0}25.227%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a20{animation:ka20 22s ease-in-out infinite}@keyframes ka20{0.000%{opacity:0}28.864%{opacity:0}29.773%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a21{animation:ka21 22s ease-in-out infinite}@keyframes ka21{0.000%{opacity:0}29.318%{opacity:0}30.227%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a22{animation:ka22 22s ease-in-out infinite}@keyframes ka22{0.000%{opacity:0}33.409%{opacity:0}34.318%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a23{animation:ka23 22s ease-in-out infinite}@keyframes ka23{0.000%{opacity:0}33.864%{opacity:0}34.773%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a24{animation:ka24 22s ease-in-out infinite}@keyframes ka24{0.000%{opacity:0}37.955%{opacity:0}38.864%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a25{animation:ka25 22s ease-in-out infinite}@keyframes ka25{0.000%{opacity:0}42.500%{opacity:0}43.409%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a26{animation:ka26 22s ease-in-out infinite}@keyframes ka26{0.000%{opacity:0}42.955%{opacity:0}43.864%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a27{animation:ka27 22s ease-in-out infinite}@keyframes ka27{0.000%{opacity:0}47.045%{opacity:0}47.955%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a28{animation:ka28 22s ease-in-out infinite}@keyframes ka28{0.000%{opacity:0}47.500%{opacity:0}48.409%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a29{animation:ka29 22s ease-in-out infinite}@keyframes ka29{0.000%{opacity:0}51.591%{opacity:0}52.500%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a30{animation:ka30 22s ease-in-out infinite}@keyframes ka30{0.000%{opacity:0}52.045%{opacity:0}52.955%{opacity:1}97.273%{opacity:1}98.182%{opacity:0}100.000%{opacity:0}}.a31{animation:ka31 22s ease-in-out infinite}@keyframes ka31{0.000%{opacity:0}55.455%{opacity:0}56.818%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a32{animation:ka32 22s ease-in-out infinite}@keyframes ka32{0.000%{opacity:0}55.455%{opacity:0}56.818%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a33{animation:ka33 22s ease-in-out infinite}@keyframes ka33{0.000%{opacity:0}60.455%{opacity:0}61.818%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a34{animation:ka34 22s ease-in-out infinite}@keyframes ka34{0.000%{opacity:0}60.455%{opacity:0}61.818%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a35{animation:ka35 22s ease-in-out infinite}@keyframes ka35{0.000%{opacity:0}60.818%{opacity:0}62.182%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a36{animation:ka36 22s ease-in-out infinite}@keyframes ka36{0.000%{opacity:0}61.182%{opacity:0}62.545%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a37{animation:ka37 22s ease-in-out infinite}@keyframes ka37{0.000%{opacity:0}61.545%{opacity:0}62.909%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a38{animation:ka38 22s ease-in-out infinite}@keyframes ka38{0.000%{opacity:0}61.909%{opacity:0}63.273%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a39{animation:ka39 22s ease-in-out infinite}@keyframes ka39{0.000%{opacity:0}62.273%{opacity:0}63.636%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a40{animation:ka40 22s ease-in-out infinite}@keyframes ka40{0.000%{opacity:0}62.636%{opacity:0}64.000%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a41{animation:ka41 22s ease-in-out infinite}@keyframes ka41{0.000%{opacity:0}63.182%{opacity:0}64.545%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a42{animation:ka42 22s ease-in-out infinite}@keyframes ka42{0.000%{opacity:0}63.182%{opacity:0}64.545%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a43{animation:ka43 22s ease-in-out infinite}@keyframes ka43{0.000%{opacity:0}65.000%{opacity:0}66.364%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a44{transform-box:fill-box;transform-origin:left center;animation:ka44 22s ease-in-out infinite}@keyframes ka44{0.000%{opacity:1;transform:scaleX(0)}65.000%{opacity:1;transform:scaleX(0)}67.727%{opacity:1;transform:scaleX(1)}97.273%{opacity:1;transform:scaleX(1)}98.636%{opacity:0;transform:scaleX(1)}100.000%{opacity:0;transform:scaleX(1)}}.a45{animation:ka45 22s ease-in-out infinite}@keyframes ka45{0.000%{opacity:0}66.818%{opacity:0}68.182%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a46{animation:ka46 22s ease-in-out infinite}@keyframes ka46{0.000%{opacity:0}65.909%{opacity:0}67.273%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a47{transform-box:fill-box;transform-origin:left center;animation:ka47 22s ease-in-out infinite}@keyframes ka47{0.000%{opacity:1;transform:scaleX(0)}65.909%{opacity:1;transform:scaleX(0)}68.636%{opacity:1;transform:scaleX(1)}97.273%{opacity:1;transform:scaleX(1)}98.636%{opacity:0;transform:scaleX(1)}100.000%{opacity:0;transform:scaleX(1)}}.a48{animation:ka48 22s ease-in-out infinite}@keyframes ka48{0.000%{opacity:0}67.727%{opacity:0}69.091%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a49{animation:ka49 22s ease-in-out infinite}@keyframes ka49{0.000%{opacity:0}66.818%{opacity:0}68.182%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a50{transform-box:fill-box;transform-origin:left center;animation:ka50 22s ease-in-out infinite}@keyframes ka50{0.000%{opacity:1;transform:scaleX(0)}66.818%{opacity:1;transform:scaleX(0)}69.545%{opacity:1;transform:scaleX(1)}97.273%{opacity:1;transform:scaleX(1)}98.636%{opacity:0;transform:scaleX(1)}100.000%{opacity:0;transform:scaleX(1)}}.a51{animation:ka51 22s ease-in-out infinite}@keyframes ka51{0.000%{opacity:0}68.636%{opacity:0}70.000%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a52{animation:ka52 22s ease-in-out infinite}@keyframes ka52{0.000%{opacity:0}67.727%{opacity:0}69.091%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a53{transform-box:fill-box;transform-origin:left center;animation:ka53 22s ease-in-out infinite}@keyframes ka53{0.000%{opacity:1;transform:scaleX(0)}67.727%{opacity:1;transform:scaleX(0)}70.455%{opacity:1;transform:scaleX(1)}97.273%{opacity:1;transform:scaleX(1)}98.636%{opacity:0;transform:scaleX(1)}100.000%{opacity:0;transform:scaleX(1)}}.a54{animation:ka54 22s ease-in-out infinite}@keyframes ka54{0.000%{opacity:0}69.545%{opacity:0}70.909%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a55{animation:ka55 22s ease-in-out infinite}@keyframes ka55{0.000%{opacity:0}68.636%{opacity:0}70.000%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a56{transform-box:fill-box;transform-origin:left center;animation:ka56 22s ease-in-out infinite}@keyframes ka56{0.000%{opacity:1;transform:scaleX(0)}68.636%{opacity:1;transform:scaleX(0)}71.364%{opacity:1;transform:scaleX(1)}97.273%{opacity:1;transform:scaleX(1)}98.636%{opacity:0;transform:scaleX(1)}100.000%{opacity:0;transform:scaleX(1)}}.a57{animation:ka57 22s ease-in-out infinite}@keyframes ka57{0.000%{opacity:0}70.455%{opacity:0}71.818%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a58{animation:ka58 22s ease-in-out infinite}@keyframes ka58{0.000%{opacity:0}69.545%{opacity:0}70.909%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a59{transform-box:fill-box;transform-origin:left center;animation:ka59 22s ease-in-out infinite}@keyframes ka59{0.000%{opacity:1;transform:scaleX(0)}69.545%{opacity:1;transform:scaleX(0)}72.273%{opacity:1;transform:scaleX(1)}97.273%{opacity:1;transform:scaleX(1)}98.636%{opacity:0;transform:scaleX(1)}100.000%{opacity:0;transform:scaleX(1)}}.a60{animation:ka60 22s ease-in-out infinite}@keyframes ka60{0.000%{opacity:0}71.364%{opacity:0}72.727%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a61{animation:ka61 22s ease-in-out infinite}@keyframes ka61{0.000%{opacity:0}70.455%{opacity:0}71.818%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}.a62{transform-box:fill-box;transform-origin:left center;animation:ka62 22s ease-in-out infinite}@keyframes ka62{0.000%{opacity:1;transform:scaleX(0)}70.455%{opacity:1;transform:scaleX(0)}73.182%{opacity:1;transform:scaleX(1)}97.273%{opacity:1;transform:scaleX(1)}98.636%{opacity:0;transform:scaleX(1)}100.000%{opacity:0;transform:scaleX(1)}}.a63{animation:ka63 22s ease-in-out infinite}@keyframes ka63{0.000%{opacity:0}72.273%{opacity:0}73.636%{opacity:1}97.273%{opacity:1}98.636%{opacity:0}100.000%{opacity:0}}@media (prefers-reduced-motion:reduce){*{animation:none!important}.transient{display:none}.static-only{display:inline}}</style>
-<text x="20" y="30" font-size="15" fill="#2f3b45" font-weight="bold">Baseball search</text>
-<text x="158" y="30" font-size="12.5" fill="#66727c">one query, pplacer's default settings (illustration)</text>
-<line x1="70" y1="72" x2="598" y2="72" stroke="#e6eaed"/>
-<text x="62" y="76" font-size="11" fill="#66727c" text-anchor="end">0</text>
-<line x1="70" y1="126" x2="598" y2="126" stroke="#e6eaed"/>
-<text x="62" y="130" font-size="11" fill="#66727c" text-anchor="end">−3</text>
-<line x1="70" y1="180" x2="598" y2="180" stroke="#e6eaed"/>
-<text x="62" y="184" font-size="11" fill="#66727c" text-anchor="end">−6</text>
-<line x1="70" y1="234" x2="598" y2="234" stroke="#e6eaed"/>
-<text x="62" y="238" font-size="11" fill="#66727c" text-anchor="end">−9</text>
-<line x1="70" y1="288" x2="598" y2="288" stroke="#e6eaed"/>
-<text x="62" y="292" font-size="11" fill="#66727c" text-anchor="end">−12</text>
-<text x="18" y="180" font-size="11.5" fill="#66727c" text-anchor="middle" transform="rotate(-90 18 180)">log-likelihood (best = 0)</text>
-<text x="86.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">1</text>
-<text x="119.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">2</text>
-<text x="152.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">3</text>
-<text x="185.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">4</text>
-<text x="218.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">5</text>
-<text x="251.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">6</text>
-<text x="284.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">7</text>
-<text x="317.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">8</text>
-<text x="350.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">9</text>
-<text x="383.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">10</text>
-<text x="416.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">11</text>
-<text x="449.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">12</text>
-<text x="482.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">13</text>
-<text x="515.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">14</text>
-<text x="548.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">15</text>
-<text x="581.5" y="306" font-size="11" fill="#66727c" text-anchor="middle">16</text>
-<text x="334" y="324" font-size="11.5" fill="#66727c" text-anchor="middle">edges in prefilter rank order</text>
-<rect x="71" y="62" width="31" height="230" fill="#fcebd0" class="a1 transient"/>
-<rect x="104" y="62" width="31" height="230" fill="#fcebd0" class="a2 transient"/>
-<rect x="137" y="62" width="31" height="230" fill="#fcebd0" class="a3 transient"/>
-<rect x="170" y="62" width="31" height="230" fill="#fcebd0" class="a4 transient"/>
-<rect x="203" y="62" width="31" height="230" fill="#fcebd0" class="a5 transient"/>
-<rect x="236" y="62" width="31" height="230" fill="#fcebd0" class="a6 transient"/>
-<rect x="269" y="62" width="31" height="230" fill="#fcebd0" class="a7 transient"/>
-<rect x="302" y="62" width="31" height="230" fill="#fcebd0" class="a8 transient"/>
-<rect x="335" y="62" width="31" height="230" fill="#fcebd0" class="a9 transient"/>
-<rect x="368" y="62" width="31" height="230" fill="#fcebd0" class="a10 transient"/>
-<rect x="401" y="62" width="31" height="230" fill="#fcebd0" class="a11 transient"/>
-<g class="a12 transient"><rect x="70" y="99" width="528" height="54" fill="#d6ede0" opacity="0.75"/><line x1="70" y1="99" x2="598" y2="99" stroke="#2b8a5a" stroke-width="1.5"/><text x="76" y="148" font-size="11" fill="#2b8a5a">strike box (3 units)</text></g>
-<g class="a13"><rect x="70" y="72" width="528" height="54" fill="#d6ede0" opacity="0.75"/><line x1="70" y1="72" x2="598" y2="72" stroke="#2b8a5a" stroke-width="1.5"/><text x="76" y="121" font-size="11" fill="#2b8a5a">strike box (3 units)</text></g>
-<text x="390" y="52" font-size="12" fill="#66727c">strikes</text>
-<circle cx="442" cy="48" r="5.5" fill="#ffffff" stroke="#c4473a" stroke-width="1.5"/>
-<circle cx="458" cy="48" r="5.5" fill="#ffffff" stroke="#c4473a" stroke-width="1.5"/>
-<circle cx="474" cy="48" r="5.5" fill="#ffffff" stroke="#c4473a" stroke-width="1.5"/>
-<circle cx="490" cy="48" r="5.5" fill="#ffffff" stroke="#c4473a" stroke-width="1.5"/>
-<circle cx="506" cy="48" r="5.5" fill="#ffffff" stroke="#c4473a" stroke-width="1.5"/>
-<circle cx="522" cy="48" r="5.5" fill="#ffffff" stroke="#c4473a" stroke-width="1.5"/>
-<circle cx="86.5" cy="99" r="6" fill="#2b8a5a" class="a14"/>
-<circle cx="119.5" cy="135" r="6" fill="#2b8a5a" class="a15"/>
-<circle cx="152.5" cy="72" r="6" fill="#2b8a5a" class="a16"/>
-<text x="152.5" y="57" font-size="10.5" fill="#2b8a5a" text-anchor="middle" font-weight="bold" class="a16">best</text>
-<g class="a17"><circle cx="185.5" cy="153" r="6" fill="#c4473a"/><text x="196.5" y="145" font-size="10.5" fill="#c4473a" font-weight="bold">1</text></g>
-<circle cx="442" cy="48" r="5.5" fill="#c4473a" class="a18"/>
-<circle cx="218.5" cy="102.6" r="6" fill="#2b8a5a" class="a19"/>
-<g class="a20"><circle cx="251.5" cy="207" r="6" fill="#c4473a"/><text x="262.5" y="199" font-size="10.5" fill="#c4473a" font-weight="bold">2</text></g>
-<circle cx="458" cy="48" r="5.5" fill="#c4473a" class="a21"/>
-<g class="a22"><circle cx="284.5" cy="171" r="6" fill="#c4473a"/><text x="295.5" y="163" font-size="10.5" fill="#c4473a" font-weight="bold">3</text></g>
-<circle cx="474" cy="48" r="5.5" fill="#c4473a" class="a23"/>
-<circle cx="317.5" cy="95.4" r="6" fill="#2b8a5a" class="a24"/>
-<g class="a25"><circle cx="350.5" cy="279" r="6" fill="#c4473a"/><text x="361.5" y="271" font-size="10.5" fill="#c4473a" font-weight="bold">4</text></g>
-<circle cx="490" cy="48" r="5.5" fill="#c4473a" class="a26"/>
-<g class="a27"><circle cx="383.5" cy="144" r="6" fill="#c4473a"/><text x="394.5" y="136" font-size="10.5" fill="#c4473a" font-weight="bold">5</text></g>
-<circle cx="506" cy="48" r="5.5" fill="#c4473a" class="a28"/>
-<g class="a29"><circle cx="416.5" cy="243" r="6" fill="#c4473a"/><text x="427.5" y="235" font-size="10.5" fill="#c4473a" font-weight="bold">6</text></g>
-<circle cx="522" cy="48" r="5.5" fill="#c4473a" class="a30"/>
-<g class="a31"><rect x="434" y="62" width="163" height="230" fill="#f6f8f9" fill-opacity="0.8"/><text x="515.5" y="172" font-size="11.5" fill="#66727c" text-anchor="middle">not optimised</text></g>
-<text x="540" y="52" font-size="12" fill="#c4473a" font-weight="bold" class="a32">6th strike: stop</text>
-<g class="a33"><path d="M604 72 h5 V154.89306334778564 h-5" fill="none" stroke="#e39b2d" stroke-width="2"/><text x="613" y="117.4" font-size="11.5" fill="#9a5f05" font-weight="bold">kept</text></g>
-<circle cx="152.5" cy="72" r="9.5" fill="none" stroke="#e39b2d" stroke-width="2.5" class="a34"/>
-<circle cx="317.5" cy="95.4" r="9.5" fill="none" stroke="#e39b2d" stroke-width="2.5" class="a35"/>
-<circle cx="86.5" cy="99" r="9.5" fill="none" stroke="#e39b2d" stroke-width="2.5" class="a36"/>
-<circle cx="218.5" cy="102.6" r="9.5" fill="none" stroke="#e39b2d" stroke-width="2.5" class="a37"/>
-<circle cx="119.5" cy="135" r="9.5" fill="none" stroke="#e39b2d" stroke-width="2.5" class="a38"/>
-<circle cx="383.5" cy="144" r="9.5" fill="none" stroke="#e39b2d" stroke-width="2.5" class="a39"/>
-<circle cx="185.5" cy="153" r="9.5" fill="none" stroke="#e39b2d" stroke-width="2.5" class="a40"/>
-<text x="660" y="82" font-size="14" fill="#2f3b45" font-weight="bold" class="a41">Like-weight ratios</text>
-<text x="660" y="100" font-size="11.5" fill="#66727c" class="a42">the 7 kept edges, after refinement</text>
-<text x="660" y="134" font-size="11.5" fill="#66727c" class="a43">rank 3</text>
-<rect x="714" y="122" width="80.55" height="16" fill="#e39b2d" rx="2" class="a44"/>
-<text x="800.55" y="134.5" font-size="11.5" fill="#2f3b45" font-weight="bold" class="a45">0.575</text>
-<text x="660" y="158" font-size="11.5" fill="#66727c" class="a46">rank 8</text>
-<rect x="714" y="146" width="21.95" height="16" fill="#e39b2d" rx="2" class="a47"/>
-<text x="741.95" y="158.5" font-size="11.5" fill="#2f3b45" font-weight="bold" class="a48">0.157</text>
-<text x="660" y="182" font-size="11.5" fill="#66727c" class="a49">rank 1</text>
-<rect x="714" y="170" width="17.97" height="16" fill="#e39b2d" rx="2" class="a50"/>
-<text x="737.97" y="182.5" font-size="11.5" fill="#2f3b45" font-weight="bold" class="a51">0.128</text>
-<text x="660" y="206" font-size="11.5" fill="#66727c" class="a52">rank 5</text>
-<rect x="714" y="194" width="14.72" height="16" fill="#e39b2d" rx="2" class="a53"/>
-<text x="734.72" y="206.5" font-size="11.5" fill="#2f3b45" font-weight="bold" class="a54">0.105</text>
-<text x="660" y="230" font-size="11.5" fill="#66727c" class="a55">rank 2</text>
-<rect x="714" y="218" width="2.43" height="16" fill="#e39b2d" rx="2" class="a56"/>
-<text x="722.43" y="230.5" font-size="11.5" fill="#2f3b45" font-weight="bold" class="a57">0.017</text>
-<text x="660" y="254" font-size="11.5" fill="#66727c" class="a58">rank 10</text>
-<rect x="714" y="242" width="1.5" height="16" fill="#e39b2d" rx="2" class="a59"/>
-<text x="721.5" y="254.5" font-size="11.5" fill="#2f3b45" font-weight="bold" class="a60">0.011</text>
-<text x="660" y="278" font-size="11.5" fill="#66727c" class="a61">rank 4</text>
-<rect x="714" y="266" width="1.5" height="16" fill="#e39b2d" rx="2" class="a62"/>
-<text x="721.5" y="278.5" font-size="11.5" fill="#2f3b45" font-weight="bold" class="a63">0.006</text>
+<text x="20" y="30" font-size="15" fill="#2a2018" font-weight="bold">Baseball search</text>
+<text x="158" y="30" font-size="12.5" fill="#6b6258">one query, pplacer's default settings (illustration)</text>
+<line x1="70" y1="72" x2="598" y2="72" stroke="#ebe6dc"/>
+<text x="62" y="76" font-size="11" fill="#6b6258" text-anchor="end">0</text>
+<line x1="70" y1="126" x2="598" y2="126" stroke="#ebe6dc"/>
+<text x="62" y="130" font-size="11" fill="#6b6258" text-anchor="end">−3</text>
+<line x1="70" y1="180" x2="598" y2="180" stroke="#ebe6dc"/>
+<text x="62" y="184" font-size="11" fill="#6b6258" text-anchor="end">−6</text>
+<line x1="70" y1="234" x2="598" y2="234" stroke="#ebe6dc"/>
+<text x="62" y="238" font-size="11" fill="#6b6258" text-anchor="end">−9</text>
+<line x1="70" y1="288" x2="598" y2="288" stroke="#ebe6dc"/>
+<text x="62" y="292" font-size="11" fill="#6b6258" text-anchor="end">−12</text>
+<text x="18" y="180" font-size="11.5" fill="#6b6258" text-anchor="middle" transform="rotate(-90 18 180)">log-likelihood (best = 0)</text>
+<text x="86.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">1</text>
+<text x="119.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">2</text>
+<text x="152.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">3</text>
+<text x="185.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">4</text>
+<text x="218.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">5</text>
+<text x="251.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">6</text>
+<text x="284.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">7</text>
+<text x="317.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">8</text>
+<text x="350.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">9</text>
+<text x="383.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">10</text>
+<text x="416.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">11</text>
+<text x="449.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">12</text>
+<text x="482.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">13</text>
+<text x="515.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">14</text>
+<text x="548.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">15</text>
+<text x="581.5" y="306" font-size="11" fill="#6b6258" text-anchor="middle">16</text>
+<text x="334" y="324" font-size="11.5" fill="#6b6258" text-anchor="middle">edges in prefilter rank order</text>
+<rect x="71" y="62" width="31" height="230" fill="#fbf1df" class="a1 transient"/>
+<rect x="104" y="62" width="31" height="230" fill="#fbf1df" class="a2 transient"/>
+<rect x="137" y="62" width="31" height="230" fill="#fbf1df" class="a3 transient"/>
+<rect x="170" y="62" width="31" height="230" fill="#fbf1df" class="a4 transient"/>
+<rect x="203" y="62" width="31" height="230" fill="#fbf1df" class="a5 transient"/>
+<rect x="236" y="62" width="31" height="230" fill="#fbf1df" class="a6 transient"/>
+<rect x="269" y="62" width="31" height="230" fill="#fbf1df" class="a7 transient"/>
+<rect x="302" y="62" width="31" height="230" fill="#fbf1df" class="a8 transient"/>
+<rect x="335" y="62" width="31" height="230" fill="#fbf1df" class="a9 transient"/>
+<rect x="368" y="62" width="31" height="230" fill="#fbf1df" class="a10 transient"/>
+<rect x="401" y="62" width="31" height="230" fill="#fbf1df" class="a11 transient"/>
+<g class="a12 transient"><rect x="70" y="99" width="528" height="54" fill="#efe8dc" opacity="0.85"/><line x1="70" y1="99" x2="598" y2="99" stroke="#2a2018" stroke-width="1.5"/><text x="76" y="148" font-size="11" fill="#6b6258">strike box (3 units)</text></g>
+<g class="a13"><rect x="70" y="72" width="528" height="54" fill="#efe8dc" opacity="0.85"/><line x1="70" y1="72" x2="598" y2="72" stroke="#2a2018" stroke-width="1.5"/><text x="76" y="121" font-size="11" fill="#6b6258">strike box (3 units)</text></g>
+<text x="390" y="52" font-size="12" fill="#6b6258">strikes</text>
+<circle cx="442" cy="48" r="5.5" fill="#ffffff" stroke="#b5452f" stroke-width="1.5"/>
+<circle cx="458" cy="48" r="5.5" fill="#ffffff" stroke="#b5452f" stroke-width="1.5"/>
+<circle cx="474" cy="48" r="5.5" fill="#ffffff" stroke="#b5452f" stroke-width="1.5"/>
+<circle cx="490" cy="48" r="5.5" fill="#ffffff" stroke="#b5452f" stroke-width="1.5"/>
+<circle cx="506" cy="48" r="5.5" fill="#ffffff" stroke="#b5452f" stroke-width="1.5"/>
+<circle cx="522" cy="48" r="5.5" fill="#ffffff" stroke="#b5452f" stroke-width="1.5"/>
+<circle cx="86.5" cy="99" r="6" fill="#2a2018" class="a14"/>
+<circle cx="119.5" cy="135" r="6" fill="#2a2018" class="a15"/>
+<circle cx="152.5" cy="72" r="6" fill="#2a2018" class="a16"/>
+<text x="152.5" y="57" font-size="10.5" fill="#2a2018" text-anchor="middle" font-weight="bold" class="a16">best</text>
+<g class="a17"><circle cx="185.5" cy="153" r="6" fill="#b5452f"/><text x="196.5" y="145" font-size="10.5" fill="#b5452f" font-weight="bold">1</text></g>
+<circle cx="442" cy="48" r="5.5" fill="#b5452f" class="a18"/>
+<circle cx="218.5" cy="102.6" r="6" fill="#2a2018" class="a19"/>
+<g class="a20"><circle cx="251.5" cy="207" r="6" fill="#b5452f"/><text x="262.5" y="199" font-size="10.5" fill="#b5452f" font-weight="bold">2</text></g>
+<circle cx="458" cy="48" r="5.5" fill="#b5452f" class="a21"/>
+<g class="a22"><circle cx="284.5" cy="171" r="6" fill="#b5452f"/><text x="295.5" y="163" font-size="10.5" fill="#b5452f" font-weight="bold">3</text></g>
+<circle cx="474" cy="48" r="5.5" fill="#b5452f" class="a23"/>
+<circle cx="317.5" cy="95.4" r="6" fill="#2a2018" class="a24"/>
+<g class="a25"><circle cx="350.5" cy="279" r="6" fill="#b5452f"/><text x="361.5" y="271" font-size="10.5" fill="#b5452f" font-weight="bold">4</text></g>
+<circle cx="490" cy="48" r="5.5" fill="#b5452f" class="a26"/>
+<g class="a27"><circle cx="383.5" cy="144" r="6" fill="#b5452f"/><text x="394.5" y="136" font-size="10.5" fill="#b5452f" font-weight="bold">5</text></g>
+<circle cx="506" cy="48" r="5.5" fill="#b5452f" class="a28"/>
+<g class="a29"><circle cx="416.5" cy="243" r="6" fill="#b5452f"/><text x="427.5" y="235" font-size="10.5" fill="#b5452f" font-weight="bold">6</text></g>
+<circle cx="522" cy="48" r="5.5" fill="#b5452f" class="a30"/>
+<g class="a31"><rect x="434" y="62" width="163" height="230" fill="#f7f7f4" fill-opacity="0.8"/><text x="515.5" y="172" font-size="11.5" fill="#6b6258" text-anchor="middle">not optimised</text></g>
+<text x="540" y="52" font-size="12" fill="#b5452f" font-weight="bold" class="a32">6th strike: stop</text>
+<g class="a33"><path d="M604 72 h5 V154.89306334778564 h-5" fill="none" stroke="#d89a3a" stroke-width="2"/><text x="613" y="117.4" font-size="11.5" fill="#9a5f16" font-weight="bold">kept</text></g>
+<circle cx="152.5" cy="72" r="9.5" fill="none" stroke="#d89a3a" stroke-width="2.5" class="a34"/>
+<circle cx="317.5" cy="95.4" r="9.5" fill="none" stroke="#d89a3a" stroke-width="2.5" class="a35"/>
+<circle cx="86.5" cy="99" r="9.5" fill="none" stroke="#d89a3a" stroke-width="2.5" class="a36"/>
+<circle cx="218.5" cy="102.6" r="9.5" fill="none" stroke="#d89a3a" stroke-width="2.5" class="a37"/>
+<circle cx="119.5" cy="135" r="9.5" fill="none" stroke="#d89a3a" stroke-width="2.5" class="a38"/>
+<circle cx="383.5" cy="144" r="9.5" fill="none" stroke="#d89a3a" stroke-width="2.5" class="a39"/>
+<circle cx="185.5" cy="153" r="9.5" fill="none" stroke="#d89a3a" stroke-width="2.5" class="a40"/>
+<text x="660" y="82" font-size="14" fill="#2a2018" font-weight="bold" class="a41">Like-weight ratios</text>
+<text x="660" y="100" font-size="11.5" fill="#6b6258" class="a42">the 7 kept edges, after refinement</text>
+<text x="660" y="134" font-size="11.5" fill="#6b6258" class="a43">rank 3</text>
+<rect x="714" y="122" width="80.55" height="16" fill="#d89a3a" rx="2" class="a44"/>
+<text x="800.55" y="134.5" font-size="11.5" fill="#2a2018" font-weight="bold" class="a45">0.575</text>
+<text x="660" y="158" font-size="11.5" fill="#6b6258" class="a46">rank 8</text>
+<rect x="714" y="146" width="21.95" height="16" fill="#d89a3a" rx="2" class="a47"/>
+<text x="741.95" y="158.5" font-size="11.5" fill="#2a2018" font-weight="bold" class="a48">0.157</text>
+<text x="660" y="182" font-size="11.5" fill="#6b6258" class="a49">rank 1</text>
+<rect x="714" y="170" width="17.97" height="16" fill="#d89a3a" rx="2" class="a50"/>
+<text x="737.97" y="182.5" font-size="11.5" fill="#2a2018" font-weight="bold" class="a51">0.128</text>
+<text x="660" y="206" font-size="11.5" fill="#6b6258" class="a52">rank 5</text>
+<rect x="714" y="194" width="14.72" height="16" fill="#d89a3a" rx="2" class="a53"/>
+<text x="734.72" y="206.5" font-size="11.5" fill="#2a2018" font-weight="bold" class="a54">0.105</text>
+<text x="660" y="230" font-size="11.5" fill="#6b6258" class="a55">rank 2</text>
+<rect x="714" y="218" width="2.43" height="16" fill="#d89a3a" rx="2" class="a56"/>
+<text x="722.43" y="230.5" font-size="11.5" fill="#2a2018" font-weight="bold" class="a57">0.017</text>
+<text x="660" y="254" font-size="11.5" fill="#6b6258" class="a58">rank 10</text>
+<rect x="714" y="242" width="1.5" height="16" fill="#d89a3a" rx="2" class="a59"/>
+<text x="721.5" y="254.5" font-size="11.5" fill="#2a2018" font-weight="bold" class="a60">0.011</text>
+<text x="660" y="278" font-size="11.5" fill="#6b6258" class="a61">rank 4</text>
+<rect x="714" y="266" width="1.5" height="16" fill="#d89a3a" rx="2" class="a62"/>
+<text x="721.5" y="278.5" font-size="11.5" fill="#2a2018" font-weight="bold" class="a63">0.006</text>
 </svg>

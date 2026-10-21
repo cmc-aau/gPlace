@@ -19,12 +19,14 @@ from gplace.engine.tiled import tile_layout  # noqa: E402
 
 OUT = os.path.join(HERE, 'src', '_static', 'figures')
 
-INK, MUTED, FAINT, GRID, PAPER = '#2f3b45', '#66727c', '#c9d1d7', '#e6eaed', '#f6f8f9'
-GREEN, GREEN_L = '#2b8a5a', '#d6ede0'                      # the reference tree (as in the logo)
-ORANGE, ORANGE_T, ORANGE_L = '#e39b2d', '#9a5f05', '#fcebd0'  # queries and placements (logo)
-RED = '#c4473a'
-VEC_D, VEC_P, VEC_S = '#3a78b5', '#8264b0', '#c2527a'      # distal, proximal, supernode vectors
-TILES = ['#2b8a5a', '#c2527a', '#2f9a9e', '#8a8f2a', '#b0763a', '#5d6d7e']
+INK, MUTED, FAINT, GRID, PAPER = '#2a2018', '#6b6258', '#d6cfc3', '#ebe6dc', '#f7f7f4'
+TREE = '#2a2018'                                            # the reference tree: the mark's stem
+ACCENT = '#9a5f16'                                          # gPlace's changes and checks: the amber outline
+BOX = '#efe8dc'                                             # the strike box
+ORANGE, ORANGE_T, ORANGE_L = '#d89a3a', '#9a5f16', '#fbf1df'  # queries and placements: the amber leaves
+RED = '#b5452f'
+VEC_D, VEC_P, VEC_S = '#55788a', '#7d8f5a', '#b5523b'      # distal, proximal, supernode vectors
+TILES = ['#9a5f16', '#55788a', '#b5523b', '#7d8f5a', '#2a2018', '#c49a52']
 FONT = '"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif'
 MONO = 'Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace'
 
@@ -77,7 +79,7 @@ def G(items, **kw):
     return f'<g {attrs(**kw)}>' + ''.join(items) + '</g>'
 
 
-def check(x, y, r=8, color=GREEN):
+def check(x, y, r=8, color=ACCENT):
     """A check mark in a filled circle centred on (x, y)."""
     return (C(x, y, r, fill=color) +
             P(f'M{num(x - r * .45)} {num(y)} l{num(r * .32)} {num(r * .32)} l{num(r * .58)} {num(-r * .62)}',
@@ -214,24 +216,24 @@ def fig_overview():
     for v in range(len(children)):
         if v != root:
             p = parent[v]
-            f.add(P(f'M{num(X(p))} {num(Y(p))} V{num(Y(v))} H{num(X(v))}', stroke=GREEN, stroke_width=3,
+            f.add(P(f'M{num(X(p))} {num(Y(p))} V{num(Y(v))} H{num(X(v))}', stroke=TREE, stroke_width=3,
                     stroke_linecap='round', stroke_linejoin='round'))
         if not children[v]:
-            f.add(C(X(v), Y(v), 3, fill=GREEN))
-    f.add(L(X(root) - 14, Y(root), X(root), Y(root), stroke=GREEN, stroke_width=3, stroke_linecap='round'))
+            f.add(C(X(v), Y(v), 3, fill=TREE))
+    f.add(L(X(root) - 14, Y(root), X(root), Y(root), stroke=TREE, stroke_width=3, stroke_linecap='round'))
     del top
 
     # queries: (name, target edge, fraction along the branch, side of the pendant branch)
     targets = [('genome A', 3, .3, -1), ('genome B', 9, .5, 1), ('genome C', 12, .5, 1)]
     seed = 7
-    palette = ['#a8d5ba', '#b9cfe6', '#f0cf96', '#d9bfd6', '#cdd3d8']
+    palette = ['#ecc887', '#c3d2da', '#dcc19e', '#cdd8bd', '#ddd3c5']   # residues, in the mark's warm tones
     rows = []
     for i, (name, edge, frac, side) in enumerate(targets):
         sy = 104 + 66 * i
         f.add(T(30, sy - 14, name, 11.5, fill=MUTED, cls='mono'))
         for k in range(22):
             seed = (seed * 1103515245 + 12345) % 2 ** 31
-            colour = palette[seed % 5] if seed % 9 else '#eef1f3'
+            colour = palette[seed % 5] if seed % 9 else '#f1ede6'
             f.add(R(30 + k * 7, sy - 7, 6, 14, fill=colour, rx=1))
         p = parent[edge]
         lx, ly = X(p) + frac * (X(edge) - X(p)), Y(edge)
@@ -257,7 +259,7 @@ def fig_overview():
         y = 126 + 28 * i
         f.add(G([C(682, y - 4, 4.5, fill=ORANGE),
                  T(694, y, f'{name}: edge {edge}', 12, cls='mono', raw=True)], class_=f.show(t)))
-    f.add(G([check(684, 222), T(700, 218, 'identical to pplacer', 13, weight='bold', fill=GREEN),
+    f.add(G([check(684, 222), T(700, 218, 'identical to pplacer', 13, weight='bold', fill=ACCENT),
              T(700, 236, 'every number, digit for digit', 11.5, fill=MUTED)], class_=f.show(8.2)))
     return f.save()
 
@@ -290,7 +292,7 @@ def fig_pipeline():
                                                    fill='#ffffff'),
               T(x + 42, y + 29, title, 15, weight='bold'),
               T(x + 16, y + 52, what, 12.5, fill=MUTED),
-              T(x + 16, y + 71, note or 'gPlace: unchanged', 12, fill=GREEN if note else '#929da6',
+              T(x + 16, y + 71, note or 'gPlace: unchanged', 12, fill=ACCENT if note else '#9b9288',
                 weight='bold' if note else None))
         if i % 3 < 2:
             ax = x + W + 3
@@ -323,9 +325,9 @@ def fig_storage():
         for v in range(len(children)):
             if v != root:
                 p = parent[v]
-                f.add(P(f'M{num(X(p))} {num(Y(p))} H{num(X(v))} V{num(Y(v))}', stroke=GREEN, stroke_width=2.5,
+                f.add(P(f'M{num(X(p))} {num(Y(p))} H{num(X(v))} V{num(Y(v))}', stroke=TREE, stroke_width=2.5,
                         stroke_linejoin='round', stroke_linecap='round'))
-        f.add(L(X(root), Y(root) - 12, X(root), Y(root), stroke=GREEN, stroke_width=2.5, stroke_linecap='round'))
+        f.add(L(X(root), Y(root) - 12, X(root), Y(root), stroke=TREE, stroke_width=2.5, stroke_linecap='round'))
         leaf_i = 0
         for v in range(len(children)):
             leaf = not children[v]
@@ -343,7 +345,7 @@ def fig_storage():
                     f.add(R(x, by, sq, sq, fill=colour, rx=1.5, class_=f'{f.show(t, t + 0.9, fade=0.2)} transient'))
                 else:
                     f.add(R(x, by, sq, sq, fill=colour, rx=1.5))
-            f.add(C(X(v), Y(v), 3.5 if not leaf else 3, fill=GREEN))
+            f.add(C(X(v), Y(v), 3.5 if not leaf else 3, fill=TREE))
             leaf_i += leaf
         n_nodes, n_internal = len(children), sum(1 for c in children if c)
         if panel == 'pplacer':
@@ -351,7 +353,7 @@ def fig_storage():
                   T(px, 304, '3 × nodes × sites × 20 × 8 bytes', 12, fill=MUTED, cls='mono'))
         else:
             f.add(T(px, 284, f'{2 * n_internal} vectors kept ({n_internal} internal nodes × 2)', 13, weight='bold',
-                    fill=GREEN),
+                    fill=ACCENT),
                   T(px, 304, '2 × internal nodes × sites × 20 × 8 bytes', 12, fill=MUTED, cls='mono'))
     f.add(L(450, 20, 450, 310, stroke=GRID, stroke_width=1.5))
     legend = [(VEC_D, 'distal: the tree below the node'), (VEC_P, 'proximal: the rest of the tree'),
@@ -401,9 +403,9 @@ def fig_baseball():
         last = k == len(bests) - 1
         off = None if last else bests[k + 1][0] + 0.35
         cls = f.show(t + 0.35, off, fade=0.2) + ('' if last else ' transient')
-        f.add(G([R(x0, yv(b), x1 - x0, 3 * 18, fill=GREEN_L, opacity=.75),
-                 L(x0, yv(b), x1, yv(b), stroke=GREEN, stroke_width=1.5),
-                 T(x0 + 6, yv(b) + 3 * 18 - 5, 'strike box (3 units)', 11, fill=GREEN)], class_=cls))
+        f.add(G([R(x0, yv(b), x1 - x0, 3 * 18, fill=BOX, opacity=.85),
+                 L(x0, yv(b), x1, yv(b), stroke=INK, stroke_width=1.5),
+                 T(x0 + 6, yv(b) + 3 * 18 - 5, 'strike box (3 units)', 11, fill=MUTED)], class_=cls))
     # the strike counter
     f.add(T(390, 52, 'strikes', 12, fill=MUTED))
     for k in range(6):
@@ -416,9 +418,9 @@ def fig_baseball():
                     class_=cls),
                   C(442 + 16 * (e[4] - 1), 48, 5.5, fill=RED, class_=f.show(t + 0.45, fade=0.2)))
         else:
-            f.add(C(xr(i), yv(v), 6, fill=GREEN, class_=cls))
+            f.add(C(xr(i), yv(v), 6, fill=TREE, class_=cls))
             if kind == 'best' and v == 0:
-                f.add(T(xr(i), yv(v) - 15, 'best', 10.5, anchor='middle', weight='bold', fill=GREEN, class_=cls))
+                f.add(T(xr(i), yv(v) - 15, 'best', 10.5, anchor='middle', weight='bold', fill=TREE, class_=cls))
     t_stop = ts[-1] + 1.2
     f.add(G([R(xr(len(vals) + 1) - w / 2 + 1, 62, w * (n_slots - len(vals)) - 2, 230, fill=PAPER, fill_opacity=.8),
              T((xr(len(vals) + 1) + xr(n_slots)) / 2, 172, 'not optimised', 11.5, anchor='middle', fill=MUTED)],
@@ -533,10 +535,10 @@ def fig_engines():
                 x += 9
             t = start + tick * (i // lanes)
             f.add(R(x, y, 22, 22, fill='#ffffff', stroke=FAINT, stroke_width=1.2, rx=3),
-                  R(x, y, 22, 22, fill=GREEN, rx=3, class_=f.show(t, fade=0.12)))
+                  R(x, y, 22, 22, fill=ORANGE, rx=3, class_=f.show(t, fade=0.12)))
             x += 25
         done = start + tick * (16 // lanes) + 0.2
-        f.add(G([check(772, y + 11), T(788, y + 16, 'identical bits', 12.5, weight='bold', fill=GREEN)],
+        f.add(G([check(772, y + 11), T(788, y + 16, 'identical bits', 12.5, weight='bold', fill=ACCENT)],
                 class_=f.show(done)))
     return f.save()
 

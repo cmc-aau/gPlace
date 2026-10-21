@@ -2,51 +2,51 @@
 <title id="title">What pplacer computes, step by step</title>
 <desc id="desc">Six steps: pre-mask, model and cache once per run; prefilter, baseball search and refinement for each query. gPlace changes only how the cache and the prefilter store their vectors.</desc>
 <style>text{font-family:"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif}.mono{font-family:Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace}.static-only{display:none}@keyframes growX{from{transform:scaleX(0)}}@keyframes growY{from{transform:scaleY(0)}}@keyframes fadein{from{opacity:0}}@keyframes draw{from{stroke-dashoffset:1}}.a1{animation:ka1 6s ease-in-out infinite}@keyframes ka1{0.000%{opacity:1}20.833%{opacity:1}25.000%{opacity:0}100.000%{opacity:0}}.a2{animation:ka2 6s ease-in-out infinite}@keyframes ka2{0.000%{opacity:0}25.000%{opacity:0}29.167%{opacity:1}45.833%{opacity:1}50.000%{opacity:0}100.000%{opacity:0}}.a3{animation:ka3 6s ease-in-out infinite}@keyframes ka3{0.000%{opacity:0}50.000%{opacity:0}54.167%{opacity:1}70.833%{opacity:1}75.000%{opacity:0}100.000%{opacity:0}}@media (prefers-reduced-motion:reduce){*{animation:none!important}.transient{display:none}.static-only{display:inline}}</style>
-<text x="20" y="40" font-size="13" fill="#66727c" font-weight="bold">Once per run</text>
-<text x="20" y="180" font-size="13" fill="#9a5f05" font-weight="bold">↻  For each query</text>
-<rect x="20" y="56" width="276" height="82" fill="#ffffff" stroke="#c9d1d7" stroke-width="1.2" rx="8"/>
-<circle cx="42" cy="80" r="12" fill="#2f3b45"/>
+<text x="20" y="40" font-size="13" fill="#6b6258" font-weight="bold">Once per run</text>
+<text x="20" y="180" font-size="13" fill="#9a5f16" font-weight="bold">↻  For each query</text>
+<rect x="20" y="56" width="276" height="82" fill="#ffffff" stroke="#d6cfc3" stroke-width="1.2" rx="8"/>
+<circle cx="42" cy="80" r="12" fill="#2a2018"/>
 <text x="42" y="84.5" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="bold">1</text>
-<text x="62" y="85" font-size="15" fill="#2f3b45" font-weight="bold">Pre-mask</text>
-<text x="36" y="108" font-size="12.5" fill="#66727c">keep the informative columns</text>
-<text x="36" y="127" font-size="12" fill="#929da6">gPlace: unchanged</text>
-<path d="M302 91.0 l7 6 l-7 6" fill="none" stroke="#c9d1d7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<rect x="312" y="56" width="276" height="82" fill="#ffffff" stroke="#c9d1d7" stroke-width="1.2" rx="8"/>
-<circle cx="334" cy="80" r="12" fill="#2f3b45"/>
+<text x="62" y="85" font-size="15" fill="#2a2018" font-weight="bold">Pre-mask</text>
+<text x="36" y="108" font-size="12.5" fill="#6b6258">keep the informative columns</text>
+<text x="36" y="127" font-size="12" fill="#9b9288">gPlace: unchanged</text>
+<path d="M302 91.0 l7 6 l-7 6" fill="none" stroke="#d6cfc3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="312" y="56" width="276" height="82" fill="#ffffff" stroke="#d6cfc3" stroke-width="1.2" rx="8"/>
+<circle cx="334" cy="80" r="12" fill="#2a2018"/>
 <text x="334" y="84.5" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="bold">2</text>
-<text x="354" y="85" font-size="15" fill="#2f3b45" font-weight="bold">Model</text>
-<text x="328" y="108" font-size="12.5" fill="#66727c">WAG + CAT rates; P(t) for every rate</text>
-<text x="328" y="127" font-size="12" fill="#929da6">gPlace: unchanged</text>
-<path d="M594 91.0 l7 6 l-7 6" fill="none" stroke="#c9d1d7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<rect x="604" y="56" width="276" height="82" fill="#ffffff" stroke="#c9d1d7" stroke-width="1.2" rx="8"/>
-<circle cx="626" cy="80" r="12" fill="#2f3b45"/>
+<text x="354" y="85" font-size="15" fill="#2a2018" font-weight="bold">Model</text>
+<text x="328" y="108" font-size="12.5" fill="#6b6258">WAG + CAT rates; P(t) for every rate</text>
+<text x="328" y="127" font-size="12" fill="#9b9288">gPlace: unchanged</text>
+<path d="M594 91.0 l7 6 l-7 6" fill="none" stroke="#d6cfc3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="604" y="56" width="276" height="82" fill="#ffffff" stroke="#d6cfc3" stroke-width="1.2" rx="8"/>
+<circle cx="626" cy="80" r="12" fill="#2a2018"/>
 <text x="626" y="84.5" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="bold">3</text>
-<text x="646" y="85" font-size="15" fill="#2f3b45" font-weight="bold">Cache</text>
-<text x="620" y="108" font-size="12.5" fill="#66727c">distal and proximal vectors per node</text>
-<text x="620" y="127" font-size="12" fill="#2b8a5a" font-weight="bold">gPlace: internal nodes only</text>
-<rect x="20" y="196" width="276" height="82" fill="#ffffff" stroke="#c9d1d7" stroke-width="1.2" rx="8"/>
-<rect x="20" y="196" width="276" height="82" fill="#fcebd0" stroke="#e39b2d" stroke-width="2" rx="8" class="a1 transient"/>
-<circle cx="42" cy="220" r="12" fill="#2f3b45"/>
+<text x="646" y="85" font-size="15" fill="#2a2018" font-weight="bold">Cache</text>
+<text x="620" y="108" font-size="12.5" fill="#6b6258">distal and proximal vectors per node</text>
+<text x="620" y="127" font-size="12" fill="#9a5f16" font-weight="bold">gPlace: internal nodes only</text>
+<rect x="20" y="196" width="276" height="82" fill="#ffffff" stroke="#d6cfc3" stroke-width="1.2" rx="8"/>
+<rect x="20" y="196" width="276" height="82" fill="#fbf1df" stroke="#d89a3a" stroke-width="2" rx="8" class="a1 transient"/>
+<circle cx="42" cy="220" r="12" fill="#2a2018"/>
 <text x="42" y="224.5" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="bold">4</text>
-<text x="62" y="225" font-size="15" fill="#2f3b45" font-weight="bold">Prefilter</text>
-<text x="36" y="248" font-size="12.5" fill="#66727c">score every edge, rank the edges</text>
-<text x="36" y="267" font-size="12" fill="#2b8a5a" font-weight="bold">gPlace: supernodes on the fly</text>
-<path d="M302 231.0 l7 6 l-7 6" fill="none" stroke="#c9d1d7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<rect x="312" y="196" width="276" height="82" fill="#ffffff" stroke="#c9d1d7" stroke-width="1.2" rx="8"/>
-<rect x="312" y="196" width="276" height="82" fill="#fcebd0" stroke="#e39b2d" stroke-width="2" rx="8" class="a2 transient"/>
-<circle cx="334" cy="220" r="12" fill="#2f3b45"/>
+<text x="62" y="225" font-size="15" fill="#2a2018" font-weight="bold">Prefilter</text>
+<text x="36" y="248" font-size="12.5" fill="#6b6258">score every edge, rank the edges</text>
+<text x="36" y="267" font-size="12" fill="#9a5f16" font-weight="bold">gPlace: supernodes on the fly</text>
+<path d="M302 231.0 l7 6 l-7 6" fill="none" stroke="#d6cfc3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="312" y="196" width="276" height="82" fill="#ffffff" stroke="#d6cfc3" stroke-width="1.2" rx="8"/>
+<rect x="312" y="196" width="276" height="82" fill="#fbf1df" stroke="#d89a3a" stroke-width="2" rx="8" class="a2 transient"/>
+<circle cx="334" cy="220" r="12" fill="#2a2018"/>
 <text x="334" y="224.5" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="bold">5</text>
-<text x="354" y="225" font-size="15" fill="#2f3b45" font-weight="bold">Baseball</text>
-<text x="328" y="248" font-size="12.5" fill="#66727c">optimise ranked edges until 6 strikes</text>
-<text x="328" y="267" font-size="12" fill="#929da6">gPlace: unchanged</text>
-<path d="M594 231.0 l7 6 l-7 6" fill="none" stroke="#c9d1d7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<rect x="604" y="196" width="276" height="82" fill="#ffffff" stroke="#c9d1d7" stroke-width="1.2" rx="8"/>
-<rect x="604" y="196" width="276" height="82" fill="#fcebd0" stroke="#e39b2d" stroke-width="2" rx="8" class="a3 transient"/>
-<circle cx="626" cy="220" r="12" fill="#2f3b45"/>
+<text x="354" y="225" font-size="15" fill="#2a2018" font-weight="bold">Baseball</text>
+<text x="328" y="248" font-size="12.5" fill="#6b6258">optimise ranked edges until 6 strikes</text>
+<text x="328" y="267" font-size="12" fill="#9b9288">gPlace: unchanged</text>
+<path d="M594 231.0 l7 6 l-7 6" fill="none" stroke="#d6cfc3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="604" y="196" width="276" height="82" fill="#ffffff" stroke="#d6cfc3" stroke-width="1.2" rx="8"/>
+<rect x="604" y="196" width="276" height="82" fill="#fbf1df" stroke="#d89a3a" stroke-width="2" rx="8" class="a3 transient"/>
+<circle cx="626" cy="220" r="12" fill="#2a2018"/>
 <text x="626" y="224.5" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="bold">6</text>
-<text x="646" y="225" font-size="15" fill="#2f3b45" font-weight="bold">Keep and refine</text>
-<text x="620" y="248" font-size="12.5" fill="#66727c">re-optimise the best ≤ 7 at 1e-5</text>
-<text x="620" y="267" font-size="12" fill="#929da6">gPlace: unchanged</text>
-<path d="M742.0 140 V160 H158.0 V192" fill="none" stroke="#c9d1d7" stroke-width="2" stroke-linejoin="round"/>
-<path d="M152.0 185 l6 7 l6 -7" fill="none" stroke="#c9d1d7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="646" y="225" font-size="15" fill="#2a2018" font-weight="bold">Keep and refine</text>
+<text x="620" y="248" font-size="12.5" fill="#6b6258">re-optimise the best ≤ 7 at 1e-5</text>
+<text x="620" y="267" font-size="12" fill="#9b9288">gPlace: unchanged</text>
+<path d="M742.0 140 V160 H158.0 V192" fill="none" stroke="#d6cfc3" stroke-width="2" stroke-linejoin="round"/>
+<path d="M152.0 185 l6 7 l6 -7" fill="none" stroke="#d6cfc3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
