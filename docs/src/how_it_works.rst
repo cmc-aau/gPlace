@@ -3,8 +3,26 @@
 How gPlace works
 ================
 
+gPlace places each query, an aligned genome, on a fixed reference tree and writes the result as
+a jplace file, as pplacer does. It runs pplacer's algorithm unchanged and changes only what is kept
+in memory and when it is computed.
+
+.. figure:: /_static/figures/overview.svg
+   :width: 100%
+   :alt: Three aligned query genomes, a reference tree with each query attached to one edge by a dashed orange branch, and the jplace file listing genome A on edge 3, genome B on edge 9 and genome C on edge 12, identical to pplacer.
+
+   What placement produces. Each query is attached to the edge where it fits best (the orange dots);
+   the jplace file lists, for every query, the edges kept with their likelihoods and branch lengths.
+
 What pplacer computes
 ---------------------
+
+.. figure:: /_static/figures/pipeline.svg
+   :width: 100%
+   :alt: Six steps in two rows: pre-mask, model and cache once per run; prefilter, baseball and keep and refine for each query. gPlace changes the cache (internal nodes only) and the prefilter (supernodes on the fly).
+
+   pplacer's six steps. Steps 1 to 3 run once per reference package and steps 4 to 6 for each
+   query. gPlace changes only the cache (step 3) and the prefilter (step 4), shown in green.
 
 For each query, pplacer v1.1.alpha19 (``pplacer -m WAG -c <refpkg>``, as run by GTDB-Tk):
 
@@ -22,6 +40,15 @@ For each query, pplacer v1.1.alpha19 (``pplacer -m WAG -c <refpkg>``, as run by 
 6. **Keeps and refines**: up to 7 edges within log(0.01) of the best are re-optimised at 1e-5;
    the like-weight ratios are normalised likelihoods.
 
+.. figure:: /_static/figures/baseball.svg
+   :width: 100%
+   :alt: Log-likelihoods of edges in prefilter order with a strike box 3 units below the best; six edges below it are strikes and the search stops at rank 11; seven edges are kept and their like-weight ratios are shown as bars.
+
+   Steps 5 and 6 for one query (illustrative values). A strike is an edge more than 3 log-likelihood
+   units below the best so far (the strike box follows the best); the search stops at the 6th strike, or
+   after 40 edges, and the edges after it are never optimised. At most 7 edges within a factor 0.01 of
+   the best likelihood are kept, refined and normalised into like-weight ratios.
+
 What gPlace changes
 -------------------
 
@@ -36,6 +63,14 @@ Only what is stored and when it is computed:
 * **supernodes are computed during the prefilter**, eight edges at a time, and discarded;
 * all queries of a reference package share one cache; a query's result does not depend on the
   other queries.
+
+.. figure:: /_static/figures/storage.svg
+   :width: 100%
+   :alt: The same six-leaf tree twice: pplacer keeps distal, proximal and supernode vectors for all 11 nodes (33 vectors); gPlace keeps distal and proximal vectors for the 5 internal nodes (10 vectors) and rebuilds leaf vectors when needed.
+
+   What is kept for a six-leaf tree. pplacer keeps three vectors for every node; gPlace keeps two for
+   each internal node, rebuilds a leaf's vectors when an edge next to it is used, and computes
+   supernodes during the prefilter.
 
 The memory needed drops from *3 x nodes x sites x 20 x 8 bytes* to about
 *2 x internal nodes x sites x 20 x 8 bytes* plus the prefilter scores (every query against every
@@ -68,6 +103,13 @@ memory at a time. The cut: walking up the tree, the part of a node's subtree not
 stays whole while it has at most N nodes; beyond that, its internal children with the largest
 parts become tile roots (leaves never root a tile).
 
+.. figure:: /_static/figures/tiling.svg
+   :width: 100%
+   :alt: A 24-leaf tree cut into five coloured tiles of at most 12 edges. Each tile root except the tree root keeps a distal vector D from the bottom-up pass and a proximal vector P from the top-down pass; placement then holds one tile at a time.
+
+   gPlace's cut (``tile_layout``) of a 24-leaf tree with ``--tile_edges 12``. With its two boundary
+   vectors (D and P), each tile is rebuilt on its own, exactly as in the untiled cache.
+
 pplacer's algorithm is unchanged; only the order of the work is:
 
 1. **Prefilter**, tile by tile and in batches of 20,000 queries: each query keeps its 160 best
@@ -98,6 +140,14 @@ functions taken from the system are exact by definition (``sqrt``, ``frexp``, ``
 the engine is built the same way with Apple's clang; Apple's linker has no ``--defsym``, so GSL's
 libm calls are bound to CORE-MATH and the traps by definitions inside the engine
 (``csrc/libm_bind.c``) instead.
+
+.. figure:: /_static/figures/engines.svg
+   :width: 100%
+   :alt: Three rows of 16 boxes: avx2 fills them four at a time, neon two at a time and portable one at a time; all three end with identical bits.
+
+   Each AVX2 instruction computes 4 different results and each NEON instruction 2, every one with the
+   operations of the portable loop in the same order (no fused multiply-add, no reordered sum): only the
+   speed differs.
 
 Exactness rules
 ---------------

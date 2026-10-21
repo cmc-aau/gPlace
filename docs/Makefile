@@ -14,6 +14,9 @@ help:
 
 .PHONY: help Makefile
 
+figures:
+	@python make_figures.py
+
 doc:
 	@make html
 	@rm -rf ../docs/*
