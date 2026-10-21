@@ -51,7 +51,7 @@ pip install .          # also compiles the placement engine (builds GSL 1.16 onc
 gplace check_install
 gplace test
 ```
-
+ 
 When installing from source, the engine is compiled during installation. Optional environment variables for the build:
 
 | Variable | Use |
