@@ -1,16 +1,14 @@
 Announcements
 =============
 
-gPlace 0.1.0
-------------
+Work in progress
+----------------
 
-*September, 2026*
+*October, 2026*
 
-* First release. gPlace reproduces GTDB-Tk's pplacer placements (v1.1.alpha19) bit for bit on
-  the WAG + CAT reference packages, with under 44 GiB of memory for the largest GTDB-Tk R226
-  class-level tree.
-* The engine is compiled automatically by ``pip install``; verify it with
-  ``gplace check_install`` and ``gplace test``.
-* Trees too large for memory, such as the full GTDB bacterial tree, can be placed tile by tile
-  with identical results: give ``--max_memory`` (e.g. ``64G``) and gPlace picks the tile size,
-  or set it with ``--tile_edges``.
+* gPlace is under active development and its results are not yet fully tested beyond the data
+  sets described in :ref:`validation`. Check it on your own data before relying on it for
+  published results (for example with :ref:`commands/compare`), and report problems on the
+  `issue tracker <https://github.com/cmc-aau/gPlace/issues>`_.
+
+

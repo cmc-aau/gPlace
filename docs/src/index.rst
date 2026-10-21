@@ -2,6 +2,17 @@
 gPlace
 ******
 
+.. warning::
+
+   **Work in progress.** gPlace is under active development and its results are not yet fully
+   tested. It reproduces pplacer's placements on the data sets described in :ref:`validation`,
+   but it has not been tested widely beyond them, and its newest features (``--full_model`` for
+   IQ-TREE and RAxML-NG fits, macOS builds) have had the least use. Options and outputs may still
+   change. Before relying on gPlace for published results, check it on your own data, for example
+   by comparing its jplace files with pplacer's on a subset of your genomes
+   (:ref:`commands/compare`). Please report problems on the
+   `issue tracker <https://github.com/cmc-aau/gPlace/issues>`_.
+
 **gPlace** places genomes on the GTDB reference trees **exactly as GTDB-Tk's pplacer does**,
 while using a fraction of the memory and time. It is a re-implementation of
 ``pplacer -c <refpkg>`` (pplacer v1.1.alpha19, the build GTDB-Tk ships): the WAG + FastTree CAT

@@ -3,6 +3,11 @@
 Validation
 ==========
 
+.. note::
+
+   gPlace is a work in progress. The checks below cover the data sets listed on this page; gPlace
+   has not yet been tested widely beyond them.
+
 gPlace was validated on the 127,343 GlobDB genomes that GTDB-Tk (release R226) assigned to the
 8 bacterial class-level reference packages, by comparing gPlace's jplace files with the jplace
 files written by GTDB-Tk's pplacer v1.1.alpha19.

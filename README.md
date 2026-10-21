@@ -3,6 +3,9 @@
 [![Unit tests](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/pchaumeil/08bdf557b640135e66112abccdc87bcc/raw/gplace-tests.json)](https://github.com/cmc-aau/gPlace/actions/workflows/tests.yml)
 [![pplacer parity](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/pchaumeil/08bdf557b640135e66112abccdc87bcc/raw/gplace-parity.json)](https://github.com/cmc-aau/gPlace/actions/workflows/tests.yml)
 
+> [!WARNING]
+> **Work in progress.** gPlace is under active development and its results are not yet fully tested. It reproduces pplacer's placements on the data sets described under [Validation](#validation), but it has not been tested widely beyond them, and its newest features (`--full_model` for IQ-TREE and RAxML-NG fits, macOS builds) have had the least use. Options and outputs may still change. Before relying on gPlace for published results, check it on your own data, for example by comparing its jplace files with pplacer's on a subset of your genomes (`gplace compare`). Please report problems on the [issue tracker](https://github.com/cmc-aau/gPlace/issues).
+
 **gPlace** places genomes on the GTDB reference trees **exactly as GTDB-Tk's pplacer does**, bit for bit, while using a fraction of the memory and time. It is a re-implementation of `pplacer -c <refpkg>` (pplacer v1.1.alpha19, the build GTDB-Tk ships): the WAG + FastTree CAT reference packages used by GTDB-Tk, and every other model pplacer supports (LG, JTT, GTR for DNA; CAT or gamma rates; model or empirical frequencies).
 
 * **Identical output:** same edges, likelihoods, like-weight ratios and branch lengths. Every number in the jplace file is textually identical to pplacer's (`%.12g`), as is the reference tree string.

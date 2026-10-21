@@ -1,6 +1,13 @@
 FAQ
 ===
 
+**Is gPlace ready to replace pplacer in my work?**
+  Not without checking. gPlace is a work in progress and its results are not yet fully tested:
+  it reproduces pplacer's placements on the data sets described in :ref:`validation`, but it has
+  not been tested widely beyond them, and its newest features (``--full_model``, macOS builds)
+  have had the least use. Compare its output with pplacer's on a subset of your own genomes
+  (``gplace compare``) before relying on it, and report problems on the GitHub issue tracker.
+
 **Are the results really identical to pplacer's?**
   Yes, for the WAG + CAT reference packages used by GTDB-Tk. On 127,343 genomes (8 GTDB-Tk R226
   class-level trees) every placement matched GTDB-Tk's jplace files: edges, likelihoods,
