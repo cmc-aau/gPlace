@@ -1,11 +1,9 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/src/_static/gplace-mark-dark.svg">
-    <img src="docs/src/_static/gplace-mark.svg" alt="gPlace logo" width="120">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/src/_static/gPlace-stacked-dark.svg">
+    <img src="docs/src/_static/gPlace-stacked.svg" alt="gPlace" width="220">
   </picture>
 </p>
-
-<h1 align="center">gPlace</h1>
 
 <p align="center">
   <a href="https://github.com/cmc-aau/gPlace/actions/workflows/tests.yml"><img alt="Unit tests" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/pchaumeil/08bdf557b640135e66112abccdc87bcc/raw/gplace-tests.json"></a>
@@ -199,7 +197,7 @@ The other models (LG, JTT, empirical frequencies, GTR, gamma) were compared with
 
 ## Citing gPlace
 
-A manuscript is in preparation. Please also cite pplacer, GTDB-Tk and GTDB (see the documentation's references page).
+Please cite pplacer, GTDB-Tk and GTDB, whose placements gPlace reproduces (see the documentation's references page).
 
 ## License
 
