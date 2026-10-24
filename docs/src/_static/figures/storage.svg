@@ -2,130 +2,130 @@
 <title id="title">Likelihood vectors kept by pplacer and by gPlace</title>
 <desc id="desc">The same small tree twice. pplacer keeps distal, proximal and supernode vectors for every node; gPlace keeps distal and proximal vectors for internal nodes only and rebuilds leaf vectors when they are needed.</desc>
 <style>text{font-family:"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif}.mono{font-family:Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace}.static-only{display:none}@keyframes growX{from{transform:scaleX(0)}}@keyframes growY{from{transform:scaleY(0)}}@keyframes fadein{from{opacity:0}}@keyframes draw{from{stroke-dashoffset:1}}.a1{animation:ka1 9s ease-in-out infinite}@keyframes ka1{0.000%{opacity:0}8.889%{opacity:0}11.111%{opacity:1}18.889%{opacity:1}21.111%{opacity:0}100.000%{opacity:0}}.a2{animation:ka2 9s ease-in-out infinite}@keyframes ka2{0.000%{opacity:0}8.889%{opacity:0}11.111%{opacity:1}18.889%{opacity:1}21.111%{opacity:0}100.000%{opacity:0}}.a3{animation:ka3 9s ease-in-out infinite}@keyframes ka3{0.000%{opacity:0}22.778%{opacity:0}25.000%{opacity:1}32.778%{opacity:1}35.000%{opacity:0}100.000%{opacity:0}}.a4{animation:ka4 9s ease-in-out infinite}@keyframes ka4{0.000%{opacity:0}22.778%{opacity:0}25.000%{opacity:1}32.778%{opacity:1}35.000%{opacity:0}100.000%{opacity:0}}.a5{animation:ka5 9s ease-in-out infinite}@keyframes ka5{0.000%{opacity:0}36.667%{opacity:0}38.889%{opacity:1}46.667%{opacity:1}48.889%{opacity:0}100.000%{opacity:0}}.a6{animation:ka6 9s ease-in-out infinite}@keyframes ka6{0.000%{opacity:0}36.667%{opacity:0}38.889%{opacity:1}46.667%{opacity:1}48.889%{opacity:0}100.000%{opacity:0}}.a7{animation:ka7 9s ease-in-out infinite}@keyframes ka7{0.000%{opacity:0}50.556%{opacity:0}52.778%{opacity:1}60.556%{opacity:1}62.778%{opacity:0}100.000%{opacity:0}}.a8{animation:ka8 9s ease-in-out infinite}@keyframes ka8{0.000%{opacity:0}50.556%{opacity:0}52.778%{opacity:1}60.556%{opacity:1}62.778%{opacity:0}100.000%{opacity:0}}.a9{animation:ka9 9s ease-in-out infinite}@keyframes ka9{0.000%{opacity:0}64.444%{opacity:0}66.667%{opacity:1}74.444%{opacity:1}76.667%{opacity:0}100.000%{opacity:0}}.a10{animation:ka10 9s ease-in-out infinite}@keyframes ka10{0.000%{opacity:0}64.444%{opacity:0}66.667%{opacity:1}74.444%{opacity:1}76.667%{opacity:0}100.000%{opacity:0}}.a11{animation:ka11 9s ease-in-out infinite}@keyframes ka11{0.000%{opacity:0}78.333%{opacity:0}80.556%{opacity:1}88.333%{opacity:1}90.556%{opacity:0}100.000%{opacity:0}}.a12{animation:ka12 9s ease-in-out infinite}@keyframes ka12{0.000%{opacity:0}78.333%{opacity:0}80.556%{opacity:1}88.333%{opacity:1}90.556%{opacity:0}100.000%{opacity:0}}@media (prefers-reduced-motion:reduce){*{animation:none!important}.transient{display:none}.static-only{display:inline}}</style>
-<text x="20" y="32" font-size="16" fill="#2a2018" font-weight="bold">pplacer</text>
-<text x="20" y="51" font-size="12.5" fill="#6b6258">3 vectors for every node</text>
-<path d="M96 190 H65 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M96 190 H127 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M142.5 144 H96 V190" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M142.5 144 H189 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M235.5 98 H142.5 V144" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M282 190 H251 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M282 190 H313 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M328.5 144 H282 V190" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M328.5 144 H375 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M235.5 98 H328.5 V144" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<line x1="235.5" y1="86" x2="235.5" y2="98" stroke="#2a2018" stroke-width="2.5" stroke-linecap="round"/>
-<rect x="46" y="244" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="59.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<rect x="73" y="244" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<circle cx="65" cy="236" r="3" fill="#2a2018"/>
-<rect x="108" y="244" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="121.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<rect x="135" y="244" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<circle cx="127" cy="236" r="3" fill="#2a2018"/>
-<rect x="103" y="173" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="116.5" y="173" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<rect x="130" y="173" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<circle cx="96" cy="190" r="3.5" fill="#2a2018"/>
-<rect x="170" y="244" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="183.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<rect x="197" y="244" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<circle cx="189" cy="236" r="3" fill="#2a2018"/>
-<rect x="149.5" y="127" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="163" y="127" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<rect x="176.5" y="127" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<circle cx="142.5" cy="144" r="3.5" fill="#2a2018"/>
-<rect x="232" y="244" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="245.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<rect x="259" y="244" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<circle cx="251" cy="236" r="3" fill="#2a2018"/>
-<rect x="294" y="244" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="307.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<rect x="321" y="244" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<circle cx="313" cy="236" r="3" fill="#2a2018"/>
-<rect x="289" y="173" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="302.5" y="173" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<rect x="316" y="173" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<circle cx="282" cy="190" r="3.5" fill="#2a2018"/>
-<rect x="356" y="244" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="369.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<rect x="383" y="244" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<circle cx="375" cy="236" r="3" fill="#2a2018"/>
-<rect x="335.5" y="127" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="349" y="127" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<rect x="362.5" y="127" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<circle cx="328.5" cy="144" r="3.5" fill="#2a2018"/>
-<rect x="242.5" y="81" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="256" y="81" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<rect x="269.5" y="81" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<circle cx="235.5" cy="98" r="3.5" fill="#2a2018"/>
-<text x="20" y="284" font-size="13" fill="#2a2018" font-weight="bold">33 vectors kept (11 nodes × 3)</text>
-<text x="20" y="304" font-size="12" fill="#6b6258" class="mono">3 × nodes × sites × 20 × 8 bytes</text>
-<text x="470" y="32" font-size="16" fill="#2a2018" font-weight="bold">gPlace</text>
-<text x="470" y="51" font-size="12.5" fill="#6b6258">2 vectors for each internal node; leaves rebuilt when needed</text>
-<path d="M546 190 H515 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M546 190 H577 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M592.5 144 H546 V190" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M592.5 144 H639 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M685.5 98 H592.5 V144" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M732 190 H701 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M732 190 H763 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M778.5 144 H732 V190" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M778.5 144 H825 V236" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M685.5 98 H778.5 V144" fill="none" stroke="#2a2018" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
-<line x1="685.5" y1="86" x2="685.5" y2="98" stroke="#2a2018" stroke-width="2.5" stroke-linecap="round"/>
-<rect x="496.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#55788a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="496" y="244" width="11" height="11" fill="#55788a" rx="1.5" class="a1 transient"/>
-<rect x="510.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#7d8f5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="509.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5" class="a2 transient"/>
-<circle cx="515" cy="236" r="3" fill="#2a2018"/>
-<rect x="558.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#55788a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="558" y="244" width="11" height="11" fill="#55788a" rx="1.5" class="a3 transient"/>
-<rect x="572.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#7d8f5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="571.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5" class="a4 transient"/>
-<circle cx="577" cy="236" r="3" fill="#2a2018"/>
-<rect x="553" y="173" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="566.5" y="173" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<circle cx="546" cy="190" r="3.5" fill="#2a2018"/>
-<rect x="620.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#55788a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="620" y="244" width="11" height="11" fill="#55788a" rx="1.5" class="a5 transient"/>
-<rect x="634.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#7d8f5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="633.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5" class="a6 transient"/>
-<circle cx="639" cy="236" r="3" fill="#2a2018"/>
-<rect x="599.5" y="127" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="613" y="127" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<circle cx="592.5" cy="144" r="3.5" fill="#2a2018"/>
-<rect x="682.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#55788a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="682" y="244" width="11" height="11" fill="#55788a" rx="1.5" class="a7 transient"/>
-<rect x="696.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#7d8f5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="695.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5" class="a8 transient"/>
-<circle cx="701" cy="236" r="3" fill="#2a2018"/>
-<rect x="744.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#55788a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="744" y="244" width="11" height="11" fill="#55788a" rx="1.5" class="a9 transient"/>
-<rect x="758.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#7d8f5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="757.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5" class="a10 transient"/>
-<circle cx="763" cy="236" r="3" fill="#2a2018"/>
-<rect x="739" y="173" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="752.5" y="173" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<circle cx="732" cy="190" r="3.5" fill="#2a2018"/>
-<rect x="806.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#55788a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="806" y="244" width="11" height="11" fill="#55788a" rx="1.5" class="a11 transient"/>
-<rect x="820.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#7d8f5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
-<rect x="819.5" y="244" width="11" height="11" fill="#7d8f5a" rx="1.5" class="a12 transient"/>
-<circle cx="825" cy="236" r="3" fill="#2a2018"/>
-<rect x="785.5" y="127" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="799" y="127" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<circle cx="778.5" cy="144" r="3.5" fill="#2a2018"/>
-<rect x="692.5" y="81" width="11" height="11" fill="#55788a" rx="1.5"/>
-<rect x="706" y="81" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<circle cx="685.5" cy="98" r="3.5" fill="#2a2018"/>
-<text x="470" y="284" font-size="13" fill="#9a5f16" font-weight="bold">10 vectors kept (5 internal nodes × 2)</text>
-<text x="470" y="304" font-size="12" fill="#6b6258" class="mono">2 × internal nodes × sites × 20 × 8 bytes</text>
-<line x1="450" y1="20" x2="450" y2="310" stroke="#ebe6dc" stroke-width="1.5"/>
-<rect x="20" y="330" width="11" height="11" fill="#55788a" rx="1.5"/>
-<text x="37" y="340" font-size="12" fill="#6b6258">distal: the tree below the node</text>
-<rect x="252.1" y="330" width="11" height="11" fill="#7d8f5a" rx="1.5"/>
-<text x="269.1" y="340" font-size="12" fill="#6b6258">proximal: the rest of the tree</text>
-<rect x="478.1" y="330" width="11" height="11" fill="#b5523b" rx="1.5"/>
-<text x="495.1" y="340" font-size="12" fill="#6b6258">supernode: prefilter (gPlace: 8 edges at a time, then discarded)</text>
+<text x="20" y="32" font-size="16" fill="#141414" font-weight="bold">pplacer</text>
+<text x="20" y="51" font-size="12.5" fill="#6b6b6b">3 vectors for every node</text>
+<path d="M96 190 H65 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M96 190 H127 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M142.5 144 H96 V190" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M142.5 144 H189 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M235.5 98 H142.5 V144" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M282 190 H251 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M282 190 H313 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M328.5 144 H282 V190" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M328.5 144 H375 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M235.5 98 H328.5 V144" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="235.5" y1="86" x2="235.5" y2="98" stroke="#141414" stroke-width="2.5" stroke-linecap="round"/>
+<rect x="46" y="244" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="59.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<rect x="73" y="244" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<circle cx="65" cy="236" r="3" fill="#141414"/>
+<rect x="108" y="244" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="121.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<rect x="135" y="244" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<circle cx="127" cy="236" r="3" fill="#141414"/>
+<rect x="103" y="173" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="116.5" y="173" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<rect x="130" y="173" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<circle cx="96" cy="190" r="3.5" fill="#141414"/>
+<rect x="170" y="244" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="183.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<rect x="197" y="244" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<circle cx="189" cy="236" r="3" fill="#141414"/>
+<rect x="149.5" y="127" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="163" y="127" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<rect x="176.5" y="127" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<circle cx="142.5" cy="144" r="3.5" fill="#141414"/>
+<rect x="232" y="244" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="245.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<rect x="259" y="244" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<circle cx="251" cy="236" r="3" fill="#141414"/>
+<rect x="294" y="244" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="307.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<rect x="321" y="244" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<circle cx="313" cy="236" r="3" fill="#141414"/>
+<rect x="289" y="173" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="302.5" y="173" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<rect x="316" y="173" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<circle cx="282" cy="190" r="3.5" fill="#141414"/>
+<rect x="356" y="244" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="369.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<rect x="383" y="244" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<circle cx="375" cy="236" r="3" fill="#141414"/>
+<rect x="335.5" y="127" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="349" y="127" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<rect x="362.5" y="127" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<circle cx="328.5" cy="144" r="3.5" fill="#141414"/>
+<rect x="242.5" y="81" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="256" y="81" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<rect x="269.5" y="81" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<circle cx="235.5" cy="98" r="3.5" fill="#141414"/>
+<text x="20" y="284" font-size="13" fill="#141414" font-weight="bold">33 vectors kept (11 nodes × 3)</text>
+<text x="20" y="304" font-size="12" fill="#6b6b6b" class="mono">3 × nodes × sites × 20 × 8 bytes</text>
+<text x="470" y="32" font-size="16" fill="#141414" font-weight="bold">gPlace</text>
+<text x="470" y="51" font-size="12.5" fill="#6b6b6b">2 vectors for each internal node; leaves rebuilt when needed</text>
+<path d="M546 190 H515 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M546 190 H577 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M592.5 144 H546 V190" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M592.5 144 H639 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M685.5 98 H592.5 V144" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M732 190 H701 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M732 190 H763 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M778.5 144 H732 V190" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M778.5 144 H825 V236" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M685.5 98 H778.5 V144" fill="none" stroke="#141414" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="685.5" y1="86" x2="685.5" y2="98" stroke="#141414" stroke-width="2.5" stroke-linecap="round"/>
+<rect x="496.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5b83b5" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="496" y="244" width="11" height="11" fill="#5b83b5" rx="1.5" class="a1 transient"/>
+<rect x="510.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5f9a5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="509.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5" class="a2 transient"/>
+<circle cx="515" cy="236" r="3" fill="#141414"/>
+<rect x="558.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5b83b5" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="558" y="244" width="11" height="11" fill="#5b83b5" rx="1.5" class="a3 transient"/>
+<rect x="572.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5f9a5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="571.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5" class="a4 transient"/>
+<circle cx="577" cy="236" r="3" fill="#141414"/>
+<rect x="553" y="173" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="566.5" y="173" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<circle cx="546" cy="190" r="3.5" fill="#141414"/>
+<rect x="620.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5b83b5" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="620" y="244" width="11" height="11" fill="#5b83b5" rx="1.5" class="a5 transient"/>
+<rect x="634.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5f9a5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="633.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5" class="a6 transient"/>
+<circle cx="639" cy="236" r="3" fill="#141414"/>
+<rect x="599.5" y="127" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="613" y="127" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<circle cx="592.5" cy="144" r="3.5" fill="#141414"/>
+<rect x="682.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5b83b5" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="682" y="244" width="11" height="11" fill="#5b83b5" rx="1.5" class="a7 transient"/>
+<rect x="696.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5f9a5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="695.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5" class="a8 transient"/>
+<circle cx="701" cy="236" r="3" fill="#141414"/>
+<rect x="744.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5b83b5" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="744" y="244" width="11" height="11" fill="#5b83b5" rx="1.5" class="a9 transient"/>
+<rect x="758.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5f9a5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="757.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5" class="a10 transient"/>
+<circle cx="763" cy="236" r="3" fill="#141414"/>
+<rect x="739" y="173" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="752.5" y="173" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<circle cx="732" cy="190" r="3.5" fill="#141414"/>
+<rect x="806.75" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5b83b5" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="806" y="244" width="11" height="11" fill="#5b83b5" rx="1.5" class="a11 transient"/>
+<rect x="820.25" y="244.75" width="9.5" height="9.5" fill="none" stroke="#5f9a5a" stroke-width="1.5" stroke-dasharray="2.2 1.6" rx="1.5"/>
+<rect x="819.5" y="244" width="11" height="11" fill="#5f9a5a" rx="1.5" class="a12 transient"/>
+<circle cx="825" cy="236" r="3" fill="#141414"/>
+<rect x="785.5" y="127" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="799" y="127" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<circle cx="778.5" cy="144" r="3.5" fill="#141414"/>
+<rect x="692.5" y="81" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<rect x="706" y="81" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<circle cx="685.5" cy="98" r="3.5" fill="#141414"/>
+<text x="470" y="284" font-size="13" fill="#8f5e12" font-weight="bold">10 vectors kept (5 internal nodes × 2)</text>
+<text x="470" y="304" font-size="12" fill="#6b6b6b" class="mono">2 × internal nodes × sites × 20 × 8 bytes</text>
+<line x1="450" y1="20" x2="450" y2="310" stroke="#ece9e3" stroke-width="1.5"/>
+<rect x="20" y="330" width="11" height="11" fill="#5b83b5" rx="1.5"/>
+<text x="37" y="340" font-size="12" fill="#6b6b6b">distal: the tree below the node</text>
+<rect x="252.1" y="330" width="11" height="11" fill="#5f9a5a" rx="1.5"/>
+<text x="269.1" y="340" font-size="12" fill="#6b6b6b">proximal: the rest of the tree</text>
+<rect x="478.1" y="330" width="11" height="11" fill="#c26a61" rx="1.5"/>
+<text x="495.1" y="340" font-size="12" fill="#6b6b6b">supernode: prefilter (gPlace: 8 edges at a time, then discarded)</text>
 </svg>

@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 80" role="img" aria-label="gPlace">
-  <g fill="none" stroke="#2b8a5a" stroke-width="3" stroke-linecap="round">
-    <path d="M14 66 V40 M14 40 H30 M14 40 H4 M30 40 V24 M30 24 H40 M30 24 H22 M40 24 V10"/>
-    <path d="M40 24 V36" stroke="#e39b2d" stroke-dasharray="3 3"/>
-  </g>
-  <circle cx="40" cy="42" r="5" fill="#e39b2d"/>
-  <text x="58" y="52" font-family="Helvetica, Arial, sans-serif" font-size="34" font-weight="700" fill="#ffffff">gPlace</text>
-</svg>

@@ -21,7 +21,7 @@ source_suffix = {'.rst': 'restructuredtext', '.md': 'markdown'}
 
 html_theme = 'sphinx_rtd_theme'
 html_theme_options = {
-    'logo_only': False,
+    'logo_only': True,
     'prev_next_buttons_location': 'bottom',
     'style_external_links': True,
     'collapse_navigation': True,
@@ -38,6 +38,6 @@ html_context = {
     'github_version': 'main/docs/src/',
 }
 html_css_files = ['theme_overrides.css']
-html_logo = '_static/gplace-mark.svg'
-html_favicon = '_static/gplace-mark.svg'
+html_logo = '_static/gPlace-stacked-dark.svg'     # the mark with the name under it, for the dark sidebar ('g' in off-white)
+# favicons (16 and 32 px, each drawn for its size) and the Apple touch icon: _templates/layout.html
 html_baseurl = 'https://cmc-aau.github.io/gPlace/'

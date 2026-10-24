@@ -3,8 +3,6 @@
 References
 ==========
 
-**gPlace manuscript is in preparation.**
-
 **gPlace reproduces the placements of:**
 
 .. list-table::

@@ -1,17 +1,22 @@
-/* The colours of the gPlace mark (_static/gplace-mark.svg) applied to the Read the Docs theme:
-   its warm near-black stem for the sidebar and headings, its off-white leaves for the page and the
-   logo panel, its amber leaves (and their darker outline) for captions, links and highlights. */
+/* The colours of the gPlace logo (_static/gPlace-mark.svg, gPlace-lockup.svg) applied to the Read the Docs
+   theme: its black branches for the sidebar and headings, its amber placement path and wordmark for
+   captions, links and highlights, and its pastel rings for notes, warnings and code. */
 :root {
-  --gp-ink: #2a2018;          /* stem and outlines */
-  --gp-ink-soft: #3d3127;     /* sidebar hover */
-  --gp-text: #3a3029;         /* running text */
-  --gp-muted: #6b6258;        /* captions, footer */
-  --gp-paper: #f7f7f4;        /* leaves: page ground, logo panel */
-  --gp-panel: #fffefb;        /* reading column */
-  --gp-rule: #e2ddd2;
-  --gp-amber: #d89a3a;        /* amber leaves */
-  --gp-amber-dark: #9a5f16;   /* their outline: links, titles on light ground */
-  --gp-amber-wash: #fbf1df;
+  --gp-ink: #141414;          /* branches */
+  --gp-ink-soft: #262626;     /* sidebar hover */
+  --gp-text: #2b2b2b;         /* running text */
+  --gp-muted: #6b6b6b;        /* captions, footer */
+  --gp-paper: #f7f6f2;        /* page ground */
+  --gp-panel: #ffffff;        /* reading column */
+  --gp-rule: #e4e1da;
+  --gp-amber: #d4972f;        /* placement path */
+  --gp-amber-word: #b87d1e;   /* wordmark */
+  --gp-amber-text: #8f5e12;   /* links and titles on light ground (5.6:1 on white) */
+  --gp-ring-blue: #cadbef;    /* rings, centre outwards: blue, peach, green, pink, lavender */
+  --gp-ring-peach: #f8ddba;
+  --gp-ring-green: #cfe6c8;
+  --gp-ring-pink: #f4ccc6;
+  --gp-ring-lavender: #dcd2ea;
 }
 
 /* Wider content and wrapped tables for command help and result tables. */
@@ -24,52 +29,50 @@ body, .wy-body-for-nav { background: var(--gp-paper); }
 .wy-nav-content { color: var(--gp-text); }
 .rst-content h1, .rst-content h2, .rst-content h3, .rst-content h4, .rst-content h5, .rst-content h6 { color: var(--gp-ink); }
 .rst-content h1 { border-bottom: 3px solid var(--gp-amber); padding-bottom: .25em; }
-a { color: var(--gp-amber-dark); }
-a:visited { color: #7d4c12; }
+a { color: var(--gp-amber-text); }
+a:visited { color: #74490c; }
 a:hover, a:focus { color: var(--gp-ink); }
-.rst-content code.literal, .rst-content tt.literal { color: #8a4f10; background: var(--gp-amber-wash); border-color: #efdcb9; }
+.rst-content code.literal, .rst-content tt.literal { color: #74490c; background: #fdf3e4; border-color: #f2dcba; }
 .rst-content div[class^="highlight"], .rst-content pre.literal-block { border-color: var(--gp-rule); }
-.rst-content div[class^="highlight"] pre, .highlight { background: #f4f1ea; }
+.rst-content div[class^="highlight"] pre, .highlight { background: #f6f5f1; }
 .rst-content table.docutils thead th, .rst-content table.field-list thead th, .wy-table thead th { border-bottom: 2px solid var(--gp-amber); }
-.wy-breadcrumbs li a, .rst-content .headerlink { color: var(--gp-amber-dark); }
+.wy-breadcrumbs li a, .rst-content .headerlink { color: var(--gp-amber-text); }
 footer, footer p { color: var(--gp-muted); }
 .btn-neutral { background-color: var(--gp-paper) !important; color: var(--gp-ink) !important; border: 1px solid var(--gp-rule); box-shadow: none; }
-.btn-neutral:hover { background-color: var(--gp-amber-wash) !important; }
-::selection { background: #f2d7a6; }
+.btn-neutral:hover { background-color: #fdf3e4 !important; }
+::selection { background: var(--gp-ring-peach); }
 
-/* Sidebar: the mark on its off-white ground, the menu on the stem's dark */
-.wy-nav-side { background: var(--gp-ink); }
-.wy-side-nav-search { background-color: var(--gp-paper); border-bottom: 3px solid var(--gp-amber); }
-.wy-side-nav-search > a.icon {
-  display: flex; flex-direction: column-reverse; align-items: center; gap: .35rem;
-  color: var(--gp-ink); font-weight: 700; font-size: 1.45em; letter-spacing: .01em;
-}
-.wy-side-nav-search > a.icon::before { display: none; }          /* the home icon next to the name */
-.wy-side-nav-search > a.icon:hover { background: transparent; color: var(--gp-amber-dark); }
-.wy-side-nav-search > a.icon img.logo { width: 84px; max-width: 84px; margin: 0; padding: 0; }
-.wy-side-nav-search > div.version { color: var(--gp-muted); }
-.wy-side-nav-search input[type="text"] { border-color: #d8cfbf; color: var(--gp-ink); }
-.wy-side-nav-search input[type="text"]:focus { border-color: var(--gp-amber); box-shadow: 0 0 0 2px rgba(216, 154, 58, .25); }
+/* Sidebar: black like the branches, with the logo and the name under it (its "g" in off-white) at the top */
+.wy-nav-side, .wy-side-nav-search { background: var(--gp-ink); }
+.wy-side-nav-search { border-bottom: 3px solid var(--gp-amber); padding-top: 1.1em; }
+.wy-side-nav-search > a { padding: 0; margin-bottom: .9em; }
+.wy-side-nav-search > a:hover { background: transparent; }
+.wy-side-nav-search > a img.logo { width: 170px; max-width: 100%; margin: 0 auto; }
+.wy-side-nav-search > div.version { color: #b5b2ab; }
+.wy-side-nav-search input[type="text"] { background: #1f1f1f; border-color: #3a3a3a; color: #f2f0ec; }
+.wy-side-nav-search input[type="text"]::placeholder { color: #8d8a84; }
+.wy-side-nav-search input[type="text"]:focus { border-color: var(--gp-amber); box-shadow: 0 0 0 2px rgba(212, 151, 47, .3); }
 .wy-menu-vertical header, .wy-menu-vertical p.caption { color: var(--gp-amber); letter-spacing: .06em; }
-.wy-menu-vertical a { color: #e6dfd2; }
+.wy-menu-vertical a { color: #e6e4df; }
 .wy-menu-vertical a:hover { background-color: var(--gp-ink-soft); color: #ffffff; }
-.wy-menu-vertical li.current { background: #ece7dc; }
+.wy-menu-vertical li.current { background: #efede8; }
 .wy-menu-vertical li.current > a, .wy-menu-vertical li.on a { color: var(--gp-ink); background: var(--gp-paper); border-left: 3px solid var(--gp-amber); }
-.wy-menu-vertical li.current a { color: #4a3f35; border-right-color: #d6cfc1; }
-.wy-menu-vertical li.current a:hover { background: #e2dccf; }
-.wy-menu-vertical li.toctree-l2.current > a, .wy-menu-vertical li.toctree-l2.current li.toctree-l3 > a { background: #e2dbcd; }
-.wy-menu-vertical li.toctree-l3.current > a, .wy-menu-vertical li.toctree-l3.current li.toctree-l4 > a { background: #d6cebe; }
+.wy-menu-vertical li.current a { color: #3d3d3d; border-right-color: #dad7d0; }
+.wy-menu-vertical li.current a:hover { background: #e5e2db; }
+.wy-menu-vertical li.toctree-l2.current > a, .wy-menu-vertical li.toctree-l2.current li.toctree-l3 > a { background: #e5e2db; }
+.wy-menu-vertical li.toctree-l3.current > a, .wy-menu-vertical li.toctree-l3.current li.toctree-l4 > a { background: #d9d6ce; }
 .wy-nav-top { background: var(--gp-ink); }
-.wy-nav-top a { color: var(--gp-paper); }
+.wy-nav-top a { color: #f2f0ec; }
 .wy-nav-top i { color: var(--gp-amber); }
 
-/* Admonitions: notes in the stem's brown, warnings in amber */
-.rst-content .note, .rst-content .seealso, .rst-content .hint, .rst-content .tip { background: #f3f0ea; }
-.rst-content .note .admonition-title, .rst-content .seealso .admonition-title,
-.rst-content .hint .admonition-title, .rst-content .tip .admonition-title { background: #5f5246; }
-.rst-content .warning, .rst-content .caution, .rst-content .attention, .rst-content .important { background: var(--gp-amber-wash); }
+/* Admonitions in the ring colours: notes blue, tips green, warnings peach with amber titles */
+.rst-content .note, .rst-content .seealso { background: #eef4fb; }
+.rst-content .note .admonition-title, .rst-content .seealso .admonition-title { background: #4f6f96; }
+.rst-content .hint, .rst-content .tip { background: #eef6ec; }
+.rst-content .hint .admonition-title, .rst-content .tip .admonition-title { background: #4e7f49; }
+.rst-content .warning, .rst-content .caution, .rst-content .attention, .rst-content .important { background: #fdf2e2; }
 .rst-content .warning .admonition-title, .rst-content .caution .admonition-title,
-.rst-content .attention .admonition-title, .rst-content .important .admonition-title { background: var(--gp-amber-dark); }
+.rst-content .attention .admonition-title, .rst-content .important .admonition-title { background: var(--gp-amber-text); }
 
 /* Figures (docs/make_figures.py): full width, with room around them and a quiet caption. */
 .rst-content figure { margin: 1.2em 0 1.8em; }

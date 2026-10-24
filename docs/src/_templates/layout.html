@@ -1,0 +1,8 @@
+{# The browser-tab icons: one PNG per size, each from the icon drawn for that size, and the Apple touch icon. #}
+{% extends "!layout.html" %}
+{% block extrahead %}
+  {{ super() }}
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ pathto('_static/gPlace-favicon-16.png', 1) }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ pathto('_static/gPlace-favicon-32.png', 1) }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ pathto('_static/gPlace-mark-white-180.png', 1) }}">
+{% endblock %}

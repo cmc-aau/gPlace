@@ -19,14 +19,14 @@ from gplace.engine.tiled import tile_layout  # noqa: E402
 
 OUT = os.path.join(HERE, 'src', '_static', 'figures')
 
-INK, MUTED, FAINT, GRID, PAPER = '#2a2018', '#6b6258', '#d6cfc3', '#ebe6dc', '#f7f7f4'
-TREE = '#2a2018'                                            # the reference tree: the mark's stem
-ACCENT = '#9a5f16'                                          # gPlace's changes and checks: the amber outline
-BOX = '#efe8dc'                                             # the strike box
-ORANGE, ORANGE_T, ORANGE_L = '#d89a3a', '#9a5f16', '#fbf1df'  # queries and placements: the amber leaves
+INK, MUTED, FAINT, GRID, PAPER = '#141414', '#6b6b6b', '#d6d3cc', '#ece9e3', '#f7f6f2'
+TREE = '#141414'                                            # the reference tree: the logo's branches
+ACCENT = '#8f5e12'                                          # gPlace's changes and checks: the logo's amber, darkened for text
+BOX = '#e3efdf'                                             # the strike box: the logo's green ring, lighter
+ORANGE, ORANGE_T, ORANGE_L = '#d4972f', '#8f5e12', '#fdf3e4'  # queries and placements: the logo's placement path
 RED = '#b5452f'
-VEC_D, VEC_P, VEC_S = '#55788a', '#7d8f5a', '#b5523b'      # distal, proximal, supernode vectors
-TILES = ['#9a5f16', '#55788a', '#b5523b', '#7d8f5a', '#2a2018', '#c49a52']
+VEC_D, VEC_P, VEC_S = '#5b83b5', '#5f9a5a', '#c26a61'      # distal, proximal, supernode: the rings' blue, green, pink, deeper
+TILES = ['#5b83b5', '#c26a61', '#5f9a5a', '#d4972f', '#8e7bbe', '#141414']   # the rings' hues, deeper, then amber and black
 FONT = '"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif'
 MONO = 'Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace'
 
@@ -226,14 +226,14 @@ def fig_overview():
     # queries: (name, target edge, fraction along the branch, side of the pendant branch)
     targets = [('genome A', 3, .3, -1), ('genome B', 9, .5, 1), ('genome C', 12, .5, 1)]
     seed = 7
-    palette = ['#ecc887', '#c3d2da', '#dcc19e', '#cdd8bd', '#ddd3c5']   # residues, in the mark's warm tones
+    palette = ['#cadbef', '#f8ddba', '#cfe6c8', '#f4ccc6', '#dcd2ea']   # residues: the logo's five rings
     rows = []
     for i, (name, edge, frac, side) in enumerate(targets):
         sy = 104 + 66 * i
         f.add(T(30, sy - 14, name, 11.5, fill=MUTED, cls='mono'))
         for k in range(22):
             seed = (seed * 1103515245 + 12345) % 2 ** 31
-            colour = palette[seed % 5] if seed % 9 else '#f1ede6'
+            colour = palette[seed % 5] if seed % 9 else '#f1efea'
             f.add(R(30 + k * 7, sy - 7, 6, 14, fill=colour, rx=1))
         p = parent[edge]
         lx, ly = X(p) + frac * (X(edge) - X(p)), Y(edge)
