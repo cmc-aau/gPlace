@@ -197,7 +197,7 @@ The other models (LG, JTT, empirical frequencies, GTR, gamma) were compared with
 
 ## Citing gPlace
 
-Please cite pplacer, GTDB-Tk and GTDB, whose placements gPlace reproduces (see the documentation's references page).
+Please cite pplacer, GTDB-Tk and pplacer, whose placements gPlace reproduces (see the documentation's references page).
 
 ## License
 
