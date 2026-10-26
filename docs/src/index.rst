@@ -2,63 +2,71 @@
 gPlace
 ******
 
-.. warning::
+**gPlace** places genomes on the GTDB reference trees and gives **exactly the same result as
+pplacer**, the placement program used by GTDB-Tk, while needing far less memory.
 
-   **Work in progress.** gPlace is under active development and its results are not yet fully
-   tested. It reproduces pplacer's placements on the data sets described in :ref:`validation`,
-   but it has not been tested widely beyond them, and its newest features (``--full_model`` for
-   IQ-TREE and RAxML-NG fits, macOS builds) have had the least use. Options and outputs may still
-   change. Before relying on gPlace for published results, check it on your own data, for example
-   by comparing its jplace files with pplacer's on a subset of your genomes
-   (:ref:`commands/compare`). Please report problems on the
-   `issue tracker <https://github.com/cmc-aau/gPlace/issues>`_.
+.. note::
 
-**gPlace** places genomes on the GTDB reference trees **exactly as GTDB-Tk's pplacer does**,
-while using a fraction of the memory and time. It is a re-implementation of
-``pplacer -c <refpkg>`` (pplacer v1.1.alpha19, the build GTDB-Tk ships): the WAG + FastTree CAT
-reference packages used by GTDB-Tk, and every other model pplacer supports (LG, JTT and GTR for
-DNA; CAT or gamma rates; model or empirical frequencies, see :ref:`models`).
+   **Work in progress.** gPlace is still being tested. Before you use its results in published
+   work, compare them with pplacer's on some of your own genomes (:ref:`commands/compare`), and
+   please report problems on the `issue tracker <https://github.com/cmc-aau/gPlace/issues>`_.
 
-* **Identical output:** same edges, likelihoods, like-weight ratios and branch lengths.
-  Every number in the jplace file is textually identical to pplacer's, as is the reference
-  tree string.
-* **Bounded memory:** under 44 GiB for the largest GTDB-Tk R226 class-level tree
-  (~104 GB with pplacer).
-* **Self-verifying:** ``gplace check_install`` compares the compiled engine bit for bit with
-  values taken from GTDB-Tk's pplacer binary.
 
-gPlace is open source and released under the
+Why gPlace?
+===========
+
+* **Same results as pplacer.** Every placement, likelihood and branch length is identical to
+  pplacer v1.1.alpha19, the version GTDB-Tk uses.
+* **Much less memory.** The largest GTDB-Tk class-level tree needs under 44 GiB (pplacer: about
+  104 GB), and the full GTDB bacterial tree fits in 64 GB (pplacer: about 615 GiB).
+* **Faster.** On the same 64-core server, gPlace placed 10,000 genomes on the full GTDB R226
+  bacterial tree in 14 minutes; pplacer took 17 hours.
+* **Checks itself.** ``gplace check_install`` confirms that gPlace computes exactly as pplacer
+  does on your computer.
+
+
+Quick start
+===========
+
+.. code-block:: bash
+
+    # install (see Installing gPlace)
+    git clone https://github.com/cmc-aau/gPlace.git
+    cd gPlace
+    pip install .
+    gplace check_install
+
+    # place the genomes of a GTDB-Tk alignment on a GTDB-Tk reference package
+    gplace place --msa_file user_msa_file.fasta --refpkg gtdbtk.package.2.refpkg \
+                 --out_file gplace.jplace --cpus 40
+
+The :ref:`quickstart` page shows the other common tasks: the full GTDB tree, many alignments at
+once, and comparing with pplacer.
+
+
+Citing
+======
+
+gPlace reproduces pplacer's placements on the GTDB reference trees. If you use gPlace, please
+cite **pplacer** and **GTDB** (see :ref:`references`).
+
+gPlace is open source, released under the
 `GNU General Public License (Version 3) <https://www.gnu.org/licenses/gpl-3.0.en.html>`_.
-
-Please post questions and issues related to gPlace on the Issues section of the GitHub repository.
-
-
-Running gPlace
-==============
-
-1. Install gPlace and build its engine (:ref:`installing`)
-
-2. Access the help documentation :ref:`commands`, or view the program help menu: ``gplace -h``
-
-* Note: Individual help can be accessed via the specific command, e.g.: ``gplace place -h``
-
-
-Citing gPlace
-=============
-We encourage you to cite gPlace and the third-party software as described in :ref:`references`.
+Questions and problems: the `issue tracker <https://github.com/cmc-aau/gPlace/issues>`_.
 
 
 .. toctree::
    :caption: Getting started
    :maxdepth: 1
 
-   announcements
    installing/index
+   quickstart
    faq
+   announcements
 
 
 .. toctree::
-   :caption: Running gPlace
+   :caption: Using gPlace
    :maxdepth: 1
 
    commands/index
@@ -66,11 +74,20 @@ We encourage you to cite gPlace and the third-party software as described in :re
 
 
 .. toctree::
+   :caption: Advanced
+   :maxdepth: 1
+
+   advanced/memory
+   advanced/pplacer_options
+   advanced/own_trees
+   models
+
+
+.. toctree::
    :caption: About
    :maxdepth: 1
 
    how_it_works
-   models
    validation
    changelog
    references

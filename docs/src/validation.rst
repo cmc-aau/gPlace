@@ -3,6 +3,10 @@
 Validation
 ==========
 
+**In short:** on every data set tested, gPlace's output was identical to pplacer's: 127,343
+genomes on the 8 GTDB-Tk R226 class-level trees, the full R226 bacterial tree, every other model
+pplacer supports and pplacer's options. This page gives the details.
+
 .. note::
 
    gPlace is a work in progress. The checks below cover the data sets listed on this page; gPlace

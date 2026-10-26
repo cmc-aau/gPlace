@@ -3,15 +3,18 @@
 place_batch
 ===========
 
-The ``place_batch`` command places the alignments listed in a :ref:`batchfile <files/batchfile>`. All alignments that share a reference package are pooled and placed in one pass, so the reference likelihood vectors are computed once per reference package. A query's placement does not depend on which other queries are placed with it, so pooling gives exactly the same results as placing each file separately.
+The ``place_batch`` command places many alignments in one run, for example every
+``user_msa_file.fasta`` of a large GTDB-Tk run. List them in a :ref:`batchfile <files/batchfile>`,
+one line per alignment: the alignment, its reference package and the output jplace file.
 
-pplacer's settings (``--max_strikes``, ``--keep_at_most``, ``--no_pre_mask``, ``--always_refine``,
-...) and Stockholm query files work as for :ref:`place <commands/place>`; reference files without a
-reference package, and query files holding the reference sequences, need ``place``.
+Alignments that share a reference package are placed together, so the work on each reference
+tree is done once. The results are exactly the same as placing each file separately with
+:ref:`place <commands/place>`.
 
-``--max_memory`` and ``--tile_edges`` work as for :ref:`place <commands/place>`. With
-``--max_memory``, untiled or tiled placement, and the tile size, are chosen separately for each
-reference package, from its tree and the number of queries pooled on it.
+The options of :ref:`place <commands/place>` work here too. ``--max_memory`` is applied to each
+reference package separately (see :ref:`advanced/memory`). Reference files without a reference
+package, and query files holding the reference sequences, need ``place``
+(see :ref:`advanced/pplacer_options`).
 
 Arguments
 ---------
@@ -35,6 +38,7 @@ Example
 
 .. code-block:: bash
 
+    # make a batchfile from GTDB-Tk output folders (script in the gPlace repository)
     python scripts/make_gtdbtk_batchfile.py --msa_root gtdbtk_runs \
         --refpkg_root release226/split/class_level/pplacer > batch.tsv
     gplace place_batch --batchfile batch.tsv --out_dir gplace_out --cpus 40

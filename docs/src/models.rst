@@ -3,6 +3,10 @@
 Models
 ======
 
+**In short:** with GTDB-Tk's reference packages you do not need this page: the model (WAG with
+FastTree's CAT rates) comes from the package, as in pplacer. It matters for reference packages
+built for other trees (see :ref:`advanced/own_trees`).
+
 gPlace reproduces every evolutionary model pplacer v1.1.alpha19 supports, bit for bit. Like
 pplacer, it reads the model from the reference package's ``phylo_model`` JSON file (pplacer's
 ``-m`` option is ignored for reference packages, so gPlace has no model option either).
@@ -30,7 +34,7 @@ pplacer, it reads the model from the reference package's ``phylo_model`` JSON fi
 
 GTDB-Tk's reference packages are WAG + Price-CAT with model frequencies. Reference packages built
 with ``taxit create`` from FastTree logs (CAT), RAxML/PhyML statistics (gamma), or IQ-TREE and RAxML-NG
-fits (gamma) work as they are; for IQ-TREE and RAxML-NG see :ref:`commands/place` (which parts of a
+fits (gamma) work as they are; for IQ-TREE and RAxML-NG see :ref:`advanced/own_trees` (which parts of a
 fitted model pplacer uses). ``place --full_model`` places with an IQ-TREE or RAxML-NG fit's complete model
 instead (the program's matrices, frequencies, +G/+I/+R and protein mixtures; results then differ from
 pplacer's).

@@ -1,7 +1,8 @@
 Bioconda
 ========
 
-A Bioconda package is planned. A recipe needs ``gcc`` and ``make`` at build time and the
+Not available yet: a Bioconda package is planned; until then, install gPlace from GitHub
+(:ref:`installing`). A recipe needs ``gcc`` and ``make`` at build time and the
 ``gsl-1.16.tar.gz`` source as a second source; its build script runs:
 
 .. code-block:: bash

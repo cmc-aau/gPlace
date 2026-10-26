@@ -1,6 +1,11 @@
 pip
 ===
 
+.. note::
+
+   Not available yet: gPlace is not on PyPI. Until it is, install it from GitHub
+   (:ref:`installing`). This page describes the planned package.
+
 .. code-block:: bash
 
     python -m pip install gtdb-gplace

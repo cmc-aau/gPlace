@@ -3,26 +3,25 @@
 References
 ==========
 
-**gPlace reproduces the placements of:**
+Citing
+------
+
+gPlace reproduces pplacer's placements on the GTDB reference trees. If you use gPlace, please
+cite **pplacer** and **GTDB**:
 
 .. list-table::
    :widths: 100
    :header-rows: 0
 
    * - Matsen FA, Kodner RB, Armbrust EV. 2010. pplacer: linear time maximum-likelihood and Bayesian phylogenetic placement of sequences onto a fixed reference tree. *BMC Bioinformatics*, 11:538. https://doi.org/10.1186/1471-2105-11-538
-   * - Chaumeil PA, Mussig AJ, Hugenholtz P, Parks DH. 2020. GTDB-Tk: a toolkit to classify genomes with the Genome Taxonomy Database. *Bioinformatics*, 36:1925–1927. https://doi.org/10.1093/bioinformatics/btz848
-   * - Chaumeil PA, Mussig AJ, Hugenholtz P, Parks DH. 2022. GTDB-Tk v2: memory friendly classification with the genome taxonomy database. *Bioinformatics*, 38:5315–5316. https://doi.org/10.1093/bioinformatics/btac672
-
-**The Genome Taxonomy Database (GTDB) is described in:**
-
-.. list-table::
-   :widths: 100
-   :header-rows: 0
-
    * - Parks DH, et al. 2022. GTDB: an ongoing census of bacterial and archaeal diversity through a phylogenetically consistent, rank normalized and complete genome-based taxonomy. *Nucleic Acids Research*, 50:D785–D794. https://doi.org/10.1093/nar/gkab776
    * - Parks DH, et al. 2020. A complete domain-to-species taxonomy for Bacteria and Archaea. *Nature Biotechnology*, 38:1079–1086. https://doi.org/10.1038/s41587-020-0501-8
 
-**Models and software used by the reference packages and by gPlace:**
+
+Software gPlace builds on
+-------------------------
+
+For reference, the tools, models and libraries behind gPlace and the GTDB-Tk reference packages:
 
 .. list-table::
    :widths: 20 80
@@ -30,6 +29,10 @@ References
 
    * - Software
      - Reference
+   * - GTDB-Tk
+     - Chaumeil PA, Mussig AJ, Hugenholtz P, Parks DH. 2022. GTDB-Tk v2: memory friendly classification with the genome taxonomy database. *Bioinformatics*, 38:5315–5316. https://doi.org/10.1093/bioinformatics/btac672
+
+       Chaumeil PA, Mussig AJ, Hugenholtz P, Parks DH. 2020. GTDB-Tk: a toolkit to classify genomes with the Genome Taxonomy Database. *Bioinformatics*, 36:1925–1927. https://doi.org/10.1093/bioinformatics/btz848
    * - FastTree
      - Price MN, Dehal PS, Arkin AP. 2010. FastTree 2 – approximately maximum-likelihood trees for large alignments. *PLoS ONE*, 5:e9490. https://doi.org/10.1371/journal.pone.0009490
    * - WAG

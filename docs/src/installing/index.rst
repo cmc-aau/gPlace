@@ -3,15 +3,50 @@
 Installing gPlace
 =================
 
-gPlace's placement engine is written in C (``gplace/engine/csrc/xp.c``) and links three third-party C
-libraries that exactness depends on: GSL 1.16, CORE-MATH and glibc 2.19's ``hypot`` and ``log1p``. On
-x86-64 and ARM64 Linux, ``pip install gtdb-gplace`` installs it prebuilt; on macOS (Apple Silicon and
-Intel), and when installing from source, it is compiled automatically. The results are identical on
-every platform.
+gPlace runs on 64-bit Linux (x86-64 or ARM64) and macOS, with Python 3.12 or newer.
+
+.. note::
+
+   gPlace is not on PyPI or Bioconda yet: install it from GitHub as below.
 
 
-Sources
--------
+Install from GitHub
+-------------------
+
+You need a C compiler and ``make``, which most Linux systems have. If yours does not, conda can
+provide them (first command below); on macOS, run ``xcode-select --install``.
+
+.. code-block:: bash
+
+    conda create -n gplace -c conda-forge python=3.12 gcc make    # optional: a fresh environment
+    conda activate gplace
+
+    git clone https://github.com/cmc-aau/gPlace.git
+    cd gPlace
+    pip install .            # also builds gPlace's engine: a few minutes, the first time only
+
+Then check that it works:
+
+.. code-block:: bash
+
+    gplace check_install     # should end with "Installation OK"
+    gplace test              # places 20 bundled genomes and compares them with pplacer's output
+
+The build downloads one library (GSL 1.16) from a GNU mirror. Without internet access, or to
+reuse an existing build, see :doc:`source`.
+
+
+What you need to run it
+-----------------------
+
+* **Memory:** depends on the tree. Up to 44 GiB for the GTDB-Tk class-level trees; for the full
+  GTDB bacterial tree, set a limit such as ``--max_memory 64G`` (see :ref:`advanced/memory`).
+  ``gplace benchmark`` estimates the memory for your data.
+* **CPUs:** any number. ``--cpus auto`` picks a good number of workers for your computer.
+
+
+Other ways to install
+---------------------
 
 .. toctree::
    :maxdepth: 1
@@ -19,78 +54,3 @@ Sources
    source
    pip
    bioconda
-
-
-Hardware requirements
----------------------
-
-.. list-table::
-   :widths: 25 75
-   :header-rows: 1
-
-   * - Resource
-     - Requirement
-   * - CPU
-     - x86-64 (AVX2 kernels with AVX2 and FMA, otherwise the portable engine) or ARM64 (NEON),
-       on Linux or macOS (Apple Silicon: NEON; Intel Macs: AVX2).
-   * - Memory
-     - Depends on the reference tree and the number of queries: about
-       *2 x internal nodes x sites x 168 bytes + edges x queries x 8 bytes* (with ``--ranked_edges``
-       the second term stops growing past 20,000 queries).
-       43.8 GiB for GTDB-Tk R226 class-level tree 2 with 22,061 queries. ``gplace benchmark`` prints the estimate for your data.
-   * - CPUs
-     - Any; placement is memory-bandwidth bound. On a 64-vCPU AMD EPYC server, 40 worker
-       processes were fastest.
-
-
-Build requirements
-------------------
-
-Only needed when installing from source (not with the prebuilt wheel):
-
-* A C compiler (gcc 4.8 or newer, e.g. CentOS 7's, or clang) and ``make``, for the engine, GSL 1.16,
-  CORE-MATH, ``hypot`` and ``log1p``. Every compiler gives the same results. On macOS, Apple's
-  command line tools provide both: ``xcode-select --install``.
-* Internet access to download ``gsl-1.16.tar.gz`` from a GNU mirror (ftpmirror.gnu.org, ftp.gnu.org or
-  mirrors.kernel.org, tried in turn), or a local copy
-  (``GPLACE_GSL_TARBALL``, SHA-256 verified), or an existing static GSL 1.16 build
-  (``GPLACE_GSL_PREFIX``).
-
-
-Python libraries
-----------------
-
-gPlace is designed for Python >=3.12 and requires the following libraries, which will be
-automatically installed:
-
-.. list-table::
-   :widths: 25 75
-   :header-rows: 1
-
-   * - Library
-     - Version
-   * - `numpy <https://numpy.org/>`_
-     - >= 1.26
-   * - `tqdm <https://github.com/tqdm/tqdm>`_
-     - ~= 4.67
-
-
-Environment variables
----------------------
-
-.. list-table::
-   :widths: 25 75
-   :header-rows: 1
-
-   * - Variable
-     - Meaning
-   * - ``GPLACE_ENGINE_DIR``
-     - Directory holding ``libgplace_core.so`` (default: the installed package directory).
-   * - ``GPLACE_GSL_TARBALL``
-     - Installation: local ``gsl-1.16.tar.gz`` (offline builds).
-   * - ``GPLACE_GSL_PREFIX``
-     - Installation: existing static, ``-fPIC`` GSL 1.16 build.
-   * - ``GPLACE_BUILD_DIR``
-     - Installation: scratch directory for the GSL build (default: ``~/.cache/gplace/build``).
-   * - ``GPLACE_BUILD_JOBS``
-     - Installation: parallel ``make`` jobs (default: 8).
