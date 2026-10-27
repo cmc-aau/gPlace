@@ -112,11 +112,21 @@ class Baseball(object):
         return [x for i, x in enumerate(srt) if i < self.search.keep_at_most and x[1][0] >= lkf + best]
 
 
+_X86_NAN = math.copysign(math.nan, -1.0)     # x86-64's default NaN: its sign bit is set
+
+
+def _x86_sub(a, b):
+    """a - b as on x86-64, where GTDB-Tk's pplacer runs: inf - inf gives the default NaN, which has
+    its sign bit set, so pplacer writes -nan. ARM64's default NaN is positive (nan)."""
+    return _X86_NAN if a == b and math.isinf(a) else a - b
+
+
 def weighted_placements(lib, refined):
     """Like-weight ratios and pplacer's placement order for [(loc, (like, pend, dist))];
-    returns [[distal_length, edge_num, like_weight_ratio, likelihood, pendant_length]]."""
+    returns [[distal_length, edge_num, like_weight_ratio, likelihood, pendant_length]].
+    A NaN keeps its sign through exp, the sum and the division, on x86-64 and ARM64 alike."""
     lls = [r[0] for _, r in refined]
-    lwr = [1. / sum(lib.xp_exp(o - ll) for o in lls) for ll in lls]
+    lwr = [1. / sum(lib.xp_exp(_x86_sub(o, ll)) for o in lls) for ll in lls]
     pl = [[r[2], loc, w, r[0], r[1]] for (loc, r), w in zip(refined, lwr)]
     pl.sort(key=lambda p: -p[2])            # make_ml_sorted (stable)
     return pl

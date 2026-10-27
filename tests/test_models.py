@@ -3,8 +3,6 @@ import os
 import tempfile
 import unittest
 
-import numpy as np
-
 from gplace.engine import core, models, testsets
 from gplace.exceptions import RefpkgMalformed
 from gplace.fileio import read_json, write_json
@@ -176,13 +174,19 @@ class TestModelsEngine(unittest.TestCase):
 
 class TestNonFinite(unittest.TestCase):
 
+    @unittest.skipUnless(ENGINES, 'engine not built')
     def test_negative_nan_written_as_pplacer(self):
-        """pplacer (glibc printf) writes the like-weight ratio of a -inf likelihood as -nan: the NaN
-        from -inf - (-inf) has its sign bit set on x86-64."""
+        """pplacer (x86-64, glibc printf) writes the like-weight ratio of a -inf likelihood as -nan:
+        the NaN from -inf - (-inf) has its sign bit set on x86-64. ARM64 makes a positive NaN, so
+        gPlace sets the sign itself; the result must be -nan on every platform."""
         from gplace.engine.jplace import _f
-        nan = np.float64(-math.inf) - np.float64(-math.inf)
-        self.assertTrue(np.signbit(nan))
-        self.assertEqual(_f(float(nan)), '-nan')
+        from gplace.engine.placer import weighted_placements
+        for lls in ([-math.inf, -math.inf], [-100.0, -math.inf]):
+            pl = weighted_placements(core.lib(), [(e, (ll, 0.1, 0.2)) for e, ll in enumerate(lls)])
+            lwr = {p[1]: p[2] for p in pl}
+            self.assertTrue(math.isnan(lwr[1]) and math.copysign(1.0, lwr[1]) < 0)
+            self.assertEqual(_f(lwr[1]), '-nan')
+        self.assertEqual(lwr[0], 1.0)                              # the finite one keeps weight 1
         self.assertEqual(_f(math.copysign(float('nan'), 1.0)), 'nan')
         self.assertEqual(_f(-math.inf), '-inf')
 
