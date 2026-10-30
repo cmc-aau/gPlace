@@ -254,5 +254,5 @@ How exactness was established
 Where results differed during development, GTDB-Tk's pplacer binary (statically linked, with
 debug symbols) was traced under gdb and compared with gPlace evaluation by evaluation. This
 found the two library differences (GSL 1.16 and glibc 2.19's ``hypot``) and the NaN-retry
-behaviour described in :ref:`how_it_works`. ``gplace check_install`` and ``gplace test`` repeat
+behaviour described in :ref:`advanced/engine`. ``gplace check_install`` and ``gplace test`` repeat
 the key comparisons on every installation.

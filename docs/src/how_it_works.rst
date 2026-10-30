@@ -126,60 +126,159 @@ pplacer's algorithm is unchanged; only the order of the work is:
 Each pass rebuilds the tiles, so tiled placement is 1.7-2.5x slower than untiled placement on a
 tree that fits in memory; ``--max_memory`` therefore places untiled whenever it can.
 
-Platforms
----------
+How the engine runs on different CPUs, the rules that keep it exact, and what makes it fast are
+described in :ref:`advanced/engine`.
 
-The engine is built in variants from the same C source: ``avx2`` (x86-64; the kernels process 4
-*different* results per instruction), ``neon`` (ARM64; 2 per instruction) and ``portable``
-(scalar loops performing the same operations in the same order; any 64-bit CPU). gPlace loads
-``avx2`` on x86-64 CPUs that have AVX2 and FMA, ``neon`` on ARM64 and ``portable`` elsewhere. The
-SIMD kernels never fuse a multiply and an add: each lane does exactly what the scalar loop does. Neither depends on the CPU's floating-point details beyond IEEE
-754 double precision: no fused multiply-add is contracted implicitly, and the only libm
-functions taken from the system are exact by definition (``sqrt``, ``frexp``, ``ldexp``, and
-``fma`` for the portable engine on x86-64). On macOS
-the engine is built the same way with Apple's clang; Apple's linker has no ``--defsym``, so GSL's
-libm calls are bound to CORE-MATH and the traps by definitions inside the engine
-(``csrc/libm_bind.c``) instead.
+.. _how_it_works/comparison:
 
-.. figure:: /_static/figures/engines.svg
-   :width: 100%
-   :alt: Three rows of 16 boxes: avx2 fills them four at a time, neon two at a time and portable one at a time; all three end with identical bits.
+Comparison with other tools
+---------------------------
 
-   Each AVX2 instruction computes 4 different results and each NEON instruction 2, every one with the
-   operations of the portable loop in the same order (no fused multiply-add, no reordered sum): only the
-   speed differs.
+Other placement tools make large trees affordable by changing *what* is computed: they place each
+genome on a part of the tree (BSCAMPP, Splicer), use distances instead of likelihoods (APPLES-2),
+or use another model (EPA-ng). Their placements therefore differ from pplacer's for some genomes.
+gPlace changes only what is stored, so it gives pplacer's placements.
 
-Exactness rules
----------------
+In short:
 
-Every floating-point result keeps pplacer's operands, operation order and rounding:
+* Only gPlace gave pplacer's placement for every genome, and it was also among the fastest: 5
+  minutes against pplacer's 6 hours on tree 2.
+* BSCAMPP with pplacer came closest to pplacer (99.2-99.9% of the genomes on the same edge), but
+  took 1 to 8 hours and, with 32 threads, about as much memory as pplacer.
+* APPLES-2 was as fast as gPlace and used the least memory, but put over a quarter of the
+  genomes on another edge, a few hundred of them in another genus.
+* Splicer and BSCAMPP with EPA-ng put about 15% of the genomes on another edge; Splicer put
+  152-221 in another phylum.
 
-* the engine (C, ``gplace/engine/csrc/xp.c``) mirrors pplacer's ``linear_c.c`` loops and GSL's
-  ``dgemv`` loop order; SIMD lanes only process *different* results, no reduction is reordered,
-  and no multiply-add is fused (``-ffp-contract=off``);
-* the numerical libraries match pplacer's statically linked binary: GSL 1.16 (GSL 2.x changes the
-  eigendecomposition in its last bits), glibc 2.19's ``hypot`` (glibc >= 2.35 changed it) and
-  ``log1p`` (GSL's inverse gamma CDF calls it for 21 or more gamma categories), and
-  correctly-rounded ``exp``/``log``/``pow``/``sin`` (CORE-MATH gives the same results as glibc
-  2.19's; GSL's own calls in the gamma functions are bound to them as well, and no inexact system
-  libm function is imported);
-* GSL errors behave as in pplacer, which turns every GSL error into an exception: the optimiser's
-  are handled as pplacer handles them, and a GSL error while the discrete gamma rates are computed
-  (e.g. alpha 10^6: "inverse failed to converge") stops gPlace with pplacer's message;
-* pplacer's control-flow quirks are reproduced: the optimiser keeps the *last evaluated* branch
-  lengths; the bisection start finder evaluates f(right) before f(left); an assertion failing
-  inside a GSL callback returns NaN (ocamlgsl's ``caml_callback_exn``), so GSL reports an error
-  and pplacer retries from the default branch lengths; ties in the ranking go to the lower edge
-  number;
-* the jplace file prints numbers with ``%.12g`` and writes the tree exactly as
-  ``Newick_bark.to_newick_string`` does.
+Every tool ran on the same server (64 vCPUs, 245 GB of memory), one at a time, with 32 threads and
+at most 200 GiB of memory. The genomes are GlobDB r226 genomes aligned by GTDB-Tk:
 
-Speed
------
+* **Tree 2**: GTDB-Tk's R226 class-level reference tree 2 (21,566 reference genomes) and the 22,061
+  genomes GTDB-Tk placed on it, compared with GTDB-Tk's own pplacer output;
+* **Full tree**: the full GTDB R226 bacterial tree (136,646 reference genomes) and 10,000 random
+  genomes, compared with pplacer's output from a 1 TB server (pplacer: 17 h 13 min and 654.9 GiB;
+  gPlace on that server: 13 min 47 s).
 
-The cache is built by a thread pool that starts a node as soon as its children (distal) or its
-parent (proximal) are done. The prefilter and the placements run in forked worker processes; the
-large arrays live in shared memory, so they are neither copied nor re-mapped per process.
-Placement uses a memory-lean three-taxon kernel: the query's evolved vectors come from a small
-table of its distinct characters, and ``(pi x proximal) x distal`` is formed once per branch-length
-change, with pplacer's association.
+gPlace ran with ``--max_memory 64G``: untiled on tree 2, in 5 tiles on the full tree.
+
+.. list-table:: Tree 2: 22,061 genomes
+   :header-rows: 1
+   :widths: 34 14 12 16 12 12
+
+   * - Tool
+     - Time
+     - Peak memory
+     - Same edge as pplacer
+     - Different genus
+     - Different phylum
+   * - pplacer v1.1.alpha19
+     - 6 h 2 min
+     - 131.2 GiB
+     - 22,061 (100%)
+     - 0
+     - 0
+   * - **gPlace**
+     - **5 min 2 s**
+     - **42.8 GiB**
+     - **22,061 (100%)**
+     - **0**
+     - **0**
+   * - APPLES-2
+     - 6 min 46 s
+     - 2.6 GiB
+     - 16,195 (73.4%)
+     - 385
+     - 5
+   * - BSCAMPP + pplacer (b = 2000)
+     - 1 h 29 min
+     - 157.4 GiB
+     - 22,009 (99.8%)
+     - 10
+     - 1
+   * - BSCAMPP + pplacer (b = 12000, V = 15)
+     - 4 h 55 min
+     - 127.0 GiB
+     - 22,041 (99.9%)
+     - 10
+     - 0
+   * - BSCAMPP + EPA-ng (b = 2000) [#cpj]_
+     - 14 min 16 s
+     - 176.9 GiB
+     - 18,951 (85.9%)
+     - 236
+     - 9
+   * - Splicer + pplacer
+     - 1 h 32 min
+     - 17.8 GiB
+     - 18,673 (84.6%)
+     - 1,436
+     - 221
+
+.. list-table:: Full tree: 10,000 genomes
+   :header-rows: 1
+   :widths: 34 14 12 16 12 12
+
+   * - Tool
+     - Time
+     - Peak memory
+     - Same edge as pplacer
+     - Different genus
+     - Different phylum
+   * - **gPlace**
+     - **24 min 15 s**
+     - **56.6 GiB**
+     - **10,000 (100%)**
+     - **0**
+     - **0**
+   * - APPLES-2
+     - 23 min 8 s
+     - 16.3 GiB
+     - 7,080 (70.8%)
+     - 216
+     - 6
+   * - BSCAMPP + pplacer (b = 2000)
+     - 1 h 12 min
+     - 156.7 GiB
+     - 9,918 (99.2%)
+     - 11
+     - 5
+   * - BSCAMPP + pplacer (b = 12000, V = 15)
+     - 8 h 14 min
+     - 126.9 GiB
+     - 9,945 (99.5%)
+     - 13
+     - 4
+   * - BSCAMPP + EPA-ng (b = 2000) [#cpj]_
+     - 50 min 37 s
+     - 173.2 GiB
+     - 8,472 (84.7%)
+     - 115
+     - 6
+   * - Splicer + pplacer
+     - 1 h 13 min
+     - 28.9 GiB
+     - 8,353 (83.5%)
+     - 905
+     - 152
+
+.. [#cpj] With 8 EPA-ng jobs at a time (``--cpus-per-job 4``); with its default (16) it ran out of
+   memory.
+
+* *Same edge as pplacer*: the genome's best placement is on the same edge of the reference tree
+  as pplacer's (tools that re-root the tree or re-estimate its branch lengths are compared on the
+  same edges, matched by their leaves).
+* *Different genus*, *Different phylum*: the GTDB genus or phylum that contains the placement is
+  not the one that contains pplacer's. This is not a full GTDB-Tk classification, which also uses
+  RED and ANI, but it counts the genomes placed in another named group.
+* The tools: pplacer v1.1.alpha19 as run by GTDB-Tk (``-m WAG``); BSCAMPP 1.0.8, which places
+  each genome on a subtree of *b* reference genomes around its closest ones (*b* = 2000 is its
+  default; *b* = 12000 with *V* = 15 votes are GTDB-Tk's settings); Splicer (git 224b604), which
+  splits the tree into pieces and places each genome in one of them; APPLES-2 2.0.11, which places
+  by distances. With pplacer, BSCAMPP and Splicer used pplacer v1.1.alpha19 and GTDB-Tk's model
+  (WAG + CAT); BSCAMPP with EPA-ng used EPA-ng's model (below).
+* EPA-ng 0.3.8 is not in the tables. It has no CAT model, so it used WAG with 4 gamma rates, and
+  with its default settings it ran out of memory while loading tree 2. Without pre-masking it
+  placed 1,000 random tree-2 genomes in 14 min 50 s with 192.5 GiB: 892 (89.2%) on pplacer's edge,
+  9 in another genus, none in another phylum (gPlace: 1,000 on pplacer's edge).
+* UShER was not tested: it places nucleotide differences from one reference genome, not protein
+  alignments.

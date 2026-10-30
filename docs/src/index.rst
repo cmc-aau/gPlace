@@ -81,6 +81,7 @@ Questions and problems: the `issue tracker <https://github.com/cmc-aau/gPlace/is
    advanced/pplacer_options
    advanced/own_trees
    models
+   advanced/engine
 
 
 .. toctree::
