@@ -248,13 +248,20 @@ class TiledPlacer(Placer):
             self.darr[k] = self.bD[c]; self.dexp[k] = self.bDe[c]
         internal = set(tile['internal'])
         n = len(tile['internal'])
+        cnode = os.environ.get('GPLACE_CNODE') == '1' and self.width == self.ns \
+            and self.refA.dtype == np.uint8         # Placer.cache's node kernel, on the tile's slots
+        if cnode and not hasattr(self, '_lut'):
+            self._lut = np.ascontiguousarray(self.alpha.lut, dtype=np.float64)
         lock = threading.Lock(); done = threading.Event(); errs = []; count = [0]
         ex = ThreadPoolExecutor(self.cpus)
         pending = {v: sum(1 for c in self.children[v] if c in internal) for v in tile['internal']}
 
         def distal_task(v):
             try:
-                self._distal(v, self.tl())
+                if cnode:
+                    self._distal_c(v)
+                else:
+                    self._distal(v, self.tl())
                 p = self.parent[v]; ready = False
                 with lock:
                     count[0] += 1; fin = count[0] == n
@@ -286,7 +293,8 @@ class TiledPlacer(Placer):
 
             def prox_task(v):
                 try:
-                    kids = self._proximal(v, self.tl())      # also fills the child tile roots
+                    kids = (self._proximal_c(v) if cnode     # also fills the child tile roots
+                            else self._proximal(v, self.tl()))
                     with lock:
                         count[0] += 1; fin = count[0] == n
                     for c in kids:
