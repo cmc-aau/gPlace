@@ -1338,6 +1338,145 @@ void xp_g_pull_exponent(double *a, int64_t *e, int nsites, int R, int min_twoexp
   }
 }
 
+/* Cache build, one node per call (GPLACE_CNODE=1). Placer._distal / _proximal make
+ * several calls per node (xp_multi_exp, xp_evolve, xp_pairwise, xp_pull_exponent) with Python,
+ * holding the GIL, in between; these do the same operations on the same operands, site by site,
+ * in one call: per site, every child's evolve (evolve_site, the tensor from xp_multi_exp), the
+ * products in the same order (x * y elementwise, exponents added), then the pull of
+ * xp_pull_exponent. A leaf child's input is its tip vector lut[code], so its evolve depends only
+ * on (rate category, code): it is computed once per pair and copied (identical inputs, identical
+ * evolve_site). Children: src = distal rows (NULL for a leaf), srce = their exponents (NULL: 0),
+ * codes = a leaf's tip codes (NULL otherwise). */
+typedef struct { const double *src; const int64_t *srce; const uint8_t *codes; double *ten;
+                 double *tab; uint8_t *have; } CnChild;
+
+static int cn_setup(CnChild *c, int nch, const int64_t *src, const int64_t *srce, const int64_t *codes,
+                    const double *bls, const double *x, const double *l, const double *xit,
+                    const double *rates, int nrates, const uint8_t *occupied)
+{
+  for (int k = 0; k < nch; k++) {
+    c[k].src = (const double *)(intptr_t)src[k]; c[k].srce = (const int64_t *)(intptr_t)srce[k];
+    c[k].codes = (const uint8_t *)(intptr_t)codes[k];
+    c[k].ten = (double *)malloc(sizeof(double) * (size_t)nrates * NS * NS);
+    c[k].tab = NULL; c[k].have = NULL;
+    if (!c[k].ten) return -1;
+    xp_multi_exp(c[k].ten, x, l, xit, rates, nrates, occupied, bls[k]);
+    if (c[k].codes) {
+      c[k].tab = (double *)aligned_alloc(32, sizeof(double) * (size_t)nrates * 256 * NS);
+      c[k].have = (uint8_t *)calloc((size_t)nrates * 256, 1);
+      if (!c[k].tab || !c[k].have) return -1;
+    }
+  }
+  return 0;
+}
+static void cn_free(CnChild *c, int nch)
+{
+  for (int k = 0; k < nch; k++) { free(c[k].ten); free(c[k].tab); free(c[k].have); }
+}
+/* child k's evolved distal at site s (into buf, or a pointer into its leaf table) */
+static inline const double *cn_ev(CnChild *c, int s, int cs, const double *lut, double *buf)
+{
+  if (c->codes) {
+    const size_t key = (size_t)cs * 256 + c->codes[s];
+    double *t = c->tab + key * NS;
+    if (!c->have[key]) { evolve_site(t, lut + (size_t)c->codes[s] * NS, c->ten + (size_t)cs * NS * NS); c->have[key] = 1; }
+    return t;
+  }
+  evolve_site(buf, c->src + (size_t)s * NS, c->ten + (size_t)cs * NS * NS);
+  return buf;
+}
+static inline int64_t cn_e(const CnChild *c, int s) { return c->srce ? c->srce[s] : 0; }
+static inline void cn_pull(double *v, int64_t *e, int min_twoexp)   /* xp_pull_exponent, one site */
+{
+  double mx = v[0];
+  for (int i = 1; i < NS; i++) if (v[i] > mx) mx = v[i];
+  int twoexp;
+  frexp(mx, &twoexp);
+  if (twoexp < min_twoexp) {
+    double f = ldexp(0.5, -twoexp + 1);
+    for (int i = 0; i < NS; i++) v[i] *= f;
+    *e += twoexp;
+  }
+}
+
+/* Placer._distal: dst / de = the node's distal (pulled to -50) from its nch children */
+int xp_cache_distal(double *dst, int64_t *de, int nch, const int64_t *src, const int64_t *srce,
+                    const int64_t *codes, const double *bls, const double *lut, int nsites,
+                    const int32_t *cat, const double *x, const double *l, const double *xit,
+                    const double *rates, int nrates, const uint8_t *occupied)
+{
+  if (nch < 1 || nch > 64) return -1;
+  CnChild c[64];
+  memset(c, 0, sizeof c);
+  if (cn_setup(c, nch, src, srce, codes, bls, x, l, xit, rates, nrates, occupied)) { cn_free(c, nch); return -1; }
+  double bufa[NS] __attribute__((aligned(32))), bufb[NS] __attribute__((aligned(32)));
+  for (int s = 0; s < nsites; s++) {
+    const int cs = cat[s];
+    double *d = dst + (size_t)s * NS;
+    const double *a = cn_ev(&c[0], s, cs, lut, bufa);
+    int64_t e = cn_e(&c[0], s);
+    if (nch == 1) {
+      memcpy(d, a, sizeof(double) * NS);
+    } else {
+      const double *b = cn_ev(&c[1], s, cs, lut, bufb);
+      for (int i = 0; i < NS; i++) d[i] = a[i] * b[i];
+      e = e + cn_e(&c[1], s);
+      for (int k = 2; k < nch; k++) {
+        const double *b2 = cn_ev(&c[k], s, cs, lut, bufb);
+        for (int i = 0; i < NS; i++) d[i] = d[i] * b2[i];
+        e = e + cn_e(&c[k], s);
+      }
+    }
+    cn_pull(d, &e, -50);
+    de[s] = e;
+  }
+  cn_free(c, nch);
+  return 0;
+}
+
+/* Placer._proximal: from the node's proximal (par / pare, evolved by bl_v) and its children's
+ * distals, the proximal of every child with out[k] != 0 (out = its row, oute = its exponents) */
+int xp_cache_proximal(const double *par, const int64_t *pare, double bl_v, int nch, const int64_t *src,
+                      const int64_t *srce, const int64_t *codes, const double *bls, const int64_t *out,
+                      const int64_t *oute, const double *lut, int nsites, const int32_t *cat,
+                      const double *x, const double *l, const double *xit, const double *rates,
+                      int nrates, const uint8_t *occupied)
+{
+  if (nch < 1 || nch > 63) return -1;
+  CnChild c[64];
+  memset(c, 0, sizeof c);
+  /* child slot nch: the node's own proximal, evolved by bl_v */
+  int64_t src2[64], srce2[64], codes2[64]; double bls2[64];
+  for (int k = 0; k < nch; k++) { src2[k] = src[k]; srce2[k] = srce[k]; codes2[k] = codes[k]; bls2[k] = bls[k]; }
+  src2[nch] = (int64_t)(intptr_t)par; srce2[nch] = (int64_t)(intptr_t)pare; codes2[nch] = 0; bls2[nch] = bl_v;
+  if (cn_setup(c, nch + 1, src2, srce2, codes2, bls2, x, l, xit, rates, nrates, occupied)) { cn_free(c, nch + 1); return -1; }
+  double evp[NS] __attribute__((aligned(32))), bufs[64][NS] __attribute__((aligned(32)));
+  const double *evk[64];
+  for (int s = 0; s < nsites; s++) {
+    const int cs = cat[s];
+    const double *p = cn_ev(&c[nch], s, cs, lut, evp);
+    const int64_t pe = cn_e(&c[nch], s);
+    for (int k = 0; k < nch; k++) evk[k] = NULL;
+    for (int t = 0; t < nch; t++) {
+      if (!out[t]) continue;                        /* leaf child: rebuilt on demand by get_p */
+      double *d = (double *)(intptr_t)out[t] + (size_t)s * NS;
+      int64_t e;
+      int first = 1;
+      for (int r = 0; r < nch; r++) {
+        if (r == t) continue;
+        if (!evk[r]) evk[r] = cn_ev(&c[r], s, cs, lut, bufs[r]);
+        if (first) { for (int i = 0; i < NS; i++) d[i] = p[i] * evk[r][i]; e = pe + cn_e(&c[r], s); first = 0; }
+        else { for (int i = 0; i < NS; i++) d[i] = d[i] * evk[r][i]; e = e + cn_e(&c[r], s); }
+      }
+      if (first) { memcpy(d, p, sizeof(double) * NS); e = pe; }
+      cn_pull(d, &e, -50);
+      ((int64_t *)(intptr_t)oute[t])[s] = e;
+    }
+  }
+  cn_free(c, nch + 1);
+  return 0;
+}
+
 /* Gmix prefilter (Glv.masked_logdot of the evolved query and the supernode), 8 edges at once:
  *   W[s][c] = log( util ), util = sum over r ascending, st ascending of qev[r][c][st]*sn[s][r][st]
  *   ll = +0.0 + sum_{s informative} W[s][code]           (ten_masked_logdot_c ...)

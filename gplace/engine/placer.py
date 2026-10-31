@@ -551,6 +551,47 @@ class Placer(object):
                                      P(self.dexp[k]), P(tA), P(e2), S)
         self.lib.xp_pull_exponent(P(self.darr[k]), P(self.dexp[k]), S, -50)
 
+    # ------------------------------------------ cache build in C (GPLACE_CNODE) -
+    def _cn_children(self, ch):
+        """Pointer arrays for xp_cache_*: distal rows and exponents (internal), tip codes (leaf)."""
+        n = len(ch)
+        src = np.zeros(n, np.int64); srce = np.zeros(n, np.int64); codes = np.zeros(n, np.int64)
+        keep = []
+        for j, c in enumerate(ch):
+            if self.children[c]:
+                k = self.iidx[c]
+                src[j] = self.darr[k].ctypes.data; srce[j] = self.dexp[k].ctypes.data
+            else:
+                cd = self.refA[self.leaf_row[c]]
+                keep.append(cd); codes[j] = cd.ctypes.data
+        bls = np.array([self.bl[c] for c in ch], np.float64)
+        return src, srce, codes, bls, keep
+
+    def _distal_c(self, v):
+        ch, k = self.children[v], self.iidx[v]
+        src, srce, codes, bls, keep = self._cn_children(ch)
+        st = self.lib.xp_cache_distal(P(self.darr[k]), P(self.dexp[k]), len(ch), P(src), P(srce), P(codes),
+                                      P(bls), P(self._lut), self.nsites, P(self.cats), P(self.x), P(self.l),
+                                      P(self.xit), P(self.rates), self.nrates, P(self.occupied))
+        if st != 0:
+            raise GPlaceException(f'cache kernel failed ({st}) at node {v}.')
+
+    def _proximal_c(self, v):
+        kv, ch = self.iidx[v], self.children[v]
+        src, srce, codes, bls, keep = self._cn_children(ch)
+        out = np.zeros(len(ch), np.int64); oute = np.zeros(len(ch), np.int64); kids = []
+        for j, c in enumerate(ch):
+            if self.children[c]:
+                kc = self.iidx[c]
+                out[j] = self.parr[kc].ctypes.data; oute[j] = self.pexp[kc].ctypes.data; kids.append(c)
+        st = self.lib.xp_cache_proximal(P(self.parr[kv]), P(self.pexp[kv]), float(self.bl[v]), len(ch),
+                                        P(src), P(srce), P(codes), P(bls), P(out), P(oute), P(self._lut),
+                                        self.nsites, P(self.cats), P(self.x), P(self.l), P(self.xit),
+                                        P(self.rates), self.nrates, P(self.occupied))
+        if st != 0:
+            raise GPlaceException(f'cache kernel failed ({st}) at node {v}.')
+        return kids
+
     def _proximal(self, v, t):
         kv, ch = self.iidx[v], self.children[v]
         evp = t.b[2]
@@ -577,9 +618,17 @@ class Placer(object):
         for v in self.internal:
             pending[v] = sum(1 for c in self.children[v] if self.children[c])
 
+        cnode = os.environ.get('GPLACE_CNODE') == '1' and self.width == self.ns \
+            and self.refA.dtype == np.uint8
+        if cnode:
+            self._lut = np.ascontiguousarray(self.alpha.lut, dtype=np.float64)
+
         def distal_task(v):
             try:
-                self._distal(v, self.tl())
+                if cnode:
+                    self._distal_c(v)
+                else:
+                    self._distal(v, self.tl())
                 p = self.parent[v]; ready = False
                 with lock:
                     count[0] += 1; fin = count[0] == n
@@ -606,7 +655,7 @@ class Placer(object):
 
         def prox_task(v):
             try:
-                kids = self._proximal(v, self.tl())
+                kids = self._proximal_c(v) if cnode else self._proximal(v, self.tl())
                 with lock:
                     count[0] += 1; fin = count[0] == n
                 for c in kids:
