@@ -328,13 +328,35 @@ class TiledPlacer(Placer):
         if self.workers is None:                     # --cpus auto without a saved benchmark
             self.workers = resources.heuristic_cpus(self.cpus)
             self.cpus_source = 'heuristic'
-        self.rank = self._ranked_candidates(np.arange(len(self.query_names)), self.n_cand,
-                                            self.stats, probe)
         self.rank_more = {}
+        self._tpf = None
+        self._bcodes = self.codes                      # the f32 switches are read for all queries
+        self._pf32_setup()
+        if not self._pf32:
+            self.rank = self._ranked_candidates(np.arange(len(self.query_names)), self.n_cand,
+                                                self.stats, probe)
+            return
+        Q = len(self.query_names)
+        ce, cs = self._ranked_candidates(np.arange(Q), self.n_cand, self.stats, probe, pf32=True)
+        self.rank = ce
+        r = self._pf32_radius_of(self.codes)
+        self._tpf = dict(vals=cs, exact=np.zeros(cs.shape, bool), r=r, aM=cs[:, -1].copy(),
+                         req=defaultdict(set), nres=np.zeros(Q, np.int64))
+        bad = [qi for qi in range(Q) if not np.all(np.isfinite(cs[qi]))]
+        if bad:                                       # unbounded f32 scores: rank those in f64
+            rows = self._ranked_candidates(np.array(bad, np.int64), self.n_cand, pf32=False)
+            for qi, row in zip(bad, rows):
+                self.rank_more[qi] = row
 
-    def _ranked_candidates(self, qidx, K, stats=None, probe=0):
+    def _ranked_candidates(self, qidx, K, stats=None, probe=0, pf32=False):
         """The first K edges of pplacer's ranking (h_ranking: score descending, ties by ascending
-        edge number) for the queries qidx, as an (n, K) array padded with _NO_EDGE."""
+        edge number) for the queries qidx, as an (n, K) array padded with _NO_EDGE. With pf32
+        (GPLACE_PF32): the first K by f32 score (xp_edge_scores8_f32, unbounded scores as +inf),
+        returned with those scores; _tpf_row orders them exactly."""
+        saved = getattr(self, '_pf32', False)
+        use32 = saved and pf32
+        self._pf32 = use32
+        present = {}
         st = stats if stats is not None else defaultdict(float)
         n = len(qidx)
         cs = np.full((n, K), -np.inf)
@@ -362,23 +384,75 @@ class TiledPlacer(Placer):
                         st['pref_probe_s'] += self._pool_map(_tile_prefilter_group, groups, chunksize=2)[1]
                     self._bcodes = np.ascontiguousarray(self.codes[rows])
                     self._qb = (len(rows), E)
+                    if use32:                          # the codes present in this batch
+                        if b0 not in present:
+                            self._pf32_setup(); present[b0] = self._present
+                        self._present = present[b0]; self._pf32 = True
                     st['pref_batch_s'] += self._pool_map(_tile_prefilter_group, groups, chunksize=2)[1]
                     tm = time.time()
-                    self._merge(cs, ce, b0, edges, self.scores[:len(rows), :E])
+                    sc = self.scores[:len(rows), :E]
+                    if use32:
+                        sc[np.isnan(sc)] = np.inf
+                    self._merge(cs, ce, b0, edges, sc)
                     st['pref_merge_s'] += time.time() - tm
                 self.logger.info(f'Prefilter: tile {step}/{nt} ({E:,} edges) done '
                                  f'({time.time() - t0:.0f} s).')
         finally:
             del self.scores
             self._bcodes = None
+            self._pf32 = saved
         st['pref_s'] += time.time() - t0
         order = np.lexsort((ce, -cs), axis=1)
+        if use32:
+            return np.take_along_axis(ce, order, 1), np.take_along_axis(cs, order, 1)
         return np.take_along_axis(ce, order, 1)
 
     _merge = staticmethod(merge_candidates)
 
     def _rank_row(self, qi):
-        return self.rank_more.get(qi, self.rank[qi])
+        if qi in self.rank_more or self._tpf is None:
+            return self.rank_more.get(qi, self.rank[qi])
+        return self._tpf_row(qi)[0]
+
+    def _tpf_row(self, qi):
+        """Under GPLACE_PF32: (the ranks of query qi's candidates known exactly, the cluster that
+        blocks the next rank or None). Every edge not kept scored at most aM in f32, so below
+        aM + r in f64; a kept edge is ranked once its floor (f32 score - r, or its f64 score)
+        exceeds aM + r and it is ordered against its neighbours: candidates whose intervals meet
+        form a cluster, ordered once all its members have f64 scores. None with a short row means
+        the certified ranks are used up ('more')."""
+        d = self._tpf
+        e, v, x = self.rank[qi], d['vals'][qi], d['exact'][qi]
+        r, aM = float(d['r'][qi]), float(d['aM'][qi])
+        rad = np.where(x, 0.0, r)
+        o = np.lexsort((e, -v)); e, v, x, rad = e[o], v[o], x[o], rad[o]
+        out, i, K = [], 0, len(e)
+        while i < K:
+            j = i + 1
+            while j < K and v[j - 1] - v[j] <= rad[j - 1] + rad[j]:
+                j += 1
+            if j - i > 1:
+                if not x[i:j].all():
+                    return np.array(out, np.int64), e[i:j][~x[i:j]]
+                cl = np.lexsort((e[i:j], -v[i:j])) + i
+            else:
+                cl = [i]
+            for k in cl:
+                if e[k] == _NO_EDGE or v[k] - rad[k] <= aM + r:
+                    return np.array(out, np.int64), None
+                out.append(int(e[k]))
+            i = j
+        return np.array(out, np.int64), None
+
+    def _tpf_resolve(self, ti):
+        """f64 prefilter scores of the requested (query, edge) pairs in tile ti, now materialised."""
+        d = self._tpf
+        for qi, loc in sorted(d['req'].pop(ti, ())):
+            k = int(np.nonzero(self.rank[qi] == loc)[0][0])
+            if d['exact'][qi, k]:
+                continue
+            d['vals'][qi, k] = self._pf32_exact_nodes(qi, [loc])[0]
+            d['exact'][qi, k] = True; d['nres'][qi] += 1
 
     def _extend_ranking(self, qis):
         """Re-rank queries that used up their candidate edges, with 4x as many (up to all)."""
@@ -409,8 +483,13 @@ class TiledPlacer(Placer):
             for it in items:
                 by_tile[self.tile_of[it[0]]][qi].append(it)
         out = []
-        for ti in sorted(by_tile, reverse=True):
+        tiles = set(by_tile) | (set(self._tpf['req']) if self._tpf is not None else set())
+        for ti in sorted(tiles, reverse=True):
             self._materialise(ti, need_p=True)
+            if self._tpf is not None and ti in self._tpf['req']:
+                self._tpf_resolve(ti)
+            if ti not in by_tile:                     # only f64 prefilter scores were needed here
+                continue
             jobs = list(by_tile[ti].items())
             if self.record_work:
                 self.work_log[ti].extend(jobs)
@@ -427,6 +506,7 @@ class TiledPlacer(Placer):
         the query needs more ranked edges than it has."""
         bb = Baseball(self.search)
         row = self._rank_row(qi)
+        blocked = self._tpf is not None and qi not in self.rank_more and self._tpf_row(qi)[1] is not None
         for loc in row:
             if loc == _NO_EDGE:                      # every edge of the tree tried
                 return bb
@@ -436,6 +516,8 @@ class TiledPlacer(Placer):
             r, st = stage1[loc]
             if not bb.add(loc, r, st):
                 return bb
+        if blocked:
+            return 'next'
         return bb if len(row) >= self.nnodes - 1 else 'more'
 
     def place_all(self, workers=None):
@@ -454,6 +536,15 @@ class TiledPlacer(Placer):
                 row = self._rank_row(qi)
                 chunk = [int(v) for v in row[nxt[qi]:nxt[qi] + self.round_size] if v != _NO_EDGE]
                 nxt[qi] += len(chunk)
+                if self._tpf is not None and qi not in self.rank_more and len(chunk) < self.round_size:
+                    cl = self._tpf_row(qi)[1]
+                    if cl is not None:                # first-stage results do not depend on order
+                        for loc in cl:
+                            loc = int(loc)
+                            self._tpf['req'][self.tile_of[loc]].add((qi, loc))
+                            if loc not in chunk:
+                                chunk.append(loc)
+                chunk = [loc for loc in chunk if loc not in stage1[qi]]
                 work[qi] = [(loc, self.search.start_pend, self.bl[loc] / 2., self.search.ml_tolerance)
                             for loc in chunk]
             for qi, out in self._evaluate(work):

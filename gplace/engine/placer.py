@@ -854,20 +854,29 @@ class Placer(object):
         else:
             self._pf32_rounds = 26
 
+    def _pf32_radius_of(self, codes):
+        nused = (np.asarray(codes) != len(self.alpha.codes)).sum(1)
+        return nused * self._pf32_rounds * 1.01 * 2.0 ** -24 + nused * 2.0 ** -40 + 1e-6
+
     def _pf32_radius(self):
         """After the f32 pass: the per-query radius r[q] = n_used * rounds * 1.01 * 2^-24 +
         n_used * 2^-40 + 1e-6, which bounds |f32 score - f64 score| (every term of every util is
         non-negative, so each rounding is a relative error of at most 2^-24; 2^-40 per site covers
         f32 underflow, utils below 2^-90 being left to f64). Order is settled lazily by ranking()."""
-        gap = len(self.alpha.codes)
-        nused = (np.asarray(self._bcodes) != gap).sum(1)
-        self._pf32_r = nused * self._pf32_rounds * 1.01 * 2.0 ** -24 + nused * 2.0 ** -40 + 1e-6
-        self._pf32_nres = shared_zeros(len(nused))     # f64 scores computed per query (diagnostics)
+        self._pf32_r = self._pf32_radius_of(self._bcodes)
+        self._pf32_nres = shared_zeros(len(self._pf32_r))   # f64 scores computed per query (diagnostics)
 
     def _pf32_exact(self, qi, cols):
         """Query qi's f64 scores (xp_edge_scores8, one edge per call: lanes are independent)
         against the edges of the columns cols, written into the score table. Uses its own
         buffers: ranking() runs between the evaluations of place_query."""
+        cols = np.asarray(cols, np.int64)
+        self.scores[qi, cols] = self._pf32_exact_nodes(qi, self.locs[cols])
+        self._pf32_nres[qi] += len(cols)
+
+    def _pf32_exact_nodes(self, qi, nodes):
+        """Query qi's f64 prefilter scores (xp_edge_scores8, one edge per call) against the edges
+        above `nodes`, whose vectors must be in memory (untiled, or their tile materialised)."""
         t = self.local
         if not hasattr(t, 'pf_b'):
             S = self.nsites
@@ -877,9 +886,9 @@ class Placer(object):
             t.pf_ten = np.zeros((self.nrates, self.ns, self.ns))
         gap = len(self.alpha.codes)
         sub = np.ascontiguousarray(self.codes[[qi]])
-        tmp = np.zeros((1, 8))
-        for k in cols:
-            v = int(self.locs[k])
+        tmp = np.zeros((1, 8)); out = np.empty(len(nodes))
+        for j, v in enumerate(nodes):
+            v = int(v)
             self.get_d(v, t.pf_b[0], t.pf_e[0]); self.get_p(v, t.pf_b[1], t.pf_e[1])
             self.evolve_t(t.pf_b[2], t.pf_b[0], self.bl[v] / 2., t.pf_ten)
             self.evolve_t(t.pf_b[3], t.pf_b[1], self.bl[v] / 2., t.pf_ten)
@@ -889,8 +898,8 @@ class Placer(object):
                                           P(self.cats), self.nsites, gap, P(sub), 1)
             if st != 0:
                 raise GPlaceException(f'Prefilter kernel failed ({st}) for edge {v}.')
-            self.scores[qi, k] = tmp[0, 0]
-        self._pf32_nres[qi] += len(cols)
+            out[j] = tmp[0, 0]
+        return out
 
     def _pf32_ranking(self, qi):
         """ranking() under GPLACE_PF32: the order of the f64 scores, from f32 scores known to
