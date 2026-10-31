@@ -104,6 +104,67 @@ double xp_log1p(double v) { return log1p(v); }
 #endif
 const char *xp_engine_version(void) { return "gplace-core 4 (" XP_STR(NS) " states): pplacer v1.1.alpha19 exact (GSL 1.16, glibc-2.19 hypot/log1p, CORE-MATH exp/log, " XP_ARCH " " XP_KERNELS "; C)"; }
 int xp_simd(void) { return XP_AVX2 ? 1 : XP_NEON ? 2 : 0; }   /* 0 scalar, 1 AVX2, 2 NEON */
+
+/* Opt-in exact speedups, read from the environment once (default off). */
+static int xp_switches_read = 0, xp_vlog = 0;
+static void xp_read_switches(void)
+{
+  if (xp_switches_read) return;
+  const char *v = getenv("GPLACE_VLOG"); xp_vlog = (v && *v == '1') && XP_AVX2;
+  xp_switches_read = 1;
+}
+
+#if XP_AVX2
+/* Four-lane correctly rounded log (GPLACE_VLOG=1): CORE-MATH's cr_log fast path with
+ * its proven absolute bound 0x1.b6p-69 and rounding test, as transcribed operation for operation
+ * by crmvec's log_fast (MIT, https://github.com/anun333/crmvec, crmvec.c at df66af3), gather form.
+ * A lane the test cannot decide, and any x that is not a positive normal finite number other than
+ * 1, goes to cr_log itself -- the function gPlace's log is (libm_bind.c) -- so every lane returns
+ * cr_log's correctly rounded result. */
+#include "xp_vlog_tab.h"
+double cr_log(double);
+static inline __m256d xp_log4(__m256d x)
+{
+  const __m256i MANT = _mm256_set1_epi64x(0xfffffffffffffLL);
+  __m256i u = _mm256_castpd_si256(x);
+  __m256i ok = _mm256_and_si256(_mm256_cmpgt_epi64(u, _mm256_set1_epi64x(0x000fffffffffffffLL)),
+                                _mm256_cmpgt_epi64(_mm256_set1_epi64x(0x7ff0000000000000LL), u));
+  u = _mm256_blendv_epi8(_mm256_castpd_si256(_mm256_set1_pd(1.0)), u, ok);
+  __m256i m = _mm256_or_si256(_mm256_and_si256(u, MANT), _mm256_set1_epi64x(1LL << 52));
+  __m256i c = _mm256_cmpgt_epi64(m, _mm256_set1_epi64x(0x16a09e667f3bcdLL - 1));
+  __m256i idx = _mm256_sub_epi64(_mm256_srlv_epi64(m, _mm256_sub_epi64(_mm256_set1_epi64x(43), c)),
+                                 _mm256_set1_epi64x(362));
+  __m256d vf = _mm256_castsi256_pd(_mm256_or_si256(_mm256_and_si256(u, MANT), _mm256_set1_epi64x(0x3ff0000000000000LL)));
+  __m256d y = _mm256_blendv_pd(vf, _mm256_mul_pd(vf, _mm256_set1_pd(0.5)), _mm256_castsi256_pd(c));
+  __m256i e = _mm256_sub_epi64(_mm256_sub_epi64(_mm256_srli_epi64(u, 52), _mm256_set1_epi64x(0x3ff)), c);
+  __m256d ee = _mm256_sub_pd(_mm256_castsi256_pd(_mm256_add_epi64(e, _mm256_castpd_si256(_mm256_set1_pd(0x1.8p52)))),
+                             _mm256_set1_pd(0x1.8p52));
+  __m256d r = _mm256_i64gather_pd(LOG_INVERSE, idx, 8);
+  __m256i i2 = _mm256_slli_epi64(idx, 1);
+  __m256d l1 = _mm256_i64gather_pd(&LOG_INV[0][0], i2, 8), l2 = _mm256_i64gather_pd(&LOG_INV[0][0] + 1, i2, 8);
+  __m256d z = _mm256_fmadd_pd(r, y, _mm256_set1_pd(-1.0));
+  __m256d z2 = _mm256_mul_pd(z, z);
+  __m256d p45 = _mm256_fmadd_pd(_mm256_set1_pd(-0x1.55362255e0f63p-3), z, _mm256_set1_pd(0x1.999a14758b084p-3));
+  __m256d p23 = _mm256_fmadd_pd(_mm256_set1_pd(-0x1.0000000537df6p-2), z, _mm256_set1_pd(0x1.555555554f4d8p-2));
+  __m256d ph = _mm256_fmadd_pd(p45, z2, p23);
+  ph = _mm256_fmadd_pd(ph, z, _mm256_set1_pd(-0x1.ffffffffffffap-2));
+  ph = _mm256_mul_pd(ph, z2);
+  __m256d a = _mm256_fmadd_pd(ee, _mm256_set1_pd(0x1.62e42fefa38p-1), l1);
+  __m256d h = _mm256_add_pd(a, z);
+  __m256d l = _mm256_sub_pd(z, _mm256_sub_pd(h, a));
+  l = _mm256_add_pd(ph, _mm256_add_pd(l, l2));
+  l = _mm256_fmadd_pd(ee, _mm256_set1_pd(0x1.ef35793c7673p-45), l);
+  const __m256d ERR = _mm256_set1_pd(0x1.b6p-69);
+  __m256d left = _mm256_add_pd(h, _mm256_sub_pd(l, ERR)), right = _mm256_add_pd(h, _mm256_add_pd(l, ERR));
+  __m256d bad = _mm256_or_pd(_mm256_cmp_pd(left, right, _CMP_NEQ_UQ),
+                             _mm256_castsi256_pd(_mm256_xor_si256(ok, _mm256_set1_epi64x(-1))));
+  int mk = _mm256_movemask_pd(bad);
+  if (!mk) return left;
+  double xs[4], ys[4]; _mm256_storeu_pd(xs, x); _mm256_storeu_pd(ys, left);
+  for (int i = 0; i < 4; i++) if (mk >> i & 1) ys[i] = cr_log(xs[i]);
+  return _mm256_loadu_pd(ys);
+}
+#endif
 int xp_n_states(void) { return NS; }
 
 /* ------------------------------------------------------------------ model -- */
@@ -510,11 +571,27 @@ int xp_edge_scores8(double *out, long ldo, long col0, int ne,
   int64_t *accE = (int64_t *)aligned_alloc(64, sizeof(int64_t) * ((size_t)nq * XP_EB + 8));
   if (!W || !SE || !accD || !accE) { free(W); free(SE); free(accD); free(accE); return -1; }
   int small = 1;       /* int32 sums over one 128-site block cannot overflow (|se| <= 2^23) */
+  xp_read_switches();
   for (int s = 0; s < nsites; s++) {
     const double *qt = qevtab + (size_t)cat[s] * ncode * NS;
     double *Ws = W + (size_t)s * NC * XP_EB;
     for (int c = 0; c < ncode; c++) {
       const double *qv = qt + (size_t)c * NS;
+#if XP_AVX2
+      if (xp_vlog && ne == XP_EB) {
+        /* Eight lanes' utils, then two four-lane logs: the same values in the same places. */
+        double u8[XP_EB];
+        for (int lane = 0; lane < XP_EB; lane++) {
+          const double *sn = sn8 + ((size_t)lane * nsites + s) * NS;
+          double util = 0;
+          for (int st = 0; st < NS; st++) util += qv[st] * sn[st];
+          u8[lane] = util;
+        }
+        _mm256_storeu_pd(Ws + c * XP_EB, xp_log4(_mm256_loadu_pd(u8)));
+        _mm256_storeu_pd(Ws + c * XP_EB + 4, xp_log4(_mm256_loadu_pd(u8 + 4)));
+        continue;
+      }
+#endif
       for (int lane = 0; lane < XP_EB; lane++) {
         if (lane < ne) {
           const double *sn = sn8 + ((size_t)lane * nsites + s) * NS;
@@ -756,7 +833,26 @@ static void tt_ll_pass(TT *t)                   /* ll_core from PD and QP */
   if (t->gmix) { gtt_ll_pass(t); return; }
   double ll_tot = 0;
   const int nu = t->nu;
-  for (int s = 0; s < t->m; s++) {
+  int s0 = 0;
+#if XP_AVX2
+  if (xp_vlog) {
+    /* Four sites' utils, one four-lane log, the four logs added in site order: the same sum. */
+    for (; s0 + 4 <= t->m; s0 += 4) {
+      double u4[4];
+      for (int k = 0; k < 4; k++) {
+        const int s = s0 + k;
+        const double *pd = t->PD + (size_t)s * NS;
+        const double *zz = t->QP + ((size_t)t->cat[s] * nu + t->qc[s]) * NS;
+        double util = 0;
+        for (int st = 0; st < NS; st++) util += pd[st] * zz[st];
+        u4[k] = util;
+      }
+      double l4[4]; _mm256_storeu_pd(l4, xp_log4(_mm256_loadu_pd(u4)));
+      ll_tot += l4[0]; ll_tot += l4[1]; ll_tot += l4[2]; ll_tot += l4[3];
+    }
+  }
+#endif
+  for (int s = s0; s < t->m; s++) {
     const double *pd = t->PD + (size_t)s * NS;
     const double *zz = t->QP + ((size_t)t->cat[s] * nu + t->qc[s]) * NS;
     double util = 0;
@@ -789,6 +885,7 @@ static void tt_dist_pass(TT *t)                 /* PD and ll_core from dist_o/pr
   const __m256d s0 = _mm256_loadu_pd(t->statd + 0), s1 = _mm256_loadu_pd(t->statd + 4),
                 s2 = _mm256_loadu_pd(t->statd + 8), s3 = _mm256_loadu_pd(t->statd + 12),
                 s4 = _mm256_loadu_pd(t->statd + 16);
+  double u4[4]; int nb = 0;
   for (int s = 0; s < t->m; s++) {
     double dv[NS], pv[NS];
     const size_t off = (size_t)t->cat[s] * NS * NS;
@@ -803,8 +900,18 @@ static void tt_dist_pass(TT *t)                 /* PD and ll_core from dist_o/pr
     const double *zz = t->QP + ((size_t)t->cat[s] * nu + t->qc[s]) * NS;
     double util = 0;
     for (int st = 0; st < NS; st++) util += pd[st] * zz[st];
+    if (xp_vlog) {                                 /* four sites' logs at once, added in order */
+      u4[nb++] = util;
+      if (nb == 4) {
+        double l4[4]; _mm256_storeu_pd(l4, xp_log4(_mm256_loadu_pd(u4)));
+        ll_tot += l4[0]; ll_tot += l4[1]; ll_tot += l4[2]; ll_tot += l4[3];
+        nb = 0;
+      }
+      continue;
+    }
     ll_tot += log(util);
   }
+  for (int k = 0; k < nb; k++) ll_tot += log(u4[k]);
   t->ll_core = ll_tot;
 #else                                              /* NEON: PD = (statd * prox) * dist, 2 states per op */
   const double *sd = t->statd;
@@ -973,6 +1080,7 @@ TT *xp_tt_new(int m, const int32_t *cat, const double *statd, const double *x, c
   t->tensorP = (double *)malloc(sizeof(double) * nrates * NS * NS);
   t->tensorQ = (double *)malloc(sizeof(double) * nrates * NS * NS);
   t->dist_o = malloc(sizeof(double) * n); t->prox_o = malloc(sizeof(double) * n);
+  xp_read_switches();
   {
     const char *e = getenv("GPLACE_PD_CACHE");
     t->pdc = (e && *e == '1' && m > 0);            /* m = 0 is the gamma path's placeholder */
