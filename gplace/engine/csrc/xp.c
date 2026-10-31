@@ -788,6 +788,12 @@ typedef struct {
    * (dist, prox) pair, cleared by xp_tt_set; t->PD always points at one of them. */
   int pdc;
   double *pd_buf[4]; double pd_kd[4], pd_kp[4]; int pd_ok[4]; long pd_age[4], pd_clock;
+  /* Distal grouping (GPLACE_DGRP=1): sites whose (distal row, category) are bitwise equal
+   * evolve to the same dv, so each distinct pair is evolved once per distal pass and the sites
+   * read its result. Classes are rebuilt by xp_tt_set from the new edge vectors. */
+  int dgrp, nd;
+  int32_t *dcls, *drep, *dhash;          /* class per site, first site of each class, table */
+  double *DV;                            /* nd x NS evolved distal rows */
 } TT;
 #define PD_SLOTS 4
 
@@ -897,6 +903,26 @@ static void tt_ll_pass(TT *t)                   /* ll_core from PD and QP */
   t->ll_core = ll_tot;
 }
 
+static void tt_group_distal(TT *t)
+{
+  const int m = t->m, hb = t->dgrp;              /* t->dgrp holds the table size (a power of 2) */
+  for (int h = 0; h < hb; h++) t->dhash[h] = -1;
+  t->nd = 0;
+  for (int s = 0; s < m; s++) {
+    const uint64_t *w = (const uint64_t *)(t->dist_o + (size_t)s * NS);
+    uint64_t h = 1469598103934665603ULL ^ (uint64_t)t->cat[s];
+    for (int k = 0; k < NS; k++) { h ^= w[k]; h *= 1099511628211ULL; h ^= h >> 29; }
+    int b = (int)(h & (uint64_t)(hb - 1));
+    for (;;) {
+      const int c = t->dhash[b];
+      if (c < 0) { t->dhash[b] = t->nd; t->drep[t->nd] = s; t->dcls[s] = t->nd++; break; }
+      const int r = t->drep[c];
+      if (t->cat[r] == t->cat[s] && memcmp(t->dist_o + (size_t)r * NS, w, sizeof(double) * NS) == 0) { t->dcls[s] = c; break; }
+      b = (b + 1) & (hb - 1);
+    }
+  }
+}
+
 static void tt_dist_pass(TT *t)                 /* PD and ll_core from dist_o/prox_o, QP */
 {
   if (t->gmix) { gtt_dist_pass(t); return; }
@@ -922,10 +948,17 @@ static void tt_dist_pass(TT *t)                 /* PD and ll_core from dist_o/pr
                 s4 = _mm256_loadu_pd(t->statd + 16);
   double u4[4]; int nb = 0;
   const double *pp4[4], *zp4[4];
+  if (t->dgrp)
+    for (int c = 0; c < t->nd; c++) {
+      const int r = t->drep[c];
+      evolve_site(t->DV + (size_t)c * NS, t->dist_o + (size_t)r * NS, t->tensorD + (size_t)t->cat[r] * NS * NS);
+    }
   for (int s = 0; s < t->m; s++) {
-    double dv[NS], pv[NS];
+    double dvb[NS], pv[NS];
+    const double *dv = dvb;
     const size_t off = (size_t)t->cat[s] * NS * NS;
-    evolve_site(dv, t->dist_o + (size_t)s * NS, t->tensorD + off);
+    if (t->dgrp) dv = t->DV + (size_t)t->dcls[s] * NS;
+    else evolve_site(dvb, t->dist_o + (size_t)s * NS, t->tensorD + off);
     evolve_site(pv, t->prox_o + (size_t)s * NS, t->tensorP + off);
     double *pd = t->PD + (size_t)s * NS;
     _mm256_storeu_pd(pd + 0, _mm256_mul_pd(_mm256_mul_pd(s0, _mm256_loadu_pd(pv + 0)), _mm256_loadu_pd(dv + 0)));
@@ -1138,6 +1171,15 @@ TT *xp_tt_new(int m, const int32_t *cat, const double *statd, const double *x, c
     t->PD = t->pd_buf[0];
   } else t->PD = malloc(sizeof(double) * n);
   t->dist_e = calloc(m, sizeof(int64_t)); t->prox_e = calloc(m, sizeof(int64_t));
+  {
+    const char *g = getenv("GPLACE_DGRP");
+    if (g && *g == '1' && m > 0 && XP_AVX2 && XP_SIMD20) {
+      int hb = 1; while (hb < 2 * m) hb <<= 1;
+      t->dgrp = hb;
+      t->dcls = malloc(sizeof(int32_t) * m); t->drep = malloc(sizeof(int32_t) * m);
+      t->dhash = malloc(sizeof(int32_t) * hb); t->DV = malloc(sizeof(double) * n);
+    }
+  }
   t->U = malloc(sizeof(double) * 64 * NS); t->qc = malloc(m > 0 ? m : 1);
   t->nu = 0;
   for (int s = 0; s < m; s++) {
@@ -1159,6 +1201,7 @@ void xp_tt_free(TT *t)
   free(t->tensorD); free(t->tensorP); free(t->tensorQ); free(t->dist_o); free(t->prox_o);
   if (t->pdc) for (int k = 0; k < PD_SLOTS; k++) free(t->pd_buf[k]);
   else free(t->PD);
+  if (t->dgrp) { free(t->dcls); free(t->drep); free(t->dhash); free(t->DV); }
   free(t->dist_e); free(t->prox_e); free(t->U); free(t->qc); free(t->QP); free(t);
 }
 
@@ -1176,6 +1219,7 @@ void xp_tt_set(TT *t, const double *darr_a, const int64_t *darr_e, const double 
   }
   /* tt_log_like in xp.c: (tot(prox_e) + tot(dist_e)) + tot(pend_e), pend_e == 0 */
   t->etot = (xp_total_twoexp(t->prox_e, t->m) + xp_total_twoexp(t->dist_e, t->m)) + 0.0;
+  if (t->dgrp) tt_group_distal(t);
   /* pendant first (Glv_edge.set_bl pend_edge), then dist edge, then prox edge */
   tt_build_QP(t, pendant);
   t->dist_bl = distal;
