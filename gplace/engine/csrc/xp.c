@@ -1577,6 +1577,242 @@ int xp_edge_scores8_f32(double *out, long ldo, long col0, int ne, const double *
   (void)ncode; (void)nrates; (void)codes; (void)nq; (void)present; return 1; }
 #endif
 
+/* f32 supernodes for the product-form prefilter (GPLACE_PF32SRC=1, with GPLACE_PF32=1). As
+ * xp_edge_scores8_f32, but each lane's supernode is built here, in f32, straight from the cache:
+ *   dv = evolve(d, half), pv = evolve(p, half), sn = statd * dv * pv           (as _supernodes8)
+ * where d is the edge's distal vector (a leaf's tip vector) and p its proximal vector or, for a
+ * leaf edge, the rebuild of get_p: p = evolve(parent proximal, bl[parent]) * prod over siblings
+ * of evolve(sibling distal, bl[sibling]). Every f64 input row is scaled by a power of two to a
+ * maximum in [1, 2) before rounding to f32, and every product vector is renormalised the same way,
+ * so the exponents are tracked here (a power-of-two scaling is exact) instead of gPlace's pulls,
+ * which only change the representation. Every operation adds or multiplies non-negative numbers,
+ * so each value carries at most one relative rounding of 2^-24 per operation on its path; the
+ * caller's radius counts them (pf32_rounds). Lane descriptor, 32 int64 each:
+ *   [0] d  [1] d exps (NULL: 0)  [2] p mode (0 stored, 1 leaf rebuild)  [3] p  [4] p exps
+ *   [5] half tensor  [6] parent tensor  [7] n siblings (<= 8)  [8..15] sibling distals
+ *   [16..23] their exps (NULL: 0)  [24..31] their tensors
+ * Tensors are R x NS x NS f64, transposed as from xp_multi_exp. Returns 1 if an exponent is out
+ * of range (the caller then uses the f64 supernodes). */
+#if XP_AVX2
+#define PF_W 24                                     /* a 20-float row padded to three vectors */
+static inline void pf_ev(float *y, const float *x, const float *T)   /* y = x . T (T: 20 x PF_W) */
+{
+  __m256 a0 = _mm256_setzero_ps(), a1 = a0, a2 = a0;
+  for (int j = 0; j < NS; j++) {
+    const __m256 xj = _mm256_set1_ps(x[j]);
+    const float *t = T + j * PF_W;
+    a0 = _mm256_fmadd_ps(xj, _mm256_load_ps(t), a0);
+    a1 = _mm256_fmadd_ps(xj, _mm256_load_ps(t + 8), a1);
+    a2 = _mm256_fmadd_ps(xj, _mm256_load_ps(t + 16), a2);
+  }
+  _mm256_store_ps(y, a0); _mm256_store_ps(y + 8, a1); _mm256_store_ps(y + 16, a2);
+}
+/* scale y (20 non-negative floats, entries 20..23 zero) to a maximum in [1, 2): returns the power
+ * of two taken out, or INT32_MIN if y is all zero (or not finite, or subnormal at the maximum) */
+static inline int pf_norm(float *y)
+{
+  const __m256 a = _mm256_load_ps(y), b = _mm256_load_ps(y + 8), c = _mm256_load_ps(y + 16);
+  __m256 m = _mm256_max_ps(_mm256_max_ps(a, b), c);
+  __m128 h = _mm_max_ps(_mm256_castps256_ps128(m), _mm256_extractf128_ps(m, 1));
+  h = _mm_max_ps(h, _mm_movehl_ps(h, h)); h = _mm_max_ss(h, _mm_shuffle_ps(h, h, 1));
+  const float mx = _mm_cvtss_f32(h);
+  if (!(mx > 0.0f) || !(mx < INFINITY)) return INT32_MIN;
+  uint32_t bits; memcpy(&bits, &mx, 4);
+  const int fe = (int)(bits >> 23) & 0xFF;
+  if (fe == 0) return INT32_MIN;                  /* subnormal maximum: leave it to f64 */
+  const int e = fe - 127;                         /* mx = f * 2^e, f in [1, 2) */
+  const uint32_t sb = (uint32_t)(127 - e) << 23;  /* 2^-e, a normal float for e in [-126, 126] */
+  if (127 - e < 1 || 127 - e > 254) return INT32_MIN;
+  float sc; memcpy(&sc, &sb, 4);
+  const __m256 v = _mm256_set1_ps(sc);            /* a power of two: exact unless subnormal */
+  _mm256_store_ps(y, _mm256_mul_ps(a, v)); _mm256_store_ps(y + 8, _mm256_mul_ps(b, v));
+  _mm256_store_ps(y + 16, _mm256_mul_ps(c, v));
+  return e;
+}
+/* f64 row x (20, non-negative) to f32 with a maximum in [1, 2); entries 20..23 set to zero */
+static inline int pf_in(float *y, const double *x)
+{
+  const __m256d v0 = _mm256_loadu_pd(x), v1 = _mm256_loadu_pd(x + 4), v2 = _mm256_loadu_pd(x + 8),
+                v3 = _mm256_loadu_pd(x + 12), v4 = _mm256_loadu_pd(x + 16);
+  __m256d m = _mm256_max_pd(_mm256_max_pd(_mm256_max_pd(v0, v1), _mm256_max_pd(v2, v3)), v4);
+  __m128d h = _mm_max_pd(_mm256_castpd256_pd128(m), _mm256_extractf128_pd(m, 1));
+  h = _mm_max_sd(h, _mm_unpackhi_pd(h, h));
+  const double mx = _mm_cvtsd_f64(h);
+  if (!(mx > 0.0) || !(mx < INFINITY)) return INT32_MIN;
+  uint64_t bits; memcpy(&bits, &mx, 8);
+  const int fe = (int)(bits >> 52) & 0x7FF;
+  if (fe == 0) return INT32_MIN;
+  const int e = fe - 1023;
+  const uint64_t sb = (uint64_t)(1023 - e) << 52;
+  double sc; memcpy(&sc, &sb, 8);
+  const __m256d v = _mm256_set1_pd(sc);
+  _mm_store_ps(y, _mm256_cvtpd_ps(_mm256_mul_pd(v0, v))); _mm_store_ps(y + 4, _mm256_cvtpd_ps(_mm256_mul_pd(v1, v)));
+  _mm_store_ps(y + 8, _mm256_cvtpd_ps(_mm256_mul_pd(v2, v))); _mm_store_ps(y + 12, _mm256_cvtpd_ps(_mm256_mul_pd(v3, v)));
+  _mm_store_ps(y + 16, _mm256_cvtpd_ps(_mm256_mul_pd(v4, v)));
+  _mm_store_ps(y + 20, _mm_setzero_ps());
+  return e;
+}
+static float *pf_tensor(const double *T, int nrates)    /* f32 copy, rows padded to PF_W */
+{
+  float *o = (float *)aligned_alloc(32, sizeof(float) * (size_t)nrates * NS * PF_W);
+  if (!o) return NULL;
+  for (int r = 0; r < nrates; r++)
+    for (int j = 0; j < NS; j++) {
+      for (int i = 0; i < NS; i++) o[((size_t)r * NS + j) * PF_W + i] = (float)T[((size_t)r * NS + j) * NS + i];
+      for (int i = NS; i < PF_W; i++) o[((size_t)r * NS + j) * PF_W + i] = 0.0f;
+    }
+  return o;
+}
+
+int xp_edge_scores8_f32src(double *out, long ldo, long col0, int ne, const int64_t *desc,
+                           const double *statd, const double *qevtab, const int32_t *cat, int nsites,
+                           int ncode, int nrates, const uint8_t *codes, int nq, const uint32_t *present)
+{
+  if (ne < 1 || ne > XP_EB || ncode < 1 || ncode > 31) return -1;
+  const int NC = ncode + 1, BS = 64;
+  const double *D[XP_EB], *P_[XP_EB], *SB[XP_EB][8];
+  const int64_t *DE[XP_EB], *PE[XP_EB], *SBE[XP_EB][8];
+  int pmode[XP_EB], nsib[XP_EB];
+  float *TH[XP_EB], *TP[XP_EB], *TS[XP_EB][8];
+  int nalloc = 0; float *allocs[XP_EB * 10];
+  int fail = 0;
+  for (int lane = 0; lane < ne; lane++) {
+    const int64_t *dd = desc + (size_t)lane * 32;
+    D[lane] = (const double *)(intptr_t)dd[0]; DE[lane] = (const int64_t *)(intptr_t)dd[1];
+    pmode[lane] = (int)dd[2];
+    P_[lane] = (const double *)(intptr_t)dd[3]; PE[lane] = (const int64_t *)(intptr_t)dd[4];
+    nsib[lane] = (int)dd[7];
+    if (nsib[lane] > 8) { fail = 1; break; }
+    allocs[nalloc++] = TH[lane] = pf_tensor((const double *)(intptr_t)dd[5], nrates);
+    TP[lane] = NULL;
+    if (pmode[lane] == 1) {
+      allocs[nalloc++] = TP[lane] = pf_tensor((const double *)(intptr_t)dd[6], nrates);
+      for (int k = 0; k < nsib[lane]; k++) {
+        SB[lane][k] = (const double *)(intptr_t)dd[8 + k]; SBE[lane][k] = (const int64_t *)(intptr_t)dd[16 + k];
+        allocs[nalloc++] = TS[lane][k] = pf_tensor((const double *)(intptr_t)dd[24 + k], nrates);
+      }
+    }
+  }
+  float *q32 = (float *)malloc(sizeof(float) * (size_t)nrates * ncode * NS);
+  float *sd32 = (float *)aligned_alloc(32, sizeof(float) * PF_W);
+  __m256 *Tm = (__m256 *)aligned_alloc(32, sizeof(__m256) * (size_t)BS * NC);
+  __m256i *Te = (__m256i *)aligned_alloc(32, sizeof(__m256i) * (size_t)BS * NC);
+  __m256 *Pq = (__m256 *)aligned_alloc(32, sizeof(__m256) * ((size_t)nq + 1));
+  int64_t *Eq = (int64_t *)calloc((size_t)nq * XP_EB + 8, sizeof(int64_t));
+  int ok_alloc = q32 && sd32 && Tm && Te && Pq && Eq;
+  for (int i = 0; i < nalloc; i++) ok_alloc = ok_alloc && allocs[i];
+  if (fail || !ok_alloc) {
+    for (int i = 0; i < nalloc; i++) free(allocs[i]);
+    free(q32); free(sd32); free(Tm); free(Te); free(Pq); free(Eq);
+    return fail ? 1 : -1;
+  }
+  for (size_t i = 0; i < (size_t)nrates * ncode * NS; i++) q32[i] = (float)qevtab[i];
+  for (int i = 0; i < PF_W; i++) sd32[i] = i < NS ? (float)statd[i] : 0.0f;
+  const __m256 one = _mm256_set1_ps(1.0f), zero = _mm256_setzero_ps(), tiny = _mm256_set1_ps(0x1p-90f);
+  const __m256i mant = _mm256_set1_epi32(0x007FFFFF), onebits = _mm256_set1_epi32(0x3F800000),
+                bias = _mm256_set1_epi32(127);
+  for (int q = 0; q < nq; q++) Pq[q] = one;
+  float snT[NS][XP_EB] __attribute__((aligned(32)));
+  float xa[PF_W] __attribute__((aligned(32))), xb[PF_W] __attribute__((aligned(32)));
+  float dv[PF_W] __attribute__((aligned(32))), pv[PF_W] __attribute__((aligned(32)));
+  int rc = 0;
+  for (int s0 = 0; s0 < nsites && !rc; s0 += BS) {
+    const int s1 = s0 + BS < nsites ? s0 + BS : nsites;
+    for (int s = s0; s < s1; s++) {
+      const int j = s - s0, c_s = cat[s];
+      int32_t sev[XP_EB];
+      for (int lane = 0; lane < XP_EB; lane++) {
+        if (lane >= ne) { for (int st = 0; st < NS; st++) snT[st][lane] = 1.0f; sev[lane] = 0; continue; }
+        const size_t to = (size_t)c_s * NS * PF_W;
+        long long ex = 0; int dead = 0, e;
+        /* distal side */
+        e = pf_in(xa, D[lane] + (size_t)s * NS); if (e == INT32_MIN) dead = 1;
+        ex += e + (DE[lane] ? DE[lane][s] : 0);
+        pf_ev(dv, xa, TH[lane] + to);
+        /* proximal side */
+        if (pmode[lane] == 0) {
+          e = pf_in(xb, P_[lane] + (size_t)s * NS); if (e == INT32_MIN) dead = 1;
+          ex += e + (PE[lane] ? PE[lane][s] : 0);
+        } else {
+          e = pf_in(xa, P_[lane] + (size_t)s * NS); if (e == INT32_MIN) dead = 1;
+          ex += e + (PE[lane] ? PE[lane][s] : 0);
+          pf_ev(xb, xa, TP[lane] + to);
+          for (int k = 0; k < nsib[lane]; k++) {
+            e = pf_in(xa, SB[lane][k] + (size_t)s * NS); if (e == INT32_MIN) dead = 1;
+            ex += e + (SBE[lane][k] ? SBE[lane][k][s] : 0);
+            float t[PF_W] __attribute__((aligned(32)));
+            pf_ev(t, xa, TS[lane][k] + to);
+            for (int i = 0; i < PF_W; i += 8) _mm256_store_ps(xb + i, _mm256_mul_ps(_mm256_load_ps(xb + i), _mm256_load_ps(t + i)));
+            e = pf_norm(xb); if (e == INT32_MIN) dead = 1; ex += e;
+          }
+          if (nsib[lane] == 0) { e = pf_norm(xb); if (e == INT32_MIN) dead = 1; ex += e; }
+        }
+        pf_ev(pv, xb, TH[lane] + to);
+        for (int i = 0; i < PF_W; i += 8)
+          _mm256_store_ps(xa + i, _mm256_mul_ps(_mm256_mul_ps(_mm256_load_ps(sd32 + i), _mm256_load_ps(pv + i)),
+                                                _mm256_load_ps(dv + i)));
+        e = pf_norm(xa); if (e == INT32_MIN) dead = 1; ex += e;
+        if (ex > (1 << 23) || ex < -(1 << 23)) { rc = 1; break; }
+        for (int st = 0; st < NS; st++) snT[st][lane] = dead ? 0.0f : xa[st];
+        sev[lane] = (int32_t)ex;
+      }
+      if (rc) break;
+      const __m256i sv = _mm256_loadu_si256((const __m256i *)sev);
+      const float *qt = q32 + (size_t)c_s * ncode * NS;
+      uint32_t pm = present[s];
+      while (pm) {
+        const int c = __builtin_ctz(pm); pm &= pm - 1;
+        const float *qv = qt + (size_t)c * NS;
+        __m256 acc = zero;
+        for (int st = 0; st < NS; st++)
+          acc = _mm256_fmadd_ps(_mm256_set1_ps(qv[st]), _mm256_load_ps(snT[st]), acc);
+        const __m256 ok = _mm256_cmp_ps(acc, tiny, _CMP_GE_OQ);
+        const __m256i b = _mm256_castps_si256(acc);
+        const __m256i ee = _mm256_sub_epi32(_mm256_srli_epi32(b, 23), bias);
+        const __m256 m = _mm256_castsi256_ps(_mm256_or_si256(_mm256_and_si256(b, mant), onebits));
+        Tm[(size_t)j * NC + c] = _mm256_blendv_ps(zero, m, ok);
+        Te[(size_t)j * NC + c] = _mm256_add_epi32(ee, sv);
+      }
+      Tm[(size_t)j * NC + ncode] = one; Te[(size_t)j * NC + ncode] = _mm256_setzero_si256();
+    }
+    if (rc) break;
+    for (int q = 0; q < nq; q++) {
+      const uint8_t *cq = codes + (size_t)q * nsites;
+      __m256 P = Pq[q];
+      __m256i E = _mm256_setzero_si256();
+      for (int s = s0; s < s1; s++) {
+        const size_t k = (size_t)(s - s0) * NC + cq[s];
+        P = _mm256_mul_ps(P, Tm[k]);
+        E = _mm256_add_epi32(E, Te[k]);
+      }
+      const __m256 z = _mm256_cmp_ps(P, zero, _CMP_EQ_OQ);
+      const __m256i b = _mm256_castps_si256(P);
+      E = _mm256_add_epi32(E, _mm256_sub_epi32(_mm256_srli_epi32(b, 23), bias));
+      P = _mm256_castsi256_ps(_mm256_or_si256(_mm256_and_si256(b, mant), onebits));
+      Pq[q] = _mm256_blendv_ps(P, zero, z);
+      int32_t e8[XP_EB]; _mm256_storeu_si256((__m256i *)e8, E);
+      for (int lane = 0; lane < XP_EB; lane++) Eq[(size_t)q * XP_EB + lane] += e8[lane];
+    }
+  }
+  if (!rc)
+    for (int q = 0; q < nq; q++) {
+      float p8[XP_EB]; _mm256_storeu_ps(p8, Pq[q]);
+      for (int lane = 0; lane < ne; lane++)
+        out[(size_t)q * ldo + col0 + lane] = p8[lane] == 0.0f ? NAN
+          : log((double)p8[lane]) + M_LN2 * (double)Eq[(size_t)q * XP_EB + lane];
+    }
+  for (int i = 0; i < nalloc; i++) free(allocs[i]);
+  free(q32); free(sd32); free(Tm); free(Te); free(Pq); free(Eq);
+  return rc;
+}
+#else
+int xp_edge_scores8_f32src(double *out, long ldo, long col0, int ne, const int64_t *desc,
+                           const double *statd, const double *qevtab, const int32_t *cat, int nsites,
+                           int ncode, int nrates, const uint8_t *codes, int nq, const uint32_t *present)
+{ (void)out; (void)ldo; (void)col0; (void)ne; (void)desc; (void)statd; (void)qevtab; (void)cat;
+  (void)nsites; (void)ncode; (void)nrates; (void)codes; (void)nq; (void)present; return 1; }
+#endif
+
 /* Gmix prefilter (Glv.masked_logdot of the evolved query and the supernode), 8 edges at once:
  *   W[s][c] = log( util ), util = sum over r ascending, st ascending of qev[r][c][st]*sn[s][r][st]
  *   ll = +0.0 + sum_{s informative} W[s][code]           (ten_masked_logdot_c ...)

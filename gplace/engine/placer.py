@@ -842,9 +842,17 @@ class Placer(object):
         for c in range(gap):
             bits |= (np.any(self._bcodes == c, axis=0).astype(np.uint32) << np.uint32(c))
         self._present = bits
-        # roundings per site on the longest path (all non-negative operands, 2^-24 each):
-        # f32 inputs 2, util dot 20, running product 1, plus margin
-        self._pf32_rounds = 26
+        # roundings per site on the longest path (all non-negative operands, 2^-24 each): f32
+        # inputs 2, util dot 20, running product 1, plus margin; with GPLACE_PF32SRC=1 (supernodes
+        # built in f32 in the kernel) distal 21, proximal 21 (a leaf's rebuild: 41 + 22 per
+        # sibling), statd product 3, util 21, running product 1
+        self._pf32src = os.environ.get('GPLACE_PF32SRC') == '1'
+        if self._pf32src:
+            kmax = max([len(self.children[self.parent[v]]) - 1 for v in range(self.nnodes)
+                        if not self.children[v] and self.parent[v] >= 0] or [0])
+            self._pf32_rounds = 21 + max(21, 41 + 22 * kmax) + 3 + 21 + 1
+        else:
+            self._pf32_rounds = 26
 
     def _pf32_radius(self):
         """After the f32 pass: the per-query radius r[q] = n_used * rounds * 1.01 * 2^-24 +
@@ -935,10 +943,57 @@ class Placer(object):
                 return
             M = min(2 * M, E)
 
+    def _pf_tensor(self, bl):
+        ten = np.zeros((self.nrates, self.ns, self.ns))
+        self.lib.xp_multi_exp(P(ten), P(self.x), P(self.l), P(self.xit), P(self.rates),
+                              self.nrates, P(self.occupied), bl)
+        return ten
+
+    def _pf32src_group(self, i0, i1, nq):
+        """xp_edge_scores8_f32src for edges locs[i0:i1]: lane descriptors pointing into the cache
+        (the arrays of _supernodes8's get_d / get_p, without building them). Returns its status."""
+        desc = np.zeros((8, 32), np.int64)
+        keep = []
+        def ptr(a):
+            if a is None:
+                return 0
+            a = np.ascontiguousarray(a); keep.append(a); return a.ctypes.data
+        for lane, k in enumerate(range(i0, i1)):
+            v = int(self.locs[k])
+            a, e = self.d_pre(v)
+            desc[lane, 0], desc[lane, 1] = ptr(a), ptr(e)
+            desc[lane, 5] = ptr(self._pf_tensor(self.bl[v] / 2.))
+            if self.children[v]:
+                kk = self.iidx[v]
+                desc[lane, 3], desc[lane, 4] = ptr(self.parr[kk]), ptr(self.pexp[kk])
+            else:                                       # get_p's leaf rebuild, in the kernel
+                pv = self.parent[v]; kp = self.iidx[pv]
+                sibs = [r for r in self.children[pv] if r != v]
+                if len(sibs) > 8:
+                    return 1
+                desc[lane, 2] = 1
+                desc[lane, 3], desc[lane, 4] = ptr(self.parr[kp]), ptr(self.pexp[kp])
+                desc[lane, 6] = ptr(self._pf_tensor(self.bl[pv]))
+                desc[lane, 7] = len(sibs)
+                for j, r in enumerate(sibs):
+                    a, e = self.d_pre(r)
+                    desc[lane, 8 + j], desc[lane, 16 + j] = ptr(a), ptr(e)
+                    desc[lane, 24 + j] = ptr(self._pf_tensor(self.bl[r]))
+        return self.lib.xp_edge_scores8_f32src(P(self.scores), self.max_edges, i0, i1 - i0, P(desc),
+                                               P(self.statd), P(self.qevtab), P(self.cats), self.nsites,
+                                               len(self.alpha.codes), self.nrates, P(self._bcodes), nq,
+                                               P(self._present))
+
     def _batch_prefilter_group(self, g):
         """Prefilter scores of the current query batch (_bcodes, _qb) against edges locs[i0:i1]."""
         i0, i1 = g
         nq, _ = self._qb
+        if getattr(self, '_pf32', False) and self._pf32src:
+            st = self._pf32src_group(i0, i1, nq)
+            if st == 0:
+                return
+            if st != 1:
+                raise GPlaceException(f'f32 prefilter kernel failed ({st}) for edges {i0}..{i1}.')
         t = self._supernodes8(i0, i1)
         if getattr(self, '_pf32', False):
             st = self.lib.xp_edge_scores8_f32(P(self.scores), self.max_edges, i0, i1 - i0, P(t.sn8),
