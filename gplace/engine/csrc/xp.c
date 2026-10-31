@@ -106,11 +106,13 @@ const char *xp_engine_version(void) { return "gplace-core 4 (" XP_STR(NS) " stat
 int xp_simd(void) { return XP_AVX2 ? 1 : XP_NEON ? 2 : 0; }   /* 0 scalar, 1 AVX2, 2 NEON */
 
 /* Opt-in exact speedups, read from the environment once (default off). */
-static int xp_switches_read = 0, xp_vlog = 0;
+static int xp_switches_read = 0, xp_vlog = 0, xp_vdot = 0;
 static void xp_read_switches(void)
 {
   if (xp_switches_read) return;
-  const char *v = getenv("GPLACE_VLOG"); xp_vlog = (v && *v == '1') && XP_AVX2;
+  const char *v = getenv("GPLACE_VLOG"), *d = getenv("GPLACE_VDOT");
+  xp_vlog = (v && *v == '1') && XP_AVX2;
+  xp_vdot = (d && *d == '1') && NS == 20;
   xp_switches_read = 1;
 }
 
@@ -163,6 +165,28 @@ static inline __m256d xp_log4(__m256d x)
   double xs[4], ys[4]; _mm256_storeu_pd(xs, x); _mm256_storeu_pd(ys, left);
   for (int i = 0; i < 4; i++) if (mk >> i & 1) ys[i] = cr_log(xs[i]);
   return _mm256_loadu_pd(ys);
+}
+
+/* Four sites' utils at once (GPLACE_VDOT=1, with GPLACE_VLOG=1), bit for bit the scalar loop
+ * `util = 0; for st: util += pd[st] * zz[st]`: each site's products are formed along its row
+ * (the same products), five 4x4 transposes put one site in each lane, and each lane then adds
+ * its products from 0 in state order -- the scalar sequence exactly. NS == 20. */
+static inline __m256d xp_dot4(const double *const p[4], const double *const z[4])
+{
+  __m256d acc = _mm256_setzero_pd();
+  for (int b = 0; b < 20; b += 4) {
+    __m256d r0 = _mm256_mul_pd(_mm256_loadu_pd(p[0] + b), _mm256_loadu_pd(z[0] + b));
+    __m256d r1 = _mm256_mul_pd(_mm256_loadu_pd(p[1] + b), _mm256_loadu_pd(z[1] + b));
+    __m256d r2 = _mm256_mul_pd(_mm256_loadu_pd(p[2] + b), _mm256_loadu_pd(z[2] + b));
+    __m256d r3 = _mm256_mul_pd(_mm256_loadu_pd(p[3] + b), _mm256_loadu_pd(z[3] + b));
+    __m256d t0 = _mm256_unpacklo_pd(r0, r1), t1 = _mm256_unpackhi_pd(r0, r1);
+    __m256d t2 = _mm256_unpacklo_pd(r2, r3), t3 = _mm256_unpackhi_pd(r2, r3);
+    acc = _mm256_add_pd(acc, _mm256_permute2f128_pd(t0, t2, 0x20));   /* state b */
+    acc = _mm256_add_pd(acc, _mm256_permute2f128_pd(t1, t3, 0x20));   /* b + 1 */
+    acc = _mm256_add_pd(acc, _mm256_permute2f128_pd(t0, t2, 0x31));   /* b + 2 */
+    acc = _mm256_add_pd(acc, _mm256_permute2f128_pd(t1, t3, 0x31));   /* b + 3 */
+  }
+  return acc;
 }
 #endif
 int xp_n_states(void) { return NS; }
@@ -839,6 +863,17 @@ static void tt_ll_pass(TT *t)                   /* ll_core from PD and QP */
     /* Four sites' utils, one four-lane log, the four logs added in site order: the same sum. */
     for (; s0 + 4 <= t->m; s0 += 4) {
       double u4[4];
+      if (xp_vdot) {
+        const double *pp[4], *zp[4];
+        for (int k = 0; k < 4; k++) {
+          const int s = s0 + k;
+          pp[k] = t->PD + (size_t)s * NS;
+          zp[k] = t->QP + ((size_t)t->cat[s] * nu + t->qc[s]) * NS;
+        }
+        double l4[4]; _mm256_storeu_pd(l4, xp_log4(xp_dot4(pp, zp)));
+        ll_tot += l4[0]; ll_tot += l4[1]; ll_tot += l4[2]; ll_tot += l4[3];
+        continue;
+      }
       for (int k = 0; k < 4; k++) {
         const int s = s0 + k;
         const double *pd = t->PD + (size_t)s * NS;
@@ -886,6 +921,7 @@ static void tt_dist_pass(TT *t)                 /* PD and ll_core from dist_o/pr
                 s2 = _mm256_loadu_pd(t->statd + 8), s3 = _mm256_loadu_pd(t->statd + 12),
                 s4 = _mm256_loadu_pd(t->statd + 16);
   double u4[4]; int nb = 0;
+  const double *pp4[4], *zp4[4];
   for (int s = 0; s < t->m; s++) {
     double dv[NS], pv[NS];
     const size_t off = (size_t)t->cat[s] * NS * NS;
@@ -898,6 +934,15 @@ static void tt_dist_pass(TT *t)                 /* PD and ll_core from dist_o/pr
     _mm256_storeu_pd(pd + 12, _mm256_mul_pd(_mm256_mul_pd(s3, _mm256_loadu_pd(pv + 12)), _mm256_loadu_pd(dv + 12)));
     _mm256_storeu_pd(pd + 16, _mm256_mul_pd(_mm256_mul_pd(s4, _mm256_loadu_pd(pv + 16)), _mm256_loadu_pd(dv + 16)));
     const double *zz = t->QP + ((size_t)t->cat[s] * nu + t->qc[s]) * NS;
+    if (xp_vlog && xp_vdot) {                      /* four sites' dots and logs at once */
+      pp4[nb] = pd; zp4[nb] = zz; nb++;
+      if (nb == 4) {
+        double l4[4]; _mm256_storeu_pd(l4, xp_log4(xp_dot4(pp4, zp4)));
+        ll_tot += l4[0]; ll_tot += l4[1]; ll_tot += l4[2]; ll_tot += l4[3];
+        nb = 0;
+      }
+      continue;
+    }
     double util = 0;
     for (int st = 0; st < NS; st++) util += pd[st] * zz[st];
     if (xp_vlog) {                                 /* four sites' logs at once, added in order */
@@ -911,7 +956,10 @@ static void tt_dist_pass(TT *t)                 /* PD and ll_core from dist_o/pr
     }
     ll_tot += log(util);
   }
-  for (int k = 0; k < nb; k++) ll_tot += log(u4[k]);
+  if (xp_vlog && xp_vdot)                          /* the last few sites, still in order */
+    for (int k = 0; k < nb; k++) { double u = 0; for (int st = 0; st < NS; st++) u += pp4[k][st] * zp4[k][st]; ll_tot += log(u); }
+  else
+    for (int k = 0; k < nb; k++) ll_tot += log(u4[k]);
   t->ll_core = ll_tot;
 #else                                              /* NEON: PD = (statd * prox) * dist, 2 states per op */
   const double *sd = t->statd;
