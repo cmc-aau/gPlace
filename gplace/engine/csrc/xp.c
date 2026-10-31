@@ -681,7 +681,14 @@ typedef struct {
   int gmix, R;           /* gamma mixture (every site under all R rates), see xp_gtt_new */
   int mix;               /* mixture model (--full_model): rate category r has its own eigen-system and */
   const double *mx, *ml, *mxit, *mstatd;   /* frequencies: R x NS x NS, R x NS, R x NS x NS, R x NS */
+  /* PD cache (GPLACE_PD_CACHE=1): PD depends only on the location's edge vectors and the
+   * (distal, proximal) lengths, not on the query's pendant state, and the alternating Brent
+   * search re-brackets at the same lengths every round. PD_SLOTS buffers, keyed by the exact
+   * (dist, prox) pair, cleared by xp_tt_set; t->PD always points at one of them. */
+  int pdc;
+  double *pd_buf[4]; double pd_kd[4], pd_kp[4]; int pd_ok[4]; long pd_age[4], pd_clock;
 } TT;
+#define PD_SLOTS 4
 
 /* Gamma mixture (Gmix_model) three-taxon passes. Glv layout here is site-major [m][R][NS]
  * (pplacer's is rate-major [R][m][NS]); only the per-site accumulation order matters and it is
@@ -826,14 +833,37 @@ static double tt_log_like(TT *t) { return t->ll_core + (M_LN2 * t->etot); }
 
 static void tt_set_pend(TT *t, double v) { tt_build_QP(t, v); tt_ll_pass(t); }
 
+/* Point t->PD at a slot for (dist, prox): returns 1 on a hit (PD already holds those values),
+ * 0 after claiming a free or the least recently used slot for the caller to fill. */
+static int pd_claim(TT *t, double d, double p)
+{
+  int victim = -1;
+  for (int k = 0; k < PD_SLOTS; k++) {
+    if (t->pd_ok[k] && t->pd_kd[k] == d && t->pd_kp[k] == p) {
+      t->PD = t->pd_buf[k]; t->pd_age[k] = ++t->pd_clock; return 1;
+    }
+    if (!t->pd_ok[k]) { if (victim < 0 || t->pd_ok[victim]) victim = k; }
+    else if (victim < 0 || (t->pd_ok[victim] && t->pd_age[k] < t->pd_age[victim])) victim = k;
+  }
+  t->pd_ok[victim] = 1; t->pd_kd[victim] = d; t->pd_kp[victim] = p; t->pd_age[victim] = ++t->pd_clock;
+  t->PD = t->pd_buf[victim];
+  return 0;
+}
+
 static void tt_set_dist(TT *t, double v)
 {
   double cut = t->dist_bl + t->prox_bl;
   double prox = cut - v;
   if (!(prox >= 0.)) t->assert_fail = 1;           /* alpha19: assert(prox_bl >= 0.) */
   t->dist_bl = v;
-  tt_tensor(t, t->tensorD, v);
   t->prox_bl = prox;
+  if (t->pdc && !t->gmix && pd_claim(t, v, prox)) {
+    /* A hit: PD is what tt_dist_pass would recompute from the same inputs; tt_ll_pass is the
+     * same per-site dot and log, in the same order, that tt_dist_pass ends with. */
+    tt_ll_pass(t);
+    return;
+  }
+  tt_tensor(t, t->tensorD, v);
   tt_tensor(t, t->tensorP, prox);
   tt_dist_pass(t);
 }
@@ -943,7 +973,14 @@ TT *xp_tt_new(int m, const int32_t *cat, const double *statd, const double *x, c
   t->tensorP = (double *)malloc(sizeof(double) * nrates * NS * NS);
   t->tensorQ = (double *)malloc(sizeof(double) * nrates * NS * NS);
   t->dist_o = malloc(sizeof(double) * n); t->prox_o = malloc(sizeof(double) * n);
-  t->PD = malloc(sizeof(double) * n);
+  {
+    const char *e = getenv("GPLACE_PD_CACHE");
+    t->pdc = (e && *e == '1' && m > 0);            /* m = 0 is the gamma path's placeholder */
+  }
+  if (t->pdc) {
+    for (int k = 0; k < PD_SLOTS; k++) t->pd_buf[k] = malloc(sizeof(double) * n);
+    t->PD = t->pd_buf[0];
+  } else t->PD = malloc(sizeof(double) * n);
   t->dist_e = calloc(m, sizeof(int64_t)); t->prox_e = calloc(m, sizeof(int64_t));
   t->U = malloc(sizeof(double) * 64 * NS); t->qc = malloc(m > 0 ? m : 1);
   t->nu = 0;
@@ -964,7 +1001,9 @@ TT *xp_tt_new(int m, const int32_t *cat, const double *statd, const double *x, c
 void xp_tt_free(TT *t)
 {
   free(t->tensorD); free(t->tensorP); free(t->tensorQ); free(t->dist_o); free(t->prox_o);
-  free(t->PD); free(t->dist_e); free(t->prox_e); free(t->U); free(t->qc); free(t->QP); free(t);
+  if (t->pdc) for (int k = 0; k < PD_SLOTS; k++) free(t->pd_buf[k]);
+  else free(t->PD);
+  free(t->dist_e); free(t->prox_e); free(t->U); free(t->qc); free(t->QP); free(t);
 }
 
 /* set_tt_edges: copy masked sites of darr[loc]/parr[loc] (full-site glvs) into the edges,
@@ -987,6 +1026,10 @@ void xp_tt_set(TT *t, const double *darr_a, const int64_t *darr_e, const double 
   tt_tensor(t, t->tensorD, distal);
   t->prox_bl = cut_bl - distal;
   tt_tensor(t, t->tensorP, cut_bl - distal);
+  if (t->pdc && !t->gmix) {                        /* new edge vectors: nothing cached applies */
+    for (int k = 0; k < PD_SLOTS; k++) t->pd_ok[k] = 0;
+    pd_claim(t, t->dist_bl, t->prox_bl);
+  }
   tt_dist_pass(t);
   t->assert_fail = 0;
 }
