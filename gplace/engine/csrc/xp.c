@@ -1477,6 +1477,106 @@ int xp_cache_proximal(const double *par, const int64_t *pare, double bl_v, int n
   return 0;
 }
 
+/* Prefilter in f32 product form (GPLACE_PF32=1). The prefilter only orders edges, and
+ * log is monotone, so a query's score against an edge is ranked by the product of its site utils
+ * as well as by their log-sum. Here every util is an f32 dot of f32-rounded inputs (all terms are
+ * non-negative, so its relative error is at most ~22 * 2^-24), the product is kept as an f32
+ * mantissa in [1, 2) times an integer power of two (no logs, no underflow), and the result is
+ * written as ln(mantissa) + ln2 * exponent. The caller adds a per-query radius
+ * n_used * 26 * 2^-24 + 1e-6 that bounds |this - the f64 score of xp_edge_scores8| and resolves
+ * every edge whose interval could change the ranking with the f64 kernel. Only the codes present
+ * in the batch at a site (bitmask `present`) are evaluated; sites are processed in blocks of 64
+ * so the table stays in cache. A util below 2^-90 (or zero) is not bounded: the score is NaN and
+ * the caller computes it in f64. Returns 1 (nothing written) if an exponent is out of range. */
+#if XP_AVX2
+int xp_edge_scores8_f32(double *out, long ldo, long col0, int ne,
+                        const double *sn8, const int64_t *se8,
+                        const double *qevtab, const int32_t *cat, int nsites, int ncode, int nrates,
+                        const uint8_t *codes, int nq, const uint32_t *present)
+{
+  if (ne < 1 || ne > XP_EB || ncode < 1 || ncode > 31) return -1;
+  for (int lane = 0; lane < ne; lane++)
+    for (int s = 0; s < nsites; s++) {
+      const int64_t v = se8[(size_t)lane * nsites + s];
+      if (v > (1 << 23) || v < -(1 << 23)) return 1;
+    }
+  const int NC = ncode + 1, BS = 64;
+  float *q32 = (float *)malloc(sizeof(float) * (size_t)nrates * ncode * NS);
+  __m256 *Tm = (__m256 *)aligned_alloc(32, sizeof(__m256) * (size_t)BS * NC);
+  __m256i *Te = (__m256i *)aligned_alloc(32, sizeof(__m256i) * (size_t)BS * NC);
+  __m256 *Pq = (__m256 *)aligned_alloc(32, sizeof(__m256) * ((size_t)nq + 1));
+  int64_t *Eq = (int64_t *)calloc((size_t)nq * XP_EB + 8, sizeof(int64_t));
+  if (!q32 || !Tm || !Te || !Pq || !Eq) { free(q32); free(Tm); free(Te); free(Pq); free(Eq); return -1; }
+  for (size_t i = 0; i < (size_t)nrates * ncode * NS; i++) q32[i] = (float)qevtab[i];
+  const __m256 one = _mm256_set1_ps(1.0f), zero = _mm256_setzero_ps(), tiny = _mm256_set1_ps(0x1p-90f);
+  const __m256i mant = _mm256_set1_epi32(0x007FFFFF), onebits = _mm256_set1_epi32(0x3F800000),
+                bias = _mm256_set1_epi32(127);
+  for (int q = 0; q < nq; q++) Pq[q] = one;
+  float snT[NS][XP_EB] __attribute__((aligned(32)));
+  for (int s0 = 0; s0 < nsites; s0 += BS) {
+    const int s1 = s0 + BS < nsites ? s0 + BS : nsites;
+    for (int s = s0; s < s1; s++) {
+      const int j = s - s0;
+      for (int lane = 0; lane < XP_EB; lane++) {
+        const double *sn = sn8 + ((size_t)(lane < ne ? lane : 0) * nsites + s) * NS;
+        for (int st = 0; st < NS; st++) snT[st][lane] = (float)sn[st];
+      }
+      int32_t sev[XP_EB];
+      for (int lane = 0; lane < XP_EB; lane++) sev[lane] = lane < ne ? (int32_t)se8[(size_t)lane * nsites + s] : 0;
+      const __m256i sv = _mm256_loadu_si256((const __m256i *)sev);
+      const float *qt = q32 + (size_t)cat[s] * ncode * NS;
+      uint32_t pm = present[s];
+      while (pm) {
+        const int c = __builtin_ctz(pm); pm &= pm - 1;
+        const float *qv = qt + (size_t)c * NS;
+        __m256 acc = zero;
+        for (int st = 0; st < NS; st++)
+          acc = _mm256_fmadd_ps(_mm256_set1_ps(qv[st]), _mm256_load_ps(snT[st]), acc);
+        const __m256 ok = _mm256_cmp_ps(acc, tiny, _CMP_GE_OQ);       /* false for NaN too */
+        const __m256i b = _mm256_castps_si256(acc);
+        const __m256i e = _mm256_sub_epi32(_mm256_srli_epi32(b, 23), bias);
+        const __m256 m = _mm256_castsi256_ps(_mm256_or_si256(_mm256_and_si256(b, mant), onebits));
+        Tm[(size_t)j * NC + c] = _mm256_blendv_ps(zero, m, ok);          /* unbounded -> 0 */
+        Te[(size_t)j * NC + c] = _mm256_add_epi32(e, sv);
+      }
+      Tm[(size_t)j * NC + ncode] = one; Te[(size_t)j * NC + ncode] = _mm256_setzero_si256();
+    }
+    for (int q = 0; q < nq; q++) {
+      const uint8_t *cq = codes + (size_t)q * nsites;
+      __m256 P = Pq[q];
+      __m256i E = _mm256_setzero_si256();
+      for (int s = s0; s < s1; s++) {
+        const size_t k = (size_t)(s - s0) * NC + cq[s];
+        P = _mm256_mul_ps(P, Tm[k]);
+        E = _mm256_add_epi32(E, Te[k]);
+      }
+      /* renormalise: < 2^64 after 64 mantissas in [1, 2); scaling by a power of two is exact */
+      const __m256 z = _mm256_cmp_ps(P, zero, _CMP_EQ_OQ);
+      const __m256i b = _mm256_castps_si256(P);
+      E = _mm256_add_epi32(E, _mm256_sub_epi32(_mm256_srli_epi32(b, 23), bias));
+      P = _mm256_castsi256_ps(_mm256_or_si256(_mm256_and_si256(b, mant), onebits));
+      Pq[q] = _mm256_blendv_ps(P, zero, z);                             /* sticky zero */
+      int32_t e8[XP_EB]; _mm256_storeu_si256((__m256i *)e8, E);
+      for (int lane = 0; lane < XP_EB; lane++) Eq[(size_t)q * XP_EB + lane] += e8[lane];
+    }
+  }
+  for (int q = 0; q < nq; q++) {
+    float p8[XP_EB]; _mm256_storeu_ps(p8, Pq[q]);
+    for (int lane = 0; lane < ne; lane++)
+      out[(size_t)q * ldo + col0 + lane] = p8[lane] == 0.0f ? NAN
+        : log((double)p8[lane]) + M_LN2 * (double)Eq[(size_t)q * XP_EB + lane];
+  }
+  free(q32); free(Tm); free(Te); free(Pq); free(Eq);
+  return 0;
+}
+#else
+int xp_edge_scores8_f32(double *out, long ldo, long col0, int ne, const double *sn8, const int64_t *se8,
+                        const double *qevtab, const int32_t *cat, int nsites, int ncode, int nrates,
+                        const uint8_t *codes, int nq, const uint32_t *present)
+{ (void)out; (void)ldo; (void)col0; (void)ne; (void)sn8; (void)se8; (void)qevtab; (void)cat; (void)nsites;
+  (void)ncode; (void)nrates; (void)codes; (void)nq; (void)present; return 1; }
+#endif
+
 /* Gmix prefilter (Glv.masked_logdot of the evolved query and the supernode), 8 edges at once:
  *   W[s][c] = log( util ), util = sum over r ascending, st ascending of qev[r][c][st]*sn[s][r][st]
  *   ll = +0.0 + sum_{s informative} W[s][code]           (ten_masked_logdot_c ...)

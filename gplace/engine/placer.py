@@ -720,10 +720,13 @@ class Placer(object):
             self.rank = None
             self.scores = shared_zeros((Qn, E))
             self._bcodes, self._qb = self.codes, (Qn, E)
+            self._pf32_setup()
             start = 0
             if self.workers is None:                   # --cpus auto without a saved benchmark
                 start = self._calibrate(groups)
             self._run_groups(groups[start:], self.workers)
+            if self._pf32:
+                self._pf32_radius()
             self._bcodes = None
             return
         K = min(max(1, int(K)), E)
@@ -825,11 +828,127 @@ class Placer(object):
                                        P(t.e[0]), P(t.b[3]), P(t.e[1]), S)
         return t
 
+    # ------------------------------------------- f32 product prefilter (GPLACE_PF32) --
+    def _pf32_setup(self):
+        """GPLACE_PF32=1: score in f32 product form (xp_edge_scores8_f32) with a per-query error
+        radius, then resolve in f64 every edge whose interval could change the ranking."""
+        self._pf32 = os.environ.get('GPLACE_PF32') == '1' and self.lib.xp_simd() == 1 \
+            and len(self.alpha.codes) <= 31 and not getattr(self, 'gmix', False) \
+            and self.search.t_max_pitches != math.inf     # every edge evaluated: no window
+        if not self._pf32:
+            return
+        gap = len(self.alpha.codes)
+        bits = np.zeros(self.nsites, np.uint32)
+        for c in range(gap):
+            bits |= (np.any(self._bcodes == c, axis=0).astype(np.uint32) << np.uint32(c))
+        self._present = bits
+        # roundings per site on the longest path (all non-negative operands, 2^-24 each):
+        # f32 inputs 2, util dot 20, running product 1, plus margin
+        self._pf32_rounds = 26
+
+    def _pf32_radius(self):
+        """After the f32 pass: the per-query radius r[q] = n_used * rounds * 1.01 * 2^-24 +
+        n_used * 2^-40 + 1e-6, which bounds |f32 score - f64 score| (every term of every util is
+        non-negative, so each rounding is a relative error of at most 2^-24; 2^-40 per site covers
+        f32 underflow, utils below 2^-90 being left to f64). Order is settled lazily by ranking()."""
+        gap = len(self.alpha.codes)
+        nused = (np.asarray(self._bcodes) != gap).sum(1)
+        self._pf32_r = nused * self._pf32_rounds * 1.01 * 2.0 ** -24 + nused * 2.0 ** -40 + 1e-6
+        self._pf32_nres = shared_zeros(len(nused))     # f64 scores computed per query (diagnostics)
+
+    def _pf32_exact(self, qi, cols):
+        """Query qi's f64 scores (xp_edge_scores8, one edge per call: lanes are independent)
+        against the edges of the columns cols, written into the score table. Uses its own
+        buffers: ranking() runs between the evaluations of place_query."""
+        t = self.local
+        if not hasattr(t, 'pf_b'):
+            S = self.nsites
+            t.pf_b = [np.empty((S, self.width)) for _ in range(4)]
+            t.pf_e = [np.zeros(S, np.int64) for _ in range(2)]
+            t.pf_sn = np.empty((8, S, self.width)); t.pf_se = np.zeros((8, S), np.int64)
+            t.pf_ten = np.zeros((self.nrates, self.ns, self.ns))
+        gap = len(self.alpha.codes)
+        sub = np.ascontiguousarray(self.codes[[qi]])
+        tmp = np.zeros((1, 8))
+        for k in cols:
+            v = int(self.locs[k])
+            self.get_d(v, t.pf_b[0], t.pf_e[0]); self.get_p(v, t.pf_b[1], t.pf_e[1])
+            self.evolve_t(t.pf_b[2], t.pf_b[0], self.bl[v] / 2., t.pf_ten)
+            self.evolve_t(t.pf_b[3], t.pf_b[1], self.bl[v] / 2., t.pf_ten)
+            self.lib.xp_statd_pairwise(P(t.pf_sn[0]), P(t.pf_se[0]), P(self.statd), P(t.pf_b[2]),
+                                       P(t.pf_e[0]), P(t.pf_b[3]), P(t.pf_e[1]), self.nsites)
+            st = self.lib.xp_edge_scores8(P(tmp), 8, 0, 1, P(t.pf_sn), P(t.pf_se), P(self.qevtab),
+                                          P(self.cats), self.nsites, gap, P(sub), 1)
+            if st != 0:
+                raise GPlaceException(f'Prefilter kernel failed ({st}) for edge {v}.')
+            self.scores[qi, k] = tmp[0, 0]
+        self._pf32_nres[qi] += len(cols)
+
+    def _pf32_ranking(self, qi):
+        """ranking() under GPLACE_PF32: the order of the f64 scores, from f32 scores known to
+        within +-r. Baseball takes at most N = t_max_pitches + 1 successful entrants, so the walk
+        certifies the first N ranks: every edge whose ceiling (score + r) reaches the N-th
+        largest floor (score - r) is a candidate, and the true first N are among them; every
+        other edge is discarded. Sorted by f32 score, candidates whose intervals chain together
+        (gaps <= 2r) form clusters, and a cluster is scored in f64 and ordered exactly only when
+        the walk reaches it. A search that goes past N (failed optimisations do not count)
+        doubles the window and continues the same way."""
+        row = np.array(self.scores[qi])
+        E = len(row)
+        r = float(self._pf32_r[qi])
+        exact = np.zeros(E, bool)
+        bad = np.nonzero(np.isnan(row))[0]
+        if len(bad):                                   # unbounded f32 scores: f64 first
+            self._pf32_exact(qi, bad); row[bad] = self.scores[qi, bad]; exact[bad] = True
+        yielded = []
+        M = min(self.search.t_max_pitches + 1, E)
+        while True:
+            thr = np.partition(row - r, E - M)[E - M]  # the M-th largest floor
+            cand = np.nonzero(row + r >= thr)[0]
+            cand = cand[np.lexsort((self.locs[cand], -row[cand]))]
+            vals = row[cand]
+            pos, i = 0, 0
+            while i < len(cand) and pos < M:
+                j = i + 1
+                while j < len(cand) and vals[j - 1] - vals[j] <= 2 * r:
+                    j += 1
+                cl = cand[i:j]
+                if len(cl) > 1:
+                    if pos + len(cl) > len(yielded):   # resolve only when the walk is here
+                        todo = cl[~exact[cl]]
+                        if len(todo):
+                            self._pf32_exact(qi, todo); row[todo] = self.scores[qi, todo]
+                            exact[todo] = True
+                    cl = cl[np.lexsort((self.locs[cl], -row[cl]))]
+                for k in cl:
+                    if pos >= M:
+                        break
+                    if pos < len(yielded):
+                        if yielded[pos] != k:
+                            raise GPlaceException(f'Inconsistent f32 ranking for {self.query_names[qi]}.')
+                    else:
+                        yielded.append(int(k))
+                        yield int(self.locs[k])
+                    pos += 1
+                i = j
+            if M >= E:
+                return
+            M = min(2 * M, E)
+
     def _batch_prefilter_group(self, g):
         """Prefilter scores of the current query batch (_bcodes, _qb) against edges locs[i0:i1]."""
         i0, i1 = g
         nq, _ = self._qb
         t = self._supernodes8(i0, i1)
+        if getattr(self, '_pf32', False):
+            st = self.lib.xp_edge_scores8_f32(P(self.scores), self.max_edges, i0, i1 - i0, P(t.sn8),
+                                              P(t.se8), P(self.qevtab), P(self.cats), self.nsites,
+                                              len(self.alpha.codes), self.nrates, P(self._bcodes), nq,
+                                              P(self._present))
+            if st == 0:
+                return
+            if st != 1:
+                raise GPlaceException(f'f32 prefilter kernel failed ({st}) for edges {i0}..{i1}.')
         st = self.lib.xp_edge_scores8(P(self.scores), self.max_edges, i0, i1 - i0, P(t.sn8), P(t.se8),
                                       P(self.qevtab), P(self.cats), self.nsites, len(self.alpha.codes),
                                       P(self._bcodes), nq)
@@ -841,6 +960,9 @@ class Placer(object):
         number. From the score table (default), or from the query's stored first edges
         (--ranked_edges): a search that goes past them (rare: many failed optimisations) scores qi
         against every edge again and continues in the same order."""
+        if self.rank is None and getattr(self, '_pf32', False):
+            yield from self._pf32_ranking(qi)
+            return
         if self.rank is None:
             row = self.scores[qi]
             E = len(row)
