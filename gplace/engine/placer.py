@@ -832,8 +832,10 @@ class Placer(object):
     def _pf32_setup(self):
         """GPLACE_PF32=1: score in f32 product form (xp_edge_scores8_f32) with a per-query error
         radius, then resolve in f64 every edge whose interval could change the ranking."""
+        # CAT models only: the f32 kernels and the f64 resolve (xp_edge_scores8) are CAT's; a gamma
+        # model (GammaMixin: width R x NS, xp_g_edge_scores8) keeps its own prefilter
         self._pf32 = os.environ.get('GPLACE_PF32') == '1' and self.lib.xp_simd() == 1 \
-            and len(self.alpha.codes) <= 31 and not getattr(self, 'gmix', False) \
+            and len(self.alpha.codes) <= 31 and self.model.ras != 'gamma' and self.width == self.ns \
             and self.search.t_max_pitches != math.inf     # every edge evaluated: no window
         if not self._pf32:
             return
