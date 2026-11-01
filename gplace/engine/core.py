@@ -182,6 +182,13 @@ def lib(ns=NS):
     L.xp_cache_distal.restype = I
     L.xp_cache_proximal.argtypes = [V, V, D, I, V, V, V, V, V, V, V, I, V, V, V, V, V, I, V]
     L.xp_cache_proximal.restype = I
+    L.xp_set_nt.argtypes = [I]; L.xp_set_nt.restype = None
+    L.xp_unit_distal.argtypes = [I, V, V, V, V, V, V, V, V, I, V, V, V, V, V, I, V, I, I]
+    L.xp_unit_distal.restype = I
+    L.xp_unit_proximal.argtypes = [I, V, V, V, V, V, V, V, V, V, V, V, V, V, I, V, V, V, V, V, I, V, I]
+    L.xp_unit_proximal.restype = I
+    L.xp_tile_walk.argtypes = [I, I] + [V] * 19 + [V, I, V, V, V, V, V, I, V, I, I]
+    L.xp_tile_walk.restype = I
     L.xp_tt_new.argtypes = [I, V, V, V, V, V, V, I, V]; L.xp_tt_new.restype = V
     L.xp_tt_set.argtypes = [V, V, V, V, V, V, D, D, D]
     L.xp_tt_optimize.argtypes = [V, D, D, I]; L.xp_tt_optimize.restype = I

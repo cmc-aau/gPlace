@@ -211,7 +211,7 @@ def link_engine(out, variant, ns, gsl_prefix, objs, link_args, cc='gcc', logger=
     _run([cc] + FLAGS + c_std_flags(cc) + variant_flags(variant, cc)
          + ['-shared', '-DXP_CR', f'-DNS={ns}', '-I' + os.path.join(gsl_prefix, 'include')] + bind
          + list(link_args) + ['-o', tmp, os.path.join(CSRC, 'xp.c')] + list(objs)
-         + [os.path.join(gsl_prefix, 'lib', 'libgsl.a'), os.path.join(gsl_prefix, 'lib', 'libgslcblas.a'), '-lm'],
+         + [os.path.join(gsl_prefix, 'lib', 'libgsl.a'), os.path.join(gsl_prefix, 'lib', 'libgslcblas.a'), '-lm', '-pthread'],
          logger=logger)
     os.replace(tmp, out)
 

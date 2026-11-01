@@ -191,30 +191,46 @@ class TiledPlacer(Placer):
         tp = self.search.t_max_pitches                # more pitches: rank and try more edges at once
         self.n_cand = candidates_needed(self.search, self.nnodes - 1, self.n_cand)
         self.round_size = self.nnodes - 1 if tp == math.inf else max(self.round_size, (tp + 1) // 5)
-        layout = tile_layout(self.children, self.tree.postorder(), self.root, self.tile_edges)
+        self.tiles, self.tile_of = self._layout(self.tile_edges)
+        self.n_slots = max(t['slots'] for t in self.tiles)
+        self.max_edges = max(len(t['nodes']) for t in self.tiles)
+        pe = int(os.environ.get('GPLACE_PIECE_EDGES', '0'))
+        self.pieces = None                            # GPLACE_PIECE_EDGES: see _evaluate
+        if 2 <= pe < self.tile_edges:
+            self.pieces, self.piece_of = self._layout(pe)
+            self.piece_roots = {t['root'] for t in self.pieces}
+            self.n_slots = max(self.n_slots, max(t['slots'] for t in self.pieces))
+        self._eval_of = self.tile_of if self.pieces is None else self.piece_of
+        self._collect = False
+        self._tw_unit = max(1, int(os.environ.get('GPLACE_TW_UNIT', '8')))      # GPLACE_TILEWALK
+        self._tw_block = max(1, int(os.environ.get('GPLACE_TW_BLOCK', '1024')))
+        self.stats = defaultdict(float)           # phase timings (seconds) and counts, for benchmark
+        self.record_work = False                  # benchmark: keep every placement job, by tile
+        self.work_log = defaultdict(list)
+
+    def _layout(self, tile_edges):
+        """(tiles in bottom-up order, the tile of every node) for tiles of at most tile_edges edges."""
+        layout = tile_layout(self.children, self.tree.postorder(), self.root, tile_edges)
         roots = {r for r, _, _ in layout}
-        self.tile_of = [-1] * self.nnodes
-        self.tiles = []
+        tile_of, tiles = [-1] * self.nnodes, []
         for ti, (r, _, _) in enumerate(layout):            # bottom-up order
             nodes, child_roots, stack = [], [], [r]
             while stack:
                 u = stack.pop()
                 nodes.append(u)
-                self.tile_of[u] = ti
+                tile_of[u] = ti
                 for c in self.children[u]:
                     (child_roots if c in roots else stack).append(c)
-            self.tiles.append({'root': r, 'nodes': nodes, 'child_roots': child_roots,
-                               'internal': [u for u in nodes if self.children[u]]})
-        self.n_slots = max(len(t['internal']) + len(t['child_roots']) for t in self.tiles)
-        self.max_edges = max(len(t['nodes']) for t in self.tiles)
-        self.stats = defaultdict(float)           # phase timings (seconds) and counts, for benchmark
-        self.record_work = False                  # benchmark: keep every placement job, by tile
-        self.work_log = defaultdict(list)
+            internal = [u for u in nodes if self.children[u]]
+            tiles.append({'root': r, 'roots': [r], 'nodes': nodes, 'child_roots': child_roots,
+                          'internal': internal, 'slots': len(internal) + len(child_roots)})
+        return tiles, tile_of
 
     def memory_estimate(self, workers=None):
         """Estimated peak memory (bytes) of this pass (see resources.estimate_memory_tiled)."""
         w = workers or self.workers or resources.heuristic_cpus(self.cpus)
-        return resources.estimate_memory_tiled(self.n_slots, self.max_edges, len(self.tiles),
+        n_bound = len(self.tiles) + (len(self.pieces) if self.pieces is not None else 0)
+        return resources.estimate_memory_tiled(self.n_slots, self.max_edges, n_bound,
                                                self.nsites, len(self.query_names), self.n_leaves,
                                                self.aln_len, w, self.query_batch, self.n_cand,
                                                width=self.width)
@@ -239,19 +255,26 @@ class TiledPlacer(Placer):
         """Rebuild tile ti's distal (and proximal) vectors from the stored boundary vectors, with
         the operations of Placer.cache; stores its root's distal and, with need_p, the proximal
         vectors of the tile roots below it."""
-        tile = self.tiles[ti]
+        self._tile_in_memory = ti
+        self._rebuild(self.tiles[ti], need_p, store=True)
+
+    def _rebuild(self, tile, need_p, store):
+        """Rebuild the vectors of tile (one tile, or a pack of pieces with several roots) from
+        boundary vectors: the tiles' (store: and store the new tile boundaries) or the pieces'."""
         slots = tile['internal'] + tile['child_roots']
         self.iidx = {v: k for k, v in enumerate(slots)}
-        self._tile_in_memory = ti
+        bD, bDe, bP, bPe = ((self.bD, self.bDe, self.bP, self.bPe) if store
+                            else (self.sD, self.sDe, self.sP, self.sPe))
         for c in tile['child_roots']:
             k = self.iidx[c]
-            self.darr[k] = self.bD[c]; self.dexp[k] = self.bDe[c]
+            self.darr[k] = bD[c]; self.dexp[k] = bDe[c]
         internal = set(tile['internal'])
         n = len(tile['internal'])
         cnode = os.environ.get('GPLACE_CNODE') == '1' and self.width == self.ns \
             and self.refA.dtype == np.uint8         # Placer.cache's node kernel, on the tile's slots
         if cnode and not hasattr(self, '_lut'):
             self._lut = np.ascontiguousarray(self.alpha.lut, dtype=np.float64)
+        tw = cnode and os.environ.get('GPLACE_TILEWALK') == '1'
         lock = threading.Lock(); done = threading.Event(); errs = []; count = [0]
         ex = ThreadPoolExecutor(self.cpus)
         pending = {v: sum(1 for c in self.children[v] if c in internal) for v in tile['internal']}
@@ -275,20 +298,27 @@ class TiledPlacer(Placer):
                 errs.append(e); done.set()
 
         try:
-            for v in [v for v in tile['internal'] if pending[v] == 0]:   # see Placer.cache
-                ex.submit(distal_task, v)
-            done.wait()
-            if errs:
-                raise errs[0]
-            r = tile['root']
-            kr = self.iidx[r]
-            self.bD[r] = self.darr[kr].copy(); self.bDe[r] = self.dexp[kr].copy()
+            if tw:
+                plan = self._tw_plan(tile)
+                self._tw_run(plan, ex, distal=True, roots_only=store and not need_p)
+            else:
+                for v in [v for v in tile['internal'] if pending[v] == 0]:   # see Placer.cache
+                    ex.submit(distal_task, v)
+                done.wait()
+                if errs:
+                    raise errs[0]
+            if store:
+                r = tile['root']
+                kr = self.iidx[r]
+                self.bD[r] = self.darr[kr].copy(); self.bDe[r] = self.dexp[kr].copy()
             if not need_p:
                 return
-            if r == self.root:
-                self.parr[kr] = self.root_proximal(); self.pexp[kr] = 0
-            else:
-                self.parr[kr] = self.bP[r]; self.pexp[kr] = self.bPe[r]
+            for r in tile['roots']:
+                kr = self.iidx[r]
+                if r == self.root:
+                    self.parr[kr] = self.root_proximal(); self.pexp[kr] = 0
+                else:
+                    self.parr[kr] = bP[r]; self.pexp[kr] = bPe[r]
             count[0] = 0; done.clear()
 
             def prox_task(v):
@@ -305,15 +335,145 @@ class TiledPlacer(Placer):
                 except BaseException as e:
                     errs.append(e); done.set()
 
-            ex.submit(prox_task, r)
-            done.wait()
-            if errs:
-                raise errs[0]
+            if tw:
+                self._tw_run(plan, ex, distal=False)
+            else:
+                for r in tile['roots']:
+                    ex.submit(prox_task, r)
+                done.wait()
+                if errs:
+                    raise errs[0]
+            if not store:
+                return
             for c in tile['child_roots']:
                 k = self.iidx[c]
                 self.bP[c] = self.parr[k].copy(); self.bPe[c] = self.pexp[k].copy()
+            if self._collect:                        # the pieces' boundary vectors, once
+                for u in tile['internal']:
+                    if u in self.piece_roots:
+                        k = self.iidx[u]
+                        self.sD[u] = self.darr[k].copy(); self.sDe[u] = self.dexp[k].copy()
+                        self.sP[u] = self.parr[k].copy(); self.sPe[u] = self.pexp[k].copy()
         finally:
             ex.shutdown()
+
+    def _tw_plan(self, tile):
+        """GPLACE_TILEWALK: the tile's internal nodes cut into units, connected groups of at most
+        _tw_unit nodes (as tile_layout cuts the tree: a node's part stays whole while it is small
+        enough, its largest child parts are cut off first), with the arguments of xp_unit_distal /
+        xp_unit_proximal for each; kept with the tile."""
+        key = (self._tw_unit, self.darr.ctypes.data, self.parr.ctypes.data)
+        if tile.get('_tw_key') == key:
+            return tile['_tw']
+        internal, U, ch = set(tile['internal']), self._tw_unit, self.children
+        post, st = [], [(r, False) for r in tile['roots']]
+        while st:
+            u, seen = st.pop()
+            if seen:
+                post.append(u); continue
+            st.append((u, True))
+            st.extend((c, False) for c in ch[u] if c in internal)
+        cut, size = set(tile['roots']), {}
+        for v in post:
+            kids = [c for c in ch[v] if c in internal]
+            sz = 1 + sum(size[c] for c in kids)
+            for c in sorted(kids, key=lambda c: -size[c]):
+                if sz <= U:
+                    break
+                cut.add(c); sz -= size[c]
+            size[v] = sz
+        units, unit_of = [], {}
+        for r in sorted(cut):
+            pre, st = [], [r]
+            while st:
+                u = st.pop()
+                pre.append(u); unit_of[u] = len(units)
+                st.extend(c for c in reversed(ch[u]) if c in internal and c not in cut)
+            units.append(pre)
+        S, W = self.nsites, self.width
+        rb, eb = S * W * 8, S * 8
+        D0, De0, P0, Pe0 = (self.darr.ctypes.data, self.dexp.ctypes.data,
+                            self.parr.ctypes.data, self.pexp.ctypes.data)
+        A0, A1 = self.refA.ctypes.data, self.refA.shape[1]
+        ii = self.iidx
+        i32, i64, f64 = (lambda a: np.array(a, np.int32)), (lambda a: np.array(a, np.int64)), \
+            (lambda a: np.array(a, np.float64))
+        parent, kids, dd, pp = [], [[] for _ in units], [], []
+        for ui, pre in enumerate(units):
+            pu = unit_of.get(self.parent[pre[0]], -1)
+            parent.append(pu)
+            if pu >= 0:
+                kids[pu].append(ui)
+            post = pre[::-1]
+            lj = {u: j for j, u in enumerate(post)}
+            nch, ck, cr, cre, cb = [], [], [], [], []
+            for v in post:
+                nch.append(len(ch[v]))
+                for c in ch[v]:
+                    cb.append(self.bl[c])
+                    if c in lj:
+                        ck.append(0); cr.append(lj[c]); cre.append(0)
+                    elif ch[c]:
+                        ck.append(1); cr.append(D0 + ii[c] * rb); cre.append(De0 + ii[c] * eb)
+                    else:
+                        ck.append(2); cr.append(A0 + int(self.leaf_row[c]) * A1); cre.append(0)
+            dd.append((len(post), i32(nch), i32(ck), i64(cr), i64(cre), f64(cb),
+                       i64([D0 + ii[v] * rb for v in post]), i64([De0 + ii[v] * eb for v in post])))
+            lp = {u: j for j, u in enumerate(pre)}
+            r = pre[0]
+            nch, ck, cr, cre, cb, co, coe, cl = [], [], [], [], [], [], [], []
+            for v in pre:
+                nch.append(len(ch[v]))
+                for c in ch[v]:
+                    cb.append(self.bl[c])
+                    if ch[c]:
+                        ck.append(1); cr.append(D0 + ii[c] * rb); cre.append(De0 + ii[c] * eb)
+                        co.append(P0 + ii[c] * rb); coe.append(Pe0 + ii[c] * eb); cl.append(lp.get(c, -1))
+                    else:
+                        ck.append(2); cr.append(A0 + int(self.leaf_row[c]) * A1); cre.append(0)
+                        co.append(0); coe.append(0); cl.append(-1)
+            pp.append((len(pre), i32([-1] + [0] * (len(pre) - 1)),
+                       i64([P0 + ii[r] * rb] + [0] * (len(pre) - 1)),
+                       i64([Pe0 + ii[r] * eb] + [0] * (len(pre) - 1)),
+                       f64([self.bl[v] for v in pre]), i32(nch), i32(ck), i64(cr), i64(cre), f64(cb),
+                       i64(co), i64(coe), i32(cl)))
+        cat = lambda parts, f: f(np.concatenate(parts)) if parts else f([])
+        uno = i64(np.concatenate([[0], np.cumsum([d[0] for d in dd])]))
+        plan = {'n': len(units), 'parent': i32(parent), 'uno': uno,
+                'kid_off': i32(np.concatenate([[0], np.cumsum([len(k) for k in kids])])),
+                'kids': i32([u for k in kids for u in k] or [0]),
+                # distal: nch, ckind, cref, crefe, cbl, dst, dste
+                'D': [cat([d[i] for d in dd], f) for i, f in
+                      zip(range(1, 8), (i32, i32, i64, i64, f64, i64, i64))],
+                # proximal: plocal, pref, prefe, pbl, nch, ckind, cref, crefe, cbl, cout, coute, clocal
+                'P': [cat([q[i] for q in pp], f) for i, f in
+                      zip(range(1, 13), (i32, i64, i64, f64, i32, i32, i64, i64, f64, i64, i64, i32))]}
+        plan['uco_d'] = i64(np.concatenate([[0], np.cumsum([len(d[2]) for d in dd])]))
+        plan['uco_p'] = i64(np.concatenate([[0], np.cumsum([len(q[6]) for q in pp])]))
+        tile['_tw'], tile['_tw_key'] = plan, key
+        return plan
+
+    def _tw_run(self, plan, ex, distal, roots_only=False):
+        """Run the plan's units in one xp_tile_walk call (self.cpus threads): distal bottom-up,
+        proximal top-down. roots_only (the boundary pass: only the tile root's distal is kept):
+        only the units' roots are written."""
+        if distal:
+            nch, ck, cr, cre, cb, dst, dste = plan['D']
+            node = (P(nch), None, P(dst), P(dste), None, None, None)
+            child = (P(ck), None, P(cr), P(cre), None, None, P(cb))
+            uco = plan['uco_d']
+        else:
+            pl, pr, pre, pbl, nch, ck, cr, cre, cb, co, coe, cl = plan['P']
+            node = (P(nch), P(pl), None, None, P(pr), P(pre), P(pbl))
+            child = (P(ck), P(cl), P(cr), P(cre), P(co), P(coe), P(cb))
+            uco = plan['uco_p']
+        st = self.lib.xp_tile_walk((2 if roots_only else 1) if distal else 0, plan['n'], P(plan['parent']), P(plan['kid_off']),
+                                   P(plan['kids']), P(plan['uno']), P(uco), *node, *child,
+                                   P(self._lut), self.nsites, P(self.cats), P(self.x), P(self.l),
+                                   P(self.xit), P(self.rates), self.nrates, P(self.occupied),
+                                   self._tw_block, self.cpus)
+        if st != 0:
+            raise GPlaceException(f'tile walk kernel failed ({st}).')
 
     def cache(self):
         """Allocate one tile's vectors; store the distal vector of every tile root (bottom-up)."""
@@ -322,6 +482,7 @@ class TiledPlacer(Placer):
         self.darr = shared_zeros((self.n_slots, S, self.width)); self.dexp = shared_zeros((self.n_slots, S), np.int64)
         self.parr = shared_zeros((self.n_slots, S, self.width)); self.pexp = shared_zeros((self.n_slots, S), np.int64)
         self.bD, self.bDe, self.bP, self.bPe = {}, {}, {}, {}
+        self.sD, self.sDe, self.sP, self.sPe = {}, {}, {}, {}
         t0 = time.time()
         for ti in range(len(self.tiles)):
             self._materialise(ti, need_p=False)
@@ -340,12 +501,16 @@ class TiledPlacer(Placer):
         self._tpf = None
         self._bcodes = self.codes                      # the f32 switches are read for all queries
         self._pf32_setup()
-        if not self._pf32:
-            self.rank = self._ranked_candidates(np.arange(len(self.query_names)), self.n_cand,
-                                                self.stats, probe)
-            return
-        Q = len(self.query_names)
-        ce, cs = self._ranked_candidates(np.arange(Q), self.n_cand, self.stats, probe, pf32=True)
+        self._collect = self.pieces is not None        # its top-down pass stores the pieces'
+        try:                                           # boundary vectors
+            if not self._pf32:
+                self.rank = self._ranked_candidates(np.arange(len(self.query_names)), self.n_cand,
+                                                    self.stats, probe)
+                return
+            Q = len(self.query_names)
+            ce, cs = self._ranked_candidates(np.arange(Q), self.n_cand, self.stats, probe, pf32=True)
+        finally:
+            self._collect = False
         self.rank = ce
         r = self._pf32_radius_of(self.codes)
         self._tpf = dict(vals=cs, exact=np.zeros(cs.shape, bool), r=r, aM=cs[:, -1].copy(),
@@ -486,6 +651,8 @@ class TiledPlacer(Placer):
     def _evaluate(self, work):
         """Run the optimisations work = {qi: [(loc, pend, dist, tol)]}, tile by tile; returns
         [(qi, [(loc, result, status)])]."""
+        if self.pieces is not None:
+            return self._evaluate_pieces(work)
         by_tile = defaultdict(lambda: defaultdict(list))
         for qi, items in work.items():
             for it in items:
@@ -501,6 +668,60 @@ class TiledPlacer(Placer):
             jobs = list(by_tile[ti].items())
             if self.record_work:
                 self.work_log[ti].extend(jobs)
+            res, _, inner = self._pool_map(_tile_eval, jobs,
+                                           chunksize=max(1, min(8, len(jobs) // (16 * self.workers))))
+            out.extend(res)
+            self.stats['eval_s'] += inner
+            self.stats['evals'] += sum(len(items) for _, items in jobs)
+        return out
+
+    def _pack(self, pis):
+        """The pieces pis as one rebuild: a piece whose parent edge is in another of them is
+        rebuilt from below, as in its tile, and only the others start from stored vectors."""
+        nodes = [u for pi in pis for u in self.pieces[pi]['nodes']]
+        U = set(nodes)
+        roots = [self.pieces[pi]['root'] for pi in pis]
+        return {'roots': [r for r in roots if r == self.root or self.parent[r] not in U],
+                'nodes': nodes, 'internal': [u for u in nodes if self.children[u]],
+                'child_roots': [c for pi in pis for c in self.pieces[pi]['child_roots'] if c not in U]}
+
+    def _evaluate_pieces(self, work):
+        """_evaluate under GPLACE_PIECE_EDGES: only the pieces (small tiles) holding the work are
+        rebuilt, from the boundary vectors the prefilter stored, packed into the tile slots; one
+        rebuild and one worker pool per pack."""
+        by_piece = defaultdict(lambda: defaultdict(list))
+        for qi, items in work.items():
+            for it in items:
+                by_piece[self.piece_of[it[0]]][qi].append(it)
+        req = self._tpf['req'] if self._tpf is not None else {}
+        packs, cur, k = [], [], 0
+        for pi in sorted(set(by_piece) | set(req), reverse=True):
+            s = self.pieces[pi]['slots']
+            if cur and k + s > self.n_slots:
+                packs.append(cur); cur, k = [], 0
+            cur.append(pi); k += s
+        if cur:
+            packs.append(cur)
+        out = []
+        for pk in packs:
+            self._tile_in_memory = None
+            self._rebuild(self._pack(pk), need_p=True, store=False)
+            jobs = defaultdict(list)
+            for pi in pk:
+                if pi in req:
+                    self._tpf_resolve(pi)
+                for qi, items in by_piece.get(pi, {}).items():
+                    jobs[qi].extend(items)
+            if not jobs:                              # only f64 prefilter scores were needed here
+                continue
+            jobs = list(jobs.items())
+            if self.record_work:                      # eval_rates replays a tile's work
+                for qi, items in jobs:
+                    g = defaultdict(list)
+                    for it in items:
+                        g[self.tile_of[it[0]]].append(it)
+                    for ti, its in g.items():
+                        self.work_log[ti].append((qi, its))
             res, _, inner = self._pool_map(_tile_eval, jobs,
                                            chunksize=max(1, min(8, len(jobs) // (16 * self.workers))))
             out.extend(res)
@@ -549,7 +770,7 @@ class TiledPlacer(Placer):
                     if cl is not None:                # first-stage results do not depend on order
                         for loc in cl:
                             loc = int(loc)
-                            self._tpf['req'][self.tile_of[loc]].add((qi, loc))
+                            self._tpf['req'][self._eval_of[loc]].add((qi, loc))
                             if loc not in chunk:
                                 chunk.append(loc)
                 chunk = [loc for loc in chunk if loc not in stage1[qi]]

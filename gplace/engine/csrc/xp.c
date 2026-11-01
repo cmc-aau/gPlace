@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include <gsl/gsl_eigen.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_vector.h>
@@ -784,9 +785,10 @@ typedef struct {
   const double *mx, *ml, *mxit, *mstatd;   /* frequencies: R x NS x NS, R x NS, R x NS x NS, R x NS */
   /* PD cache (GPLACE_PD_CACHE=1): PD depends only on the location's edge vectors and the
    * (distal, proximal) lengths, not on the query's pendant state, and the alternating Brent
-   * search re-brackets at the same lengths every round. PD_SLOTS buffers, keyed by the exact
-   * (dist, prox) pair, cleared by xp_tt_set; t->PD always points at one of them. */
-  int pdc;
+   * search re-brackets at the same lengths every round. npd buffers (GPLACE_PD_SLOTS, 1 to
+   * PD_SLOTS, default PD_SLOTS), keyed by the exact (dist, prox) pair, cleared by xp_tt_set;
+   * t->PD always points at one of them. Fewer slots: less memory per worker, fewer hits. */
+  int pdc, npd;
   double *pd_buf[4]; double pd_kd[4], pd_kp[4]; int pd_ok[4]; long pd_age[4], pd_clock;
   /* Distal grouping (GPLACE_DGRP=1): sites whose (distal row, category) are bitwise equal
    * evolve to the same dv, so each distinct pair is evolved once per distal pass and the sites
@@ -1026,7 +1028,7 @@ static void tt_set_pend(TT *t, double v) { tt_build_QP(t, v); tt_ll_pass(t); }
 static int pd_claim(TT *t, double d, double p)
 {
   int victim = -1;
-  for (int k = 0; k < PD_SLOTS; k++) {
+  for (int k = 0; k < t->npd; k++) {
     if (t->pd_ok[k] && t->pd_kd[k] == d && t->pd_kp[k] == p) {
       t->PD = t->pd_buf[k]; t->pd_age[k] = ++t->pd_clock; return 1;
     }
@@ -1167,7 +1169,10 @@ TT *xp_tt_new(int m, const int32_t *cat, const double *statd, const double *x, c
     t->pdc = (e && *e == '1' && m > 0);            /* m = 0 is the gamma path's placeholder */
   }
   if (t->pdc) {
-    for (int k = 0; k < PD_SLOTS; k++) t->pd_buf[k] = malloc(sizeof(double) * n);
+    const char *e = getenv("GPLACE_PD_SLOTS");
+    const int want = e ? atoi(e) : PD_SLOTS;
+    t->npd = want < 1 ? 1 : want > PD_SLOTS ? PD_SLOTS : want;
+    for (int k = 0; k < t->npd; k++) t->pd_buf[k] = malloc(sizeof(double) * n);
     t->PD = t->pd_buf[0];
   } else t->PD = malloc(sizeof(double) * n);
   t->dist_e = calloc(m, sizeof(int64_t)); t->prox_e = calloc(m, sizeof(int64_t));
@@ -1199,7 +1204,7 @@ TT *xp_tt_new(int m, const int32_t *cat, const double *statd, const double *x, c
 void xp_tt_free(TT *t)
 {
   free(t->tensorD); free(t->tensorP); free(t->tensorQ); free(t->dist_o); free(t->prox_o);
-  if (t->pdc) for (int k = 0; k < PD_SLOTS; k++) free(t->pd_buf[k]);
+  if (t->pdc) for (int k = 0; k < t->npd; k++) free(t->pd_buf[k]);
   else free(t->PD);
   if (t->dgrp) { free(t->dcls); free(t->drep); free(t->dhash); free(t->DV); }
   free(t->dist_e); free(t->prox_e); free(t->U); free(t->qc); free(t->QP); free(t);
@@ -1227,7 +1232,7 @@ void xp_tt_set(TT *t, const double *darr_a, const int64_t *darr_e, const double 
   t->prox_bl = cut_bl - distal;
   tt_tensor(t, t->tensorP, cut_bl - distal);
   if (t->pdc && !t->gmix) {                        /* new edge vectors: nothing cached applies */
-    for (int k = 0; k < PD_SLOTS; k++) t->pd_ok[k] = 0;
+    for (int k = 0; k < t->npd; k++) t->pd_ok[k] = 0;
     pd_claim(t, t->dist_bl, t->prox_bl);
   }
   tt_dist_pass(t);
@@ -1399,6 +1404,21 @@ static inline void cn_pull(double *v, int64_t *e, int min_twoexp)   /* xp_pull_e
   }
 }
 
+/* Experiment (GPLACE_NTSTORE): the rows are written with non-temporal stores, from a stack
+ * buffer holding the same values, so the written lines are not first read into the cache. */
+static int xp_nt = 0;
+void xp_set_nt(int on) { xp_nt = on; }
+static inline void cn_store(double *dst, const double *v)
+{
+#if XP_AVX2
+  if (!((uintptr_t)dst & 31)) {
+    for (int i = 0; i < NS; i += 4) _mm256_stream_pd(dst + i, _mm256_load_pd(v + i));
+    return;
+  }
+#endif
+  memcpy(dst, v, sizeof(double) * NS);
+}
+
 /* Placer._distal: dst / de = the node's distal (pulled to -50) from its nch children */
 int xp_cache_distal(double *dst, int64_t *de, int nch, const int64_t *src, const int64_t *srce,
                     const int64_t *codes, const double *bls, const double *lut, int nsites,
@@ -1410,9 +1430,11 @@ int xp_cache_distal(double *dst, int64_t *de, int nch, const int64_t *src, const
   memset(c, 0, sizeof c);
   if (cn_setup(c, nch, src, srce, codes, bls, x, l, xit, rates, nrates, occupied)) { cn_free(c, nch); return -1; }
   double bufa[NS] __attribute__((aligned(32))), bufb[NS] __attribute__((aligned(32)));
+  double tmp[NS] __attribute__((aligned(32)));
   for (int s = 0; s < nsites; s++) {
     const int cs = cat[s];
-    double *d = dst + (size_t)s * NS;
+    double *row = dst + (size_t)s * NS;
+    double *d = xp_nt ? tmp : row;
     const double *a = cn_ev(&c[0], s, cs, lut, bufa);
     int64_t e = cn_e(&c[0], s);
     if (nch == 1) {
@@ -1428,8 +1450,12 @@ int xp_cache_distal(double *dst, int64_t *de, int nch, const int64_t *src, const
       }
     }
     cn_pull(d, &e, -50);
+    if (xp_nt) cn_store(row, d);
     de[s] = e;
   }
+#if XP_AVX2
+  if (xp_nt) _mm_sfence();
+#endif
   cn_free(c, nch);
   return 0;
 }
@@ -1452,6 +1478,7 @@ int xp_cache_proximal(const double *par, const int64_t *pare, double bl_v, int n
   if (cn_setup(c, nch + 1, src2, srce2, codes2, bls2, x, l, xit, rates, nrates, occupied)) { cn_free(c, nch + 1); return -1; }
   double evp[NS] __attribute__((aligned(32))), bufs[64][NS] __attribute__((aligned(32)));
   const double *evk[64];
+  double tmp[NS] __attribute__((aligned(32)));
   for (int s = 0; s < nsites; s++) {
     const int cs = cat[s];
     const double *p = cn_ev(&c[nch], s, cs, lut, evp);
@@ -1459,7 +1486,8 @@ int xp_cache_proximal(const double *par, const int64_t *pare, double bl_v, int n
     for (int k = 0; k < nch; k++) evk[k] = NULL;
     for (int t = 0; t < nch; t++) {
       if (!out[t]) continue;                        /* leaf child: rebuilt on demand by get_p */
-      double *d = (double *)(intptr_t)out[t] + (size_t)s * NS;
+      double *row = (double *)(intptr_t)out[t] + (size_t)s * NS;
+      double *d = xp_nt ? tmp : row;
       int64_t e;
       int first = 1;
       for (int r = 0; r < nch; r++) {
@@ -1470,11 +1498,363 @@ int xp_cache_proximal(const double *par, const int64_t *pare, double bl_v, int n
       }
       if (first) { memcpy(d, p, sizeof(double) * NS); e = pe; }
       cn_pull(d, &e, -50);
+      if (xp_nt) cn_store(row, d);
       ((int64_t *)(intptr_t)oute[t])[s] = e;
     }
   }
+#if XP_AVX2
+  if (xp_nt) _mm_sfence();
+#endif
   cn_free(c, nch + 1);
   return 0;
+}
+
+/* Tile build in units (GPLACE_TILEWALK=1). The cache build is bound by memory bandwidth: every
+ * node's rows go to memory and its parent reads them back. Here one call builds a unit, a
+ * connected group of a tile's internal nodes, in blocks of sites: within a block a node's result
+ * stays in a cache-resident scratch slice that its parent (distal) or children (proximal) in the
+ * unit read, and only rows entering the unit are read from memory. The transition tensors of the
+ * unit's edges are made once per call and stay in cache across the blocks. Per site, the
+ * operations, operands and order are those of xp_cache_distal / xp_cache_proximal, so every
+ * value is identical; rows are written with non-temporal stores (cn_store).
+ * Children of node j (in order) are at [off_j, off_j + nch[j]) of the child arrays:
+ *   ckind 0 = a node of this unit (cref = its index, distal only), 1 = a row (cref / crefe =
+ *   rows and exponents pointers), 2 = a leaf (cref = its tip codes). */
+static __thread unsigned char *tw_buf = NULL;
+static __thread size_t tw_cap = 0;
+static void *tw_arena(size_t bytes)
+{
+  bytes = (bytes + 63) & ~(size_t)63;
+  if (bytes > tw_cap) {
+    free(tw_buf);
+    tw_buf = (unsigned char *)aligned_alloc(64, bytes);
+    tw_cap = tw_buf ? bytes : 0;
+  }
+  return tw_buf;
+}
+
+typedef struct { int kind; const double *src; const int64_t *srce; const uint8_t *codes;
+                 double *ten; double *tab; uint8_t *have; } TwChild;
+
+/* tensors (and leaf memo tables) for nc child edges, in the thread's arena after `extra` bytes */
+static TwChild *tw_setup(int nc, const int32_t *ckind, const int64_t *cref, const int64_t *crefe,
+                         const double *cbl, size_t extra, void **extra_out, const double *x,
+                         const double *l, const double *xit, const double *rates, int nrates,
+                         const uint8_t *occupied)
+{
+  size_t tsz = sizeof(double) * (size_t)nrates * NS * NS;
+  size_t lsz = sizeof(double) * (size_t)nrates * 256 * NS, hsz = ((size_t)nrates * 256 + 63) & ~(size_t)63;
+  int nleaf = 0;
+  for (int k = 0; k < nc; k++) nleaf += ckind[k] == 2;
+  size_t head = ((sizeof(TwChild) * (size_t)nc) + 63) & ~(size_t)63;
+  extra = (extra + 63) & ~(size_t)63;
+  unsigned char *b = (unsigned char *)tw_arena(head + extra + tsz * nc + (lsz + hsz) * nleaf);
+  if (!b) return NULL;
+  TwChild *c = (TwChild *)b;
+  *extra_out = b + head;
+  unsigned char *q = b + head + extra;
+  for (int k = 0; k < nc; k++) {
+    c[k].kind = ckind[k];
+    c[k].src = ckind[k] == 1 ? (const double *)(intptr_t)cref[k] : NULL;
+    c[k].srce = ckind[k] == 1 ? (const int64_t *)(intptr_t)crefe[k] : NULL;
+    c[k].codes = ckind[k] == 2 ? (const uint8_t *)(intptr_t)cref[k] : NULL;
+    c[k].ten = (double *)q; q += tsz;
+    xp_multi_exp(c[k].ten, x, l, xit, rates, nrates, occupied, cbl[k]);
+    c[k].tab = NULL; c[k].have = NULL;
+  }
+  for (int k = 0; k < nc; k++)
+    if (ckind[k] == 2) {
+      c[k].tab = (double *)q; q += lsz;
+      c[k].have = (uint8_t *)q; q += hsz;
+      memset(c[k].have, 0, (size_t)nrates * 256);
+    }
+  return c;
+}
+/* child k's evolved row at site s: a leaf's from its memo table (as cn_ev), a row's evolved
+ * into buf from src (a local scratch slice, or the global row) */
+static inline const double *tw_ev(TwChild *c, int s, int cs, const double *lut, const double *src,
+                                  double *buf)
+{
+  if (c->codes) {
+    const size_t key = (size_t)cs * 256 + c->codes[s];
+    double *t = c->tab + key * NS;
+    if (!c->have[key]) { evolve_site(t, lut + (size_t)c->codes[s] * NS, c->ten + (size_t)cs * NS * NS); c->have[key] = 1; }
+    return t;
+  }
+  evolve_site(buf, src, c->ten + (size_t)cs * NS * NS);
+  return buf;
+}
+static int xp_tw_nt = 1;
+void xp_set_tw_nt(int on) { xp_tw_nt = on; }
+static inline void tw_store(double *dst, const double *v)
+{
+  if (xp_tw_nt) cn_store(dst, v); else memcpy(dst, v, sizeof(double) * NS);
+}
+/* cn_pull with frexp's exponent read from the bits for a positive normal maximum (the same
+ * value: x = m 2^e with m in [0.5, 1)), frexp itself otherwise */
+static inline void tw_pull(double *v, int64_t *e, int min_twoexp)
+{
+  double mx = v[0];
+  for (int i = 1; i < NS; i++) if (v[i] > mx) mx = v[i];
+  int twoexp;
+  uint64_t bits; memcpy(&bits, &mx, 8);
+  const int be = (int)((bits >> 52) & 0x7ff);
+  if (be != 0 && be != 0x7ff) twoexp = be - 1022;
+  else frexp(mx, &twoexp);
+  if (twoexp < min_twoexp) {
+    double f = ldexp(0.5, -twoexp + 1);
+    for (int i = 0; i < NS; i++) v[i] *= f;
+    *e += twoexp;
+  }
+}
+static int xp_tw_fastpull = 1;
+void xp_set_tw_fastpull(int on) { xp_tw_fastpull = on; }
+static inline void tw_store_e(int64_t *dst, int64_t e)
+{
+#if XP_AVX2
+  if (xp_tw_nt) _mm_stream_si64((long long *)dst, (long long)e); else *dst = e;
+#else
+  *dst = e;
+#endif
+}
+
+/* distal rows of nu internal nodes in post-order (children before parents): dst[j] / dste[j]
+ * (roots_only: only the unit's root, j = nu - 1, the one row read outside the unit) */
+int xp_unit_distal(int nu, const int32_t *nch, const int32_t *ckind, const int64_t *cref,
+                   const int64_t *crefe, const double *cbl, const int64_t *dst, const int64_t *dste,
+                   const double *lut, int nsites, const int32_t *cat, const double *x, const double *l,
+                   const double *xit, const double *rates, int nrates, const uint8_t *occupied, int block,
+                   int roots_only)
+{
+  if (nu < 1 || block < 1) return -1;
+  int nc = 0, off[nu + 1];
+  for (int j = 0; j < nu; j++) {
+    if (nch[j] < 1 || nch[j] > 64) return -1;
+    off[j] = nc; nc += nch[j];
+  }
+  off[nu] = nc;
+  const int B = block < nsites ? block : nsites;
+  void *ex;
+  TwChild *c = tw_setup(nc, ckind, cref, crefe, cbl, sizeof(double) * (size_t)nu * B * NS
+                        + sizeof(int64_t) * (size_t)nu * B, &ex, x, l, xit, rates, nrates, occupied);
+  if (!c) return -1;
+  double *scr = (double *)ex;
+  int64_t *scre = (int64_t *)(scr + (size_t)nu * B * NS);
+  double bufa[NS] __attribute__((aligned(32))), bufb[NS] __attribute__((aligned(32)));
+  for (int s0 = 0; s0 < nsites; s0 += B) {
+    const int n = nsites - s0 < B ? nsites - s0 : B;
+    for (int j = 0; j < nu; j++) {
+      TwChild *cj = c + off[j];
+      double *out = (double *)(intptr_t)dst[j];
+      int64_t *oute = (int64_t *)(intptr_t)dste[j];
+      for (int i = 0; i < n; i++) {
+        const int s = s0 + i, cs = cat[s];
+        double *d = scr + ((size_t)j * B + i) * NS;
+#define TW_SRC(ch, k) ((ch)->kind == 0 ? scr + ((size_t)cref[off[j] + (k)] * B + i) * NS \
+                       : (ch)->src ? (ch)->src + (size_t)s * NS : NULL)
+#define TW_E(ch, k) ((ch)->kind == 0 ? scre[(size_t)cref[off[j] + (k)] * B + i] : (ch)->srce ? (ch)->srce[s] : 0)
+        const double *a = tw_ev(&cj[0], s, cs, lut, TW_SRC(&cj[0], 0), bufa);
+        int64_t e = TW_E(&cj[0], 0);
+        if (nch[j] == 1) {
+          memcpy(d, a, sizeof(double) * NS);
+        } else {
+          const double *b = tw_ev(&cj[1], s, cs, lut, TW_SRC(&cj[1], 1), bufb);
+          for (int q = 0; q < NS; q++) d[q] = a[q] * b[q];
+          e = e + TW_E(&cj[1], 1);
+          for (int k = 2; k < nch[j]; k++) {
+            const double *b2 = tw_ev(&cj[k], s, cs, lut, TW_SRC(&cj[k], k), bufb);
+            for (int q = 0; q < NS; q++) d[q] = d[q] * b2[q];
+            e = e + TW_E(&cj[k], k);
+          }
+        }
+#undef TW_SRC
+#undef TW_E
+        if (xp_tw_fastpull) tw_pull(d, &e, -50); else cn_pull(d, &e, -50);
+        scre[(size_t)j * B + i] = e;
+        if (roots_only && j < nu - 1) continue;      /* read only within this unit */
+        tw_store(out + (size_t)s * NS, d);
+        tw_store_e(oute + s, e);
+      }
+    }
+  }
+#if XP_AVX2
+  _mm_sfence();
+#endif
+  return 0;
+}
+
+/* proximal rows of nu internal nodes in pre-order (parents before children). Node j's own
+ * proximal is the row pref[j] / prefe[j] when plocal[j] < 0 (the unit's root), otherwise the
+ * scratch slice its parent wrote; it is evolved by pbl[j]. Children as above (ckind 1 or 2, the
+ * child's distal); a child with cout != 0 gets its proximal there (and in its scratch slice
+ * when clocal >= 0, its index in this unit). */
+int xp_unit_proximal(int nu, const int32_t *plocal, const int64_t *pref, const int64_t *prefe,
+                     const double *pbl, const int32_t *nch, const int32_t *ckind, const int64_t *cref,
+                     const int64_t *crefe, const double *cbl, const int64_t *cout, const int64_t *coute,
+                     const int32_t *clocal, const double *lut, int nsites, const int32_t *cat,
+                     const double *x, const double *l, const double *xit, const double *rates,
+                     int nrates, const uint8_t *occupied, int block)
+{
+  if (nu < 1 || block < 1) return -1;
+  int nc = 0, off[nu + 1];
+  for (int j = 0; j < nu; j++) {
+    if (nch[j] < 1 || nch[j] > 63) return -1;
+    off[j] = nc; nc += nch[j];
+  }
+  off[nu] = nc;
+  /* the arena holds nc child tensors, then nu own-edge tensors (as rows, kind 1) */
+  int32_t kk[nc + nu]; int64_t rr[nc + nu], re[nc + nu]; double bb[nc + nu];
+  for (int k = 0; k < nc; k++) { kk[k] = ckind[k]; rr[k] = cref[k]; re[k] = crefe[k]; bb[k] = cbl[k]; }
+  for (int j = 0; j < nu; j++) { kk[nc + j] = 1; rr[nc + j] = pref[j]; re[nc + j] = prefe[j]; bb[nc + j] = pbl[j]; }
+  const int B = block < nsites ? block : nsites;
+  void *ex;
+  TwChild *c = tw_setup(nc + nu, kk, rr, re, bb, sizeof(double) * (size_t)nu * B * NS
+                        + sizeof(int64_t) * (size_t)nu * B, &ex, x, l, xit, rates, nrates, occupied);
+  if (!c) return -1;
+  double *scr = (double *)ex;
+  int64_t *scre = (int64_t *)(scr + (size_t)nu * B * NS);
+  double evp[NS] __attribute__((aligned(32))), bufs[64][NS] __attribute__((aligned(32)));
+  double tmp[NS] __attribute__((aligned(32)));
+  const double *evk[64];
+  for (int s0 = 0; s0 < nsites; s0 += B) {
+    const int n = nsites - s0 < B ? nsites - s0 : B;
+    for (int j = 0; j < nu; j++) {
+      TwChild *cj = c + off[j], *own = c + nc + j;
+      const int m = nch[j];
+      for (int i = 0; i < n; i++) {
+        const int s = s0 + i, cs = cat[s];
+        const double *psrc = plocal[j] < 0 ? own->src + (size_t)s * NS : scr + ((size_t)j * B + i) * NS;
+        const int64_t pe = plocal[j] < 0 ? own->srce[s] : scre[(size_t)j * B + i];
+        const double *p = tw_ev(own, s, cs, lut, psrc, evp);
+        for (int k = 0; k < m; k++) evk[k] = NULL;
+        for (int t = 0; t < m; t++) {
+          const int64_t ot = cout[off[j] + t];
+          if (!ot) continue;                          /* leaf child: rebuilt on demand by get_p */
+          const int lc = clocal[off[j] + t];
+          double *d = lc >= 0 ? scr + ((size_t)lc * B + i) * NS : tmp;
+          int64_t e;
+          int first = 1;
+          for (int r = 0; r < m; r++) {
+            if (r == t) continue;
+            if (!evk[r]) evk[r] = tw_ev(&cj[r], s, cs, lut, cj[r].src ? cj[r].src + (size_t)s * NS : NULL, bufs[r]);
+            const int64_t er = cj[r].srce ? cj[r].srce[s] : 0;
+            if (first) { for (int q = 0; q < NS; q++) d[q] = p[q] * evk[r][q]; e = pe + er; first = 0; }
+            else { for (int q = 0; q < NS; q++) d[q] = d[q] * evk[r][q]; e = e + er; }
+          }
+          if (first) { memcpy(d, p, sizeof(double) * NS); e = pe; }
+          if (xp_tw_fastpull) tw_pull(d, &e, -50); else cn_pull(d, &e, -50);
+          if (lc >= 0) scre[(size_t)lc * B + i] = e;
+          tw_store((double *)(intptr_t)ot + (size_t)s * NS, d);
+          tw_store_e((int64_t *)(intptr_t)coute[off[j] + t] + s, e);
+        }
+      }
+    }
+  }
+#if XP_AVX2
+  _mm_sfence();
+#endif
+  return 0;
+}
+
+/* A tile's units in one call (GPLACE_TILEWALK=1; distal 2: only the units' root rows are
+ * written, for a distal pass that keeps only boundary vectors): nthreads threads (the caller's included) run
+ * the units of one pass as they become ready, distal bottom-up (a unit once every unit below it
+ * is done), proximal top-down (a unit's children once it is done). Unit u's nodes are
+ * [uno[u], uno[u+1]) of the node arrays and its children [uco[u], uco[u+1]) of the child arrays,
+ * laid out as xp_unit_distal / xp_unit_proximal take them; uparent[u] is the unit above it
+ * (-1: none), its units below are ukids[ukid_off[u] .. ukid_off[u+1]). */
+typedef struct {
+  int distal, nunits, block, nsites, nrates;
+  const int32_t *uparent, *ukid_off, *ukids; const int64_t *uno, *uco;
+  const int32_t *nch, *plocal; const int64_t *dst, *dste, *pref, *prefe; const double *pbl;
+  const int32_t *ckind, *clocal; const int64_t *cref, *crefe, *cout, *coute; const double *cbl;
+  const double *lut; const int32_t *cat; const double *x, *l, *xit, *rates; const uint8_t *occupied;
+  pthread_mutex_t mu; pthread_cond_t cv;
+  int32_t *stack; int top, remaining, err; int32_t *pending;
+} TwWalk;
+
+static int tw_unit(TwWalk *w, int u)
+{
+  const int64_t no = w->uno[u], co = w->uco[u];
+  const int nu = (int)(w->uno[u + 1] - no);
+  if (w->distal)
+    return xp_unit_distal(nu, w->nch + no, w->ckind + co, w->cref + co, w->crefe + co, w->cbl + co,
+                          w->dst + no, w->dste + no, w->lut, w->nsites, w->cat, w->x, w->l, w->xit,
+                          w->rates, w->nrates, w->occupied, w->block, w->distal == 2);
+  return xp_unit_proximal(nu, w->plocal + no, w->pref + no, w->prefe + no, w->pbl + no, w->nch + no,
+                          w->ckind + co, w->cref + co, w->crefe + co, w->cbl + co, w->cout + co,
+                          w->coute + co, w->clocal + co, w->lut, w->nsites, w->cat, w->x, w->l, w->xit,
+                          w->rates, w->nrates, w->occupied, w->block);
+}
+
+static void *tw_worker(void *arg)
+{
+  TwWalk *w = (TwWalk *)arg;
+  pthread_mutex_lock(&w->mu);
+  for (;;) {
+    while (w->top == 0 && w->remaining > 0 && !w->err) pthread_cond_wait(&w->cv, &w->mu);
+    if (w->remaining == 0 || w->err) break;
+    const int u = w->stack[--w->top];
+    pthread_mutex_unlock(&w->mu);
+    const int st = tw_unit(w, u);
+    pthread_mutex_lock(&w->mu);
+    if (st) { w->err = st; pthread_cond_broadcast(&w->cv); break; }
+    w->remaining--;
+    int pushed = 0;
+    if (w->distal) {
+      const int p = w->uparent[u];
+      if (p >= 0 && --w->pending[p] == 0) { w->stack[w->top++] = p; pushed = 1; }
+    } else {
+      for (int k = w->ukid_off[u]; k < w->ukid_off[u + 1]; k++) { w->stack[w->top++] = w->ukids[k]; pushed++; }
+    }
+    if (w->remaining == 0 || pushed > 1) pthread_cond_broadcast(&w->cv);
+    else if (pushed) pthread_cond_signal(&w->cv);
+  }
+  pthread_mutex_unlock(&w->mu);
+  return NULL;
+}
+
+static void *tw_thread(void *arg)
+{
+  tw_worker(arg);
+  free(tw_buf); tw_buf = NULL; tw_cap = 0;               /* this thread's arena */
+  return NULL;
+}
+
+int xp_tile_walk(int distal, int nunits, const int32_t *uparent, const int32_t *ukid_off,
+                 const int32_t *ukids, const int64_t *uno, const int64_t *uco, const int32_t *nch,
+                 const int32_t *plocal, const int64_t *dst, const int64_t *dste, const int64_t *pref,
+                 const int64_t *prefe, const double *pbl, const int32_t *ckind, const int32_t *clocal,
+                 const int64_t *cref, const int64_t *crefe, const int64_t *cout, const int64_t *coute,
+                 const double *cbl, const double *lut, int nsites, const int32_t *cat, const double *x,
+                 const double *l, const double *xit, const double *rates, int nrates,
+                 const uint8_t *occupied, int block, int nthreads)
+{
+  if (nunits < 1) return 0;
+  TwWalk w = {distal, nunits, block, nsites, nrates, uparent, ukid_off, ukids, uno, uco, nch, plocal,
+              dst, dste, pref, prefe, pbl, ckind, clocal, cref, crefe, cout, coute, cbl, lut, cat, x, l,
+              xit, rates, occupied};
+  w.stack = (int32_t *)malloc(sizeof(int32_t) * (size_t)nunits);
+  w.pending = (int32_t *)malloc(sizeof(int32_t) * (size_t)nunits);
+  if (!w.stack || !w.pending) { free(w.stack); free(w.pending); return -1; }
+  w.top = 0; w.remaining = nunits; w.err = 0;
+  for (int u = 0; u < nunits; u++) {
+    w.pending[u] = ukid_off[u + 1] - ukid_off[u];
+    if (distal ? w.pending[u] == 0 : uparent[u] < 0) w.stack[w.top++] = u;
+  }
+  pthread_mutex_init(&w.mu, NULL); pthread_cond_init(&w.cv, NULL);
+  if (nthreads < 1) nthreads = 1;
+  if (nthreads > 256) nthreads = 256;
+  pthread_t th[256];
+  int started = 0;
+  for (int t = 1; t < nthreads; t++)
+    if (pthread_create(&th[started], NULL, tw_thread, &w) == 0) started++;
+  tw_worker(&w);                                         /* the caller's thread works too */
+  for (int t = 0; t < started; t++) pthread_join(th[t], NULL);
+  pthread_mutex_destroy(&w.mu); pthread_cond_destroy(&w.cv);
+  const int err = w.err ? w.err : (w.remaining ? -2 : 0);
+  free(w.stack); free(w.pending);
+  return err;
 }
 
 /* Prefilter in f32 product form (GPLACE_PF32=1). The prefilter only orders edges, and
