@@ -807,7 +807,8 @@ typedef struct {
   int gmix, R;           /* gamma mixture (every site under all R rates), see xp_gtt_new */
   int mix;               /* mixture model (--full_model): rate category r has its own eigen-system and */
   const double *mx, *ml, *mxit, *mstatd;   /* frequencies: R x NS x NS, R x NS, R x NS x NS, R x NS */
-  /* PD cache (GPLACE_PD_CACHE=1): PD depends only on the location's edge vectors and the
+  /* PD cache (GPLACE_EXPERIMENTAL_PD_CACHE=1; never part of a set of switches: it was slower than
+   * no cache at 64 workers on an AMD EPYC 7763 node): PD depends only on the location's edge vectors and the
    * (distal, proximal) lengths, not on the query's pendant state, and the alternating Brent
    * search re-brackets at the same lengths every round. npd buffers (GPLACE_PD_SLOTS, 1 to
    * PD_SLOTS, default PD_SLOTS), keyed by the exact (dist, prox) pair, cleared by xp_tt_set;
@@ -1189,7 +1190,7 @@ TT *xp_tt_new(int m, const int32_t *cat, const double *statd, const double *x, c
   t->dist_o = malloc(sizeof(double) * n); t->prox_o = malloc(sizeof(double) * n);
   xp_read_switches();
   {
-    const char *e = getenv("GPLACE_PD_CACHE");
+    const char *e = getenv("GPLACE_EXPERIMENTAL_PD_CACHE");
     t->pdc = (e && *e == '1' && m > 0);            /* m = 0 is the gamma path's placeholder */
   }
   if (t->pdc) {

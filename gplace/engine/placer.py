@@ -196,6 +196,12 @@ class Placer(object):
     def __init__(self, refpkg_dir, queries, cpus=1, discard_nonoverlapped=False, search=None,
                  always_refine=False, ranked_edges=None):
         self.logger = logging.getLogger('timestamp')
+        if os.environ.get('GPLACE_EXPERIMENTAL_PD_CACHE') == '1':
+            self.logger.warning('GPLACE_EXPERIMENTAL_PD_CACHE=1: the PD cache is on. It was slower than no '
+                                'cache at 64 workers (AMD EPYC 7763); set it only to measure it.')
+        elif 'GPLACE_PD_CACHE' in os.environ:
+            self.logger.warning('GPLACE_PD_CACHE is no longer read; the PD cache stays off '
+                                '(GPLACE_EXPERIMENTAL_PD_CACHE=1 turns it on, on its own).')
         self.search = search = search or core.Search()
         if ranked_edges is not None and int(ranked_edges) < 1:
             raise GPlaceException('--ranked_edges must be at least 1.')
