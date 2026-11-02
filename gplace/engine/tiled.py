@@ -37,6 +37,7 @@ pplacer's algorithm then runs tile by tile, with the work reordered but not chan
     pplacer.
 """
 
+import ctypes
 import gc
 import math
 import os
@@ -67,6 +68,15 @@ def _tlog(msg):
     if _TIMING:
         sys.stderr.write(f'[gplace timing {time.time() - _T0:8.1f} s] {msg}\n')
         sys.stderr.flush()
+
+class _EvCtx(ctypes.Structure):
+    """xp.c EvCtx: what xp_eval_batch reads (GPLACE_CEVAL)."""
+    _fields_ = ([('S', ctypes.c_int), ('nrates', ctypes.c_int), ('max_iter', ctypes.c_int),
+                 ('start_pend', ctypes.c_double), ('max_pend', ctypes.c_double)]
+                + [(f, ctypes.c_void_p) for f in ('darr', 'parr', 'dexp', 'pexp', 'slot', 'parent', 'ch_off',
+                                                  'ch', 'leaf_row', 'bl', 'lut', 'refA', 'QM', 'cats', 'statd',
+                                                  'x', 'l', 'xit', 'rates', 'occupied')])
+
 
 MIN_TILE_EDGES = 1000                   # smallest tiles --max_memory chooses
 PLAN_FRACTION = 0.95                    # --max_memory plans keep 5% headroom below the limit
@@ -692,8 +702,7 @@ class TiledPlacer(Placer):
             jobs = list(by_tile[ti].items())
             if self.record_work:
                 self.work_log[ti].extend(jobs)
-            res, outer, inner = self._pool_map(_tile_eval, jobs,
-                                               chunksize=max(1, min(8, len(jobs) // (16 * self.workers))))
+            res, outer, inner = self._run_jobs(jobs)
             out.extend(res)
             tm['pool'] += outer; tm['eval'] += inner; tm['pools'] += 1
             tm['evals'] += sum(len(items) for _, items in jobs)
@@ -701,6 +710,81 @@ class TiledPlacer(Placer):
             self.stats['evals'] += sum(len(items) for _, items in jobs)
         self._note_evaluate(tm)
         return out
+
+    def _run_jobs(self, jobs):
+        """The optimisations jobs = [(qi, [(loc, pend, dist, tol)])] on the tile or pack in memory:
+        [(qi, [(loc, result, status)])], seconds, seconds without the pool start-up. A worker
+        pool of forked processes, or under GPLACE_CEVAL=1 one xp_eval_batch call on threads."""
+        if not self._ceval_on():
+            return self._pool_map(_tile_eval, jobs, chunksize=max(1, min(8, len(jobs) // (16 * self.workers))))
+        t0 = time.time()
+        ctx, keep = self._ev_ctx()
+        nq = len(jobs)
+        qis = np.array([qi for qi, _ in jobs], np.int32)
+        joff = np.zeros(nq + 1, np.int64)
+        joff[1:] = np.cumsum([len(items) for _, items in jobs])
+        nj = int(joff[-1])
+        flat = [it for _, items in jobs for it in items]
+        loc = np.array([it[0] for it in flat], np.int32)
+        pend = np.array([it[1] for it in flat], np.float64)
+        dist = np.array([it[2] for it in flat], np.float64)
+        tol = np.array([it[3] for it in flat], np.float64)
+        out = np.zeros((nj, 3)); status = np.zeros(nj, np.int32)
+        t1 = time.time()
+        rc = self.lib.xp_eval_batch(ctypes.byref(ctx), nq, P(qis), P(joff), P(loc), P(pend), P(dist), P(tol),
+                                    P(out), P(status), int(self.workers))
+        t2 = time.time()
+        if rc:
+            raise GPlaceException(f'xp_eval_batch failed ({rc}): '
+                                  f'{"a vector the rebuild did not provide" if rc == -1 else "likelihood set-up"}.')
+        res, j = [], 0
+        for qi, items in jobs:
+            r = []
+            for it in items:
+                st = int(status[j])
+                r.append((it[0], (float(out[j, 0]), float(out[j, 1]), float(out[j, 2])), None)
+                         if st in (core.XP_OK, core.XP_EXCEEDED) else (it[0], None, st))
+                j += 1
+            res.append((qi, r))
+        del keep
+        return res, time.time() - t0, t2 - t1
+
+    def _ceval_on(self):
+        if not hasattr(self, '_ceval'):
+            self._ceval = (os.environ.get('GPLACE_CEVAL') == '1' and self.model.ras != 'gamma'
+                           and self.width == self.ns and self.refA.dtype == np.uint8)
+        return self._ceval
+
+    def _ev_ctx(self):
+        """The EvCtx of the tile or pack in memory (its slot map) over the arrays every call shares."""
+        if not hasattr(self, '_ev_static'):
+            n = self.nnodes
+            ch_off = np.zeros(n + 1, np.int32)
+            ch_off[1:] = np.cumsum([len(self.children[v]) for v in range(n)])
+            ch = np.array([c for v in range(n) for c in self.children[v]], np.int32)
+            leaf_row = np.full(n, -1, np.int32)
+            for v, r in self.leaf_row.items():
+                leaf_row[v] = r
+            a = dict(parent=np.array(self.parent, np.int32), ch_off=ch_off, ch=ch, leaf_row=leaf_row,
+                     bl=np.ascontiguousarray(self.bl, np.float64),
+                     lut=np.ascontiguousarray(self.alpha.lut, np.float64),
+                     refA=np.ascontiguousarray(self.refA), QM=np.ascontiguousarray(self.QM, np.uint8),
+                     cats=np.ascontiguousarray(self.cats, np.int32))
+            for k in ('statd', 'x', 'l', 'xit', 'rates'):
+                a[k] = np.ascontiguousarray(getattr(self, k), np.float64)
+            a['occupied'] = np.ascontiguousarray(self.occupied, np.uint8)
+            self._ev_static = a
+        a = dict(self._ev_static)
+        slot = np.full(self.nnodes, -1, np.int32)
+        for v, k in self.iidx.items():
+            slot[v] = k
+        a['slot'] = slot
+        for k in ('darr', 'parr', 'dexp', 'pexp'):
+            a[k] = getattr(self, k)
+        ctx = _EvCtx(S=self.nsites, nrates=self.nrates, max_iter=core.MAX_ITER,
+                     start_pend=self.search.start_pend, max_pend=self.search.max_pend,
+                     **{k: v.ctypes.data for k, v in a.items()})
+        return ctx, a
 
     def _note_evaluate(self, tm):
         """Adds one _evaluate call's timings to self.stats and, under GPLACE_TIMING, prints them."""
@@ -763,8 +847,7 @@ class TiledPlacer(Placer):
                         g[self.tile_of[it[0]]].append(it)
                     for ti, its in g.items():
                         self.work_log[ti].append((qi, its))
-            res, outer, inner = self._pool_map(_tile_eval, jobs,
-                                               chunksize=max(1, min(8, len(jobs) // (16 * self.workers))))
+            res, outer, inner = self._run_jobs(jobs)
             out.extend(res)
             tm['pool'] += outer; tm['eval'] += inner; tm['pools'] += 1
             tm['evals'] += sum(len(items) for _, items in jobs)
@@ -894,7 +977,7 @@ class TiledPlacer(Placer):
         try:
             for w in worker_counts:
                 self.workers = w
-                dt = self._pool_map(_tile_eval, jobs)[2]
+                dt = self._run_jobs(jobs)[2]
                 out.append((w, dt, n * reps / max(dt, 1e-9)))
         finally:
             self.workers = saved

@@ -1244,6 +1244,182 @@ void xp_tt_results(TT *t, double *out)   /* (log_like, pend_bl, dist_bl, n_calls
   out[0] = tt_log_like(t); out[1] = t->pend_bl; out[2] = t->dist_bl; out[3] = (double)t->n_calls;
 }
 
+/* Batch evaluation (GPLACE_CEVAL=1): the tiled placement's per-query work of
+ * Placer._query_evaluator, for every query of one rebuilt tile or pack of pieces, on pthreads.
+ * The same calls in the same order as the Python evaluator (get_d / get_p with the leaf proximal
+ * rebuilt as Placer._prox_into does, xp_tt_set, xp_tt_optimize, the retry from the default
+ * lengths after a GSL error), so the results are identical; it only replaces the forked worker
+ * pool and the Python around those calls (GIL, copy-on-write, pool start-up). */
+typedef struct {
+  int S, nrates, max_iter;
+  double start_pend, max_pend;
+  const double *darr, *parr; const int64_t *dexp, *pexp;  /* tile slots: [slot][S][NS], [slot][S] */
+  const int32_t *slot;                                     /* node -> slot, -1 if not rebuilt */
+  const int32_t *parent, *ch_off, *ch, *leaf_row;          /* children of v: ch[ch_off[v]..ch_off[v+1]) */
+  const double *bl, *lut;                                  /* lut: [256][NS] */
+  const uint8_t *refA, *QM;                                /* [leaf rows][S], [queries][S] */
+  const int32_t *cats; const double *statd, *x, *l, *xit, *rates; const uint8_t *occupied;
+} EvCtx;
+
+typedef struct {
+  const EvCtx *c; int nq; const int32_t *qis; const int64_t *joff; const int32_t *loc;
+  const double *pend, *dist, *tol; double *out; int32_t *status;
+  int next, err;
+} EvBatch;
+
+typedef struct { double *D, *Pp, *b4, *b5, *b6, *tensor; int64_t *De, *Pe, *zero; } EvBuf;
+
+static void ev_leaf_lv(const EvCtx *c, int v, double *dst)
+{
+  const uint8_t *r = c->refA + (size_t)c->leaf_row[v] * c->S;
+  for (int s = 0; s < c->S; s++) memcpy(dst + (size_t)s * NS, c->lut + (size_t)r[s] * NS, sizeof(double) * NS);
+}
+
+static int ev_is_leaf(const EvCtx *c, int v) { return c->ch_off[v + 1] == c->ch_off[v]; }
+
+/* Placer.d_pre: the distal vector before the final pull (a leaf's in buf, exponents zero) */
+static int ev_dpre(const EvCtx *c, const EvBuf *b, int v, double *buf, const double **a, const int64_t **e)
+{
+  if (!ev_is_leaf(c, v)) {
+    int k = c->slot[v]; if (k < 0) return -1;
+    *a = c->darr + (size_t)k * c->S * NS; *e = c->dexp + (size_t)k * c->S;
+  } else { ev_leaf_lv(c, v, buf); *a = buf; *e = b->zero; }
+  return 0;
+}
+
+static void ev_evolve(const EvCtx *c, const EvBuf *b, double *dst, const double *src, double bl)
+{
+  xp_multi_exp(b->tensor, c->x, c->l, c->xit, c->rates, c->nrates, c->occupied, bl);
+  xp_evolve(dst, src, c->S, c->cats, b->tensor);
+}
+
+static int ev_get_d(const EvCtx *c, const EvBuf *b, int v)       /* Placer.get_d */
+{
+  const int S = c->S;
+  if (!ev_is_leaf(c, v)) {
+    int k = c->slot[v]; if (k < 0) return -1;
+    memcpy(b->D, c->darr + (size_t)k * S * NS, sizeof(double) * S * NS);
+    memcpy(b->De, c->dexp + (size_t)k * S, sizeof(int64_t) * S);
+  } else { ev_leaf_lv(c, v, b->D); memset(b->De, 0, sizeof(int64_t) * S); }
+  xp_pull_exponent(b->D, b->De, S, -10);
+  return 0;
+}
+
+static int ev_get_p(const EvCtx *c, const EvBuf *b, int v)       /* Placer.get_p, Placer._prox_into */
+{
+  const int S = c->S;
+  if (!ev_is_leaf(c, v)) {
+    int k = c->slot[v]; if (k < 0) return -1;
+    memcpy(b->Pp, c->parr + (size_t)k * S * NS, sizeof(double) * S * NS);
+    memcpy(b->Pe, c->pexp + (size_t)k * S, sizeof(int64_t) * S);
+  } else {
+    int pv = c->parent[v]; if (pv < 0) return -1;
+    int kp = c->slot[pv]; if (kp < 0) return -1;
+    const int64_t *evpe = c->pexp + (size_t)kp * S;
+    ev_evolve(c, b, b->b4, c->parr + (size_t)kp * S * NS, c->bl[pv]);
+    int first = 1;
+    for (int j = c->ch_off[pv]; j < c->ch_off[pv + 1]; j++) {
+      int r = c->ch[j]; if (r == v) continue;
+      const double *a; const int64_t *e;
+      if (ev_dpre(c, b, r, b->b6, &a, &e)) return -1;
+      ev_evolve(c, b, b->b5, a, c->bl[r]);
+      if (first) xp_pairwise(b->Pp, b->Pe, b->b4, evpe, b->b5, e, S);
+      else xp_pairwise(b->Pp, b->Pe, b->Pp, b->Pe, b->b5, e, S);
+      first = 0;
+    }
+    if (first) { memcpy(b->Pp, b->b4, sizeof(double) * S * NS); memcpy(b->Pe, evpe, sizeof(int64_t) * S); }
+    xp_pull_exponent(b->Pp, b->Pe, S, -50);
+  }
+  xp_pull_exponent(b->Pp, b->Pe, S, -10);
+  return 0;
+}
+
+static int ev_query(const EvBatch *B, const EvBuf *b, int i)
+{
+  const EvCtx *c = B->c;
+  const int S = c->S, q = B->qis[i];
+  const uint8_t *row = c->QM + (size_t)q * S;
+  int32_t *reind = malloc(sizeof(int32_t) * S), *catm = malloc(sizeof(int32_t) * S);
+  int m = 0;
+  for (int s = 0; s < S; s++) if (row[s] != '-' && row[s] != '?') reind[m++] = s;  /* core.informative */
+  double *qm = malloc(sizeof(double) * (size_t)(m ? m : 1) * NS);
+  for (int k = 0; k < m; k++) {
+    memcpy(qm + (size_t)k * NS, c->lut + (size_t)row[reind[k]] * NS, sizeof(double) * NS);
+    catm[k] = c->cats[reind[k]];
+  }
+  int rc = 0;
+  TT *t = xp_tt_new(m, catm, c->statd, c->x, c->l, c->xit, c->rates, c->nrates, qm);
+  if (!t) rc = -2;
+  int cur = -1; double res[4];
+  for (int64_t j = B->joff[i]; !rc && j < B->joff[i + 1]; j++) {
+    int loc = B->loc[j];
+    double pend = B->pend[j], dist = B->dist[j];
+    for (int attempt = 0; ; attempt++) {
+      if (cur != loc) {
+        if (ev_get_d(c, b, loc) || ev_get_p(c, b, loc)) { rc = -1; break; }
+        cur = loc;
+      }
+      xp_tt_set(t, b->D, b->De, b->Pp, b->Pe, reind, c->bl[loc], pend, dist);
+      int st = xp_tt_optimize(t, B->tol[j], c->max_pend, c->max_iter);
+      if (st == XP_GSL && attempt == 0) {          /* safe_ml_optimize_location: retry once */
+        pend = c->start_pend; dist = c->bl[loc] / 2.; continue;
+      }
+      B->status[j] = st;
+      if (st == XP_OK || st == XP_EXCEEDED) {
+        xp_tt_results(t, res);
+        B->out[3 * j] = res[0]; B->out[3 * j + 1] = res[1]; B->out[3 * j + 2] = res[2];
+      }
+      break;
+    }
+  }
+  if (t) xp_tt_free(t);
+  free(qm); free(catm); free(reind);
+  return rc;
+}
+
+static void *ev_worker(void *arg)
+{
+  EvBatch *B = (EvBatch *)arg;
+  const EvCtx *c = B->c;
+  const size_t V = (size_t)c->S * NS;
+  EvBuf b;
+  b.D = malloc(sizeof(double) * V); b.Pp = malloc(sizeof(double) * V);
+  b.b4 = malloc(sizeof(double) * V); b.b5 = malloc(sizeof(double) * V); b.b6 = malloc(sizeof(double) * V);
+  b.tensor = malloc(sizeof(double) * (size_t)c->nrates * NS * NS);
+  b.De = malloc(sizeof(int64_t) * c->S); b.Pe = malloc(sizeof(int64_t) * c->S);
+  b.zero = calloc(c->S, sizeof(int64_t));
+  for (;;) {
+    if (__atomic_load_n(&B->err, __ATOMIC_RELAXED)) break;
+    int i = __atomic_fetch_add(&B->next, 1, __ATOMIC_RELAXED);
+    if (i >= B->nq) break;
+    int rc = ev_query(B, &b, i);
+    if (rc) { __atomic_store_n(&B->err, rc, __ATOMIC_RELAXED); break; }
+  }
+  free(b.D); free(b.Pp); free(b.b4); free(b.b5); free(b.b6); free(b.tensor);
+  free(b.De); free(b.Pe); free(b.zero);
+  return NULL;
+}
+
+/* Queries qis[i] with jobs joff[i]..joff[i+1] (loc, pend, dist, tol); writes out[3j] = (like,
+ * pend, dist) and status[j]. Returns 0, -1 (a vector the rebuild did not provide) or -2 (TT
+ * allocation failed). */
+int xp_eval_batch(const EvCtx *c, int nq, const int32_t *qis, const int64_t *joff, const int32_t *loc,
+                  const double *pend, const double *dist, const double *tol, double *out,
+                  int32_t *status, int nthreads)
+{
+  EvBatch B = { c, nq, qis, joff, loc, pend, dist, tol, out, status, 0, 0 };
+  if (nthreads < 1) nthreads = 1;
+  if (nthreads > nq) nthreads = nq > 0 ? nq : 1;
+  pthread_t *th = malloc(sizeof(pthread_t) * nthreads);
+  int started = 0;
+  for (int k = 1; k < nthreads; k++)
+    if (pthread_create(&th[k], NULL, ev_worker, &B) == 0) started = k; else break;
+  ev_worker(&B);
+  for (int k = 1; k <= started; k++) pthread_join(th[k], NULL);
+  free(th);
+  return B.err;
+}
+
 /* ======================================================================================
  * Gamma mixture model (pplacer gmix_model.ml, gamma.ml, linear_c.c "tensor" functions).
  * Glvs are stored site-major: a[s][r][st] (pplacer: rate-major a[r][s][st]); one exponent per
