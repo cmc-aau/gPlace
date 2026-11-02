@@ -559,19 +559,19 @@ class TiledPlacer(Placer):
     _BS64, _BS32 = 128, 64                          # xp.c's default site-block lengths
 
     def _pf_bs_setup(self):
-        """GPLACE_PF_BS: unset = the kernels' defaults; N = blocks of N sites (f32: at most 64);
+        """GPLACE_PF_BS: unset = the kernels' defaults; N = blocks of N sites (at most 4,096);
         auto = measured on the first groups of the run (_pf_bs_calibrate)."""
         v = os.environ.get('GPLACE_PF_BS', '').strip().lower()
         self._pf_bs_auto = v == 'auto'
         self._pf_bs_chosen = None
         if v.isdigit() and int(v) > 0:
-            self.lib.xp_set_pf_bs(min(int(v), 255), min(int(v), 64))
+            self.lib.xp_set_pf_bs(min(int(v), 4096), min(int(v), 4096))
 
     def _pf_bs_calibrate(self, groups, use32, st):
         """Scores the first groups of the run with each candidate site-block length (interleaved,
         several groups per worker each; the scores are the real ones, as the length changes no
         value), keeps the fastest by median seconds per group and returns the groups left."""
-        cands = [16, 32, 64] if use32 else [16, 32, 64, 128, 192]
+        cands = [32, 64, 128, 256] if use32 else [32, 64, 128, 256, 512]
         n = min(len(cands) * 2 * max(1, self.workers), len(groups) // 2)
         n -= n % len(cands)
         if n < 2 * len(cands):                          # too few groups to tell: keep the defaults
