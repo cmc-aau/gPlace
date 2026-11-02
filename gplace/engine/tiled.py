@@ -40,6 +40,7 @@ pplacer's algorithm then runs tile by tile, with the work reordered but not chan
 import gc
 import math
 import os
+import sys
 import threading
 import time
 from collections import defaultdict, namedtuple
@@ -55,6 +56,17 @@ from gplace.engine.placer import (Placer, Baseball, weighted_placements, shared_
                                   candidates_needed, merge_candidates, _NO_EDGE)
 from gplace.exceptions import GPlaceException, GPlaceExit
 from gplace.fileio import read_json, read_text
+
+_TIMING = os.environ.get('GPLACE_TIMING') == '1'
+_T0 = time.time()
+
+
+def _tlog(msg):
+    """GPLACE_TIMING=1: one line per finished phase on stderr, with seconds since import (it does
+    not go through the logger, so the benchmark scripts, which configure none, show it too)."""
+    if _TIMING:
+        sys.stderr.write(f'[gplace timing {time.time() - _T0:8.1f} s] {msg}\n')
+        sys.stderr.flush()
 
 MIN_TILE_EDGES = 1000                   # smallest tiles --max_memory chooses
 PLAN_FRACTION = 0.95                    # --max_memory plans keep 5% headroom below the limit
@@ -483,10 +495,13 @@ class TiledPlacer(Placer):
         self.parr = shared_zeros((self.n_slots, S, self.width)); self.pexp = shared_zeros((self.n_slots, S), np.int64)
         self.bD, self.bDe, self.bP, self.bPe = {}, {}, {}, {}
         self.sD, self.sDe, self.sP, self.sPe = {}, {}, {}, {}
-        t0 = time.time()
-        for ti in range(len(self.tiles)):
+        t0, nt = time.time(), len(self.tiles)
+        for ti in range(nt):
+            tm = time.time()
             self._materialise(ti, need_p=False)
+            _tlog(f'boundary: tile {ti + 1}/{nt} ({len(self.tiles[ti]["nodes"]):,} nodes) {time.time() - tm:.2f} s')
         self.stats['boundary_s'] = time.time() - t0
+        _tlog(f'boundary done: {nt} tiles in {self.stats["boundary_s"]:.1f} s')
 
     # ---------------------------------------------------------------- prefilter --
     def prefilter(self, probe=0):
@@ -540,6 +555,7 @@ class TiledPlacer(Placer):
         st['pref_probe_n'] = probe
         try:
             for step, ti in enumerate(reversed(range(nt)), 1):   # top-down: stores boundary proximals
+                before = {k: st[k] for k in ('pref_rebuild_s', 'pref_batch_s', 'pref_merge_s')}
                 tm = time.time()
                 self._materialise(ti, need_p=True)
                 st['pref_rebuild_s'] += time.time() - tm
@@ -570,11 +586,15 @@ class TiledPlacer(Placer):
                     st['pref_merge_s'] += time.time() - tm
                 self.logger.info(f'Prefilter: tile {step}/{nt} ({E:,} edges) done '
                                  f'({time.time() - t0:.0f} s).')
+                d = {k: st[k] - v for k, v in before.items()}
+                _tlog(f'prefilter: tile {step}/{nt} ({E:,} edges, {n:,} queries): rebuild '
+                      f'{d["pref_rebuild_s"]:.2f} s, scoring {d["pref_batch_s"]:.2f} s, merge {d["pref_merge_s"]:.2f} s')
         finally:
             del self.scores
             self._bcodes = None
             self._pf32 = saved
         st['pref_s'] += time.time() - t0
+        _tlog(f'prefilter done: {n:,} queries x {K:,} edges{" (f32)" if use32 else ""} in {time.time() - t0:.1f} s')
         order = np.lexsort((ce, -cs), axis=1)
         if use32:
             return np.take_along_axis(ce, order, 1), np.take_along_axis(cs, order, 1)
@@ -658,22 +678,38 @@ class TiledPlacer(Placer):
             for it in items:
                 by_tile[self.tile_of[it[0]]][qi].append(it)
         out = []
+        tm = defaultdict(float)
         tiles = set(by_tile) | (set(self._tpf['req']) if self._tpf is not None else set())
         for ti in sorted(tiles, reverse=True):
+            t1 = time.time()
             self._materialise(ti, need_p=True)
+            t2 = time.time()
             if self._tpf is not None and ti in self._tpf['req']:
                 self._tpf_resolve(ti)
+            tm['rebuild'] += t2 - t1; tm['resolve'] += time.time() - t2; tm['rebuilds'] += 1
             if ti not in by_tile:                     # only f64 prefilter scores were needed here
                 continue
             jobs = list(by_tile[ti].items())
             if self.record_work:
                 self.work_log[ti].extend(jobs)
-            res, _, inner = self._pool_map(_tile_eval, jobs,
-                                           chunksize=max(1, min(8, len(jobs) // (16 * self.workers))))
+            res, outer, inner = self._pool_map(_tile_eval, jobs,
+                                               chunksize=max(1, min(8, len(jobs) // (16 * self.workers))))
             out.extend(res)
+            tm['pool'] += outer; tm['eval'] += inner; tm['pools'] += 1
+            tm['evals'] += sum(len(items) for _, items in jobs)
             self.stats['eval_s'] += inner
             self.stats['evals'] += sum(len(items) for _, items in jobs)
+        self._note_evaluate(tm)
         return out
+
+    def _note_evaluate(self, tm):
+        """Adds one _evaluate call's timings to self.stats and, under GPLACE_TIMING, prints them."""
+        for k in ('rebuild', 'resolve', 'pool'):
+            self.stats[f'place_{k}_s'] += tm[k]
+        self.stats['place_rebuilds'] += tm['rebuilds']; self.stats['place_pools'] += tm['pools']
+        _tlog(f'  evaluate: {int(tm["evals"]):,} evals; {int(tm["rebuilds"])} rebuilds {tm["rebuild"]:.2f} s, '
+              f'f64 resolve {tm["resolve"]:.2f} s, {int(tm["pools"])} pools {tm["pool"]:.2f} s '
+              f'(evals {tm["eval"]:.2f} s, start-up/teardown {tm["pool"] - tm["eval"]:.2f} s)')
 
     def _pack(self, pis):
         """The pieces pis as one rebuild: a piece whose parent edge is in another of them is
@@ -703,13 +739,18 @@ class TiledPlacer(Placer):
         if cur:
             packs.append(cur)
         out = []
+        tm = defaultdict(float)
         for pk in packs:
             self._tile_in_memory = None
+            t1 = time.time()
             self._rebuild(self._pack(pk), need_p=True, store=False)
+            tm['rebuild'] += time.time() - t1; tm['rebuilds'] += 1
             jobs = defaultdict(list)
             for pi in pk:
                 if pi in req:
+                    t1 = time.time()
                     self._tpf_resolve(pi)
+                    tm['resolve'] += time.time() - t1
                 for qi, items in by_piece.get(pi, {}).items():
                     jobs[qi].extend(items)
             if not jobs:                              # only f64 prefilter scores were needed here
@@ -722,11 +763,15 @@ class TiledPlacer(Placer):
                         g[self.tile_of[it[0]]].append(it)
                     for ti, its in g.items():
                         self.work_log[ti].append((qi, its))
-            res, _, inner = self._pool_map(_tile_eval, jobs,
-                                           chunksize=max(1, min(8, len(jobs) // (16 * self.workers))))
+            res, outer, inner = self._pool_map(_tile_eval, jobs,
+                                               chunksize=max(1, min(8, len(jobs) // (16 * self.workers))))
             out.extend(res)
+            tm['pool'] += outer; tm['eval'] += inner; tm['pools'] += 1
+            tm['evals'] += sum(len(items) for _, items in jobs)
             self.stats['eval_s'] += inner
             self.stats['evals'] += sum(len(items) for _, items in jobs)
+        tm['pieces'] = sum(len(pk) for pk in packs)
+        self._note_evaluate(tm)
         return out
 
     def _replay(self, qi, stage1):
@@ -760,6 +805,7 @@ class TiledPlacer(Placer):
         active, done, rnd = list(range(Q)), {}, 0
         while active:
             rnd += 1
+            tr = time.time()
             work = {}
             for qi in active:
                 row = self._rank_row(qi)
@@ -776,9 +822,11 @@ class TiledPlacer(Placer):
                 chunk = [loc for loc in chunk if loc not in stage1[qi]]
                 work[qi] = [(loc, self.search.start_pend, self.bl[loc] / 2., self.search.ml_tolerance)
                             for loc in chunk]
+            te = time.time()
             for qi, out in self._evaluate(work):
                 for loc, r, st in out:
                     stage1[qi][loc] = (r, st)
+            tp = time.time()
             still, more = [], []
             for qi in active:
                 bb = self._replay(qi, stage1[qi])
@@ -788,10 +836,16 @@ class TiledPlacer(Placer):
                     still.append(qi)
                     if bb == 'more':
                         more.append(qi)
+            tx = time.time()
             if more:
                 self._extend_ranking(more)
             active = still
             self.logger.info(f'Baseball round {rnd}: {Q - len(active):,}/{Q:,} queries complete.')
+            t3 = time.time()
+            self.stats['place_python_s'] += (te - tr) + (tx - tp); self.stats['place_extend_s'] += t3 - tx
+            _tlog(f'round {rnd}: {Q - len(active):,}/{Q:,} complete in {t3 - tr:.1f} s '
+                  f'(work lists {te - tr:.2f} s, evaluate {tp - te:.1f} s, replay {tx - tp:.2f} s, '
+                  f'extend ranking {t3 - tx:.2f} s for {len(more):,})')
 
         kept, work = {}, {}
         for qi in range(Q):
@@ -800,9 +854,11 @@ class TiledPlacer(Placer):
             kept[qi] = done[qi].kept(self.lib)
             work[qi] = [(loc, pend, dist, core.FINAL_TOL) for loc, (lk, pend, dist) in kept[qi]]
         refined = {}
+        tf = time.time()
         for qi, out in self._evaluate(work):
             for loc, r, _ in out:
                 refined[(qi, loc)] = r
+        _tlog(f'refine: {sum(len(v) for v in kept.values()):,} kept placements in {time.time() - tf:.1f} s')
         del work, stage1
         results = []
         for qi in range(Q):
@@ -814,6 +870,11 @@ class TiledPlacer(Placer):
         self.stats['rounds'] = rnd
         self.stats['place_s'] += time.time() - t_start
         self.logger.info('Refined the kept placements.')
+        s = self.stats
+        _tlog(f'placement done: {rnd} rounds in {time.time() - t_start:.1f} s: rebuilds {s["place_rebuild_s"]:.1f} s '
+              f'({int(s["place_rebuilds"])}), f64 resolve {s["place_resolve_s"]:.1f} s, pools {s["place_pool_s"]:.1f} s '
+              f'(evals {s["eval_s"]:.1f} s), main-process python {s["place_python_s"]:.1f} s, '
+              f'extend ranking {s["place_extend_s"]:.1f} s')
         return results
 
     # ---------------------------------------------------------------- benchmark --
