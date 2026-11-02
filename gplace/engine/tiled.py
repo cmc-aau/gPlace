@@ -87,7 +87,16 @@ memory / untiled_memory: estimated peak bytes of the chosen / the untiled placem
 
 
 def _tile_prefilter_group(g):
-    placer_mod._PLACER._batch_prefilter_group(g)
+    """g = (i0, i1), or (i0, i1, bs64, bs32) while GPLACE_PF_BS=auto calibrates: then the group is
+    scored with those site-block lengths and (bs64, bs32, seconds) returned."""
+    pl = placer_mod._PLACER
+    if len(g) == 2:
+        pl._batch_prefilter_group(g)
+        return None
+    pl.lib.xp_set_pf_bs(g[2], g[3])
+    t0 = time.perf_counter()
+    pl._batch_prefilter_group(g[:2])
+    return g[2], g[3], time.perf_counter() - t0
 
 
 def _tile_eval(job):
@@ -519,6 +528,7 @@ class TiledPlacer(Placer):
         (benchmark): also score each tile for the first `probe` queries alone, which separates
         the prefilter's fixed and per-query costs (see job_seconds)."""
         self._query_tables()
+        self._pf_bs_setup()
         if self.workers is None:                     # --cpus auto without a saved benchmark
             self.workers = resources.heuristic_cpus(self.cpus)
             self.cpus_source = 'heuristic'
@@ -545,6 +555,44 @@ class TiledPlacer(Placer):
             rows = self._ranked_candidates(np.array(bad, np.int64), self.n_cand, pf32=False)
             for qi, row in zip(bad, rows):
                 self.rank_more[qi] = row
+
+    _BS64, _BS32 = 128, 64                          # xp.c's default site-block lengths
+
+    def _pf_bs_setup(self):
+        """GPLACE_PF_BS: unset = the kernels' defaults; N = blocks of N sites (f32: at most 64);
+        auto = measured on the first groups of the run (_pf_bs_calibrate)."""
+        v = os.environ.get('GPLACE_PF_BS', '').strip().lower()
+        self._pf_bs_auto = v == 'auto'
+        self._pf_bs_chosen = None
+        if v.isdigit() and int(v) > 0:
+            self.lib.xp_set_pf_bs(min(int(v), 255), min(int(v), 64))
+
+    def _pf_bs_calibrate(self, groups, use32, st):
+        """Scores the first groups of the run with each candidate site-block length (interleaved,
+        several groups per worker each; the scores are the real ones, as the length changes no
+        value), keeps the fastest by median seconds per group and returns the groups left."""
+        cands = [16, 32, 64] if use32 else [16, 32, 64, 128, 192]
+        n = min(len(cands) * 2 * max(1, self.workers), len(groups) // 2)
+        n -= n % len(cands)
+        if n < 2 * len(cands):                          # too few groups to tell: keep the defaults
+            self._pf_bs_chosen = (self._BS64, self._BS32)
+            return groups
+        jobs = []
+        for k, (i0, i1) in enumerate(groups[:n]):
+            c = cands[k % len(cands)]
+            jobs.append((i0, i1, self._BS64, c) if use32 else (i0, i1, c, self._BS32))
+        out = self._pool_map(_tile_prefilter_group, jobs, chunksize=1)[0]
+        med = {}
+        for c in cands:
+            ts = sorted(t for b64, b32, t in out if (b32 if use32 else b64) == c)
+            med[c] = ts[len(ts) // 2]
+        best = min(cands, key=lambda c: med[c])
+        self._pf_bs_chosen = (self._BS64, best) if use32 else (best, self._BS32)
+        self.lib.xp_set_pf_bs(*self._pf_bs_chosen)      # inherited by the pools forked from here on
+        st['pf_bs'] = float(best); st['pf_bs_groups'] = float(n)
+        _tlog(f'prefilter block length ({"f32" if use32 else "f64"} kernel, {n} groups): '
+              + ', '.join(f'{c} sites {med[c] * 1e3:.1f} ms' for c in cands) + f' -> {best}')
+        return groups[n:]
 
     def _ranked_candidates(self, qidx, K, stats=None, probe=0, pf32=False):
         """The first K edges of pplacer's ranking (h_ranking: score descending, ties by ascending
@@ -587,7 +635,12 @@ class TiledPlacer(Placer):
                         if b0 not in present:
                             self._pf32_setup(); present[b0] = self._present
                         self._present = present[b0]; self._pf32 = True
-                    st['pref_batch_s'] += self._pool_map(_tile_prefilter_group, groups, chunksize=2)[1]
+                    gs = groups
+                    if getattr(self, "_pf_bs_auto", False) and not self._pf_bs_chosen:
+                        tc = time.time()
+                        gs = self._pf_bs_calibrate(groups, use32, st)
+                        st['pref_batch_s'] += time.time() - tc
+                    st['pref_batch_s'] += self._pool_map(_tile_prefilter_group, gs, chunksize=2)[1]
                     tm = time.time()
                     sc = self.scores[:len(rows), :E]
                     if use32:

@@ -108,6 +108,18 @@ int xp_simd(void) { return XP_AVX2 ? 1 : XP_NEON ? 2 : 0; }   /* 0 scalar, 1 AVX
 
 /* Opt-in exact speedups, read from the environment once (default off). */
 static int xp_switches_read = 0, xp_vlog = 0, xp_vdot = 0;
+
+/* Site-block lengths of the prefilter kernels (xp_set_pf_bs; GPLACE_PF_BS). Scheduling only: every
+ * query's per-edge values are added (f64) or multiplied (f32, renormalised exactly by powers of two)
+ * in site order whatever the block length, so the scores do not depend on it. Limits: f64 <= 255
+ * (int32 exponent sums of one block, |se| <= 2^23); f32 <= 64 (a product of 64 mantissas in [1, 2)
+ * stays below 2^64). */
+static int xp_pf_bs64 = 128, xp_pf_bs32 = 64;
+void xp_set_pf_bs(int bs64, int bs32)
+{
+  if (bs64 >= 1 && bs64 <= 255) xp_pf_bs64 = bs64;
+  if (bs32 >= 1 && bs32 <= 64) xp_pf_bs32 = bs32;
+}
 static void xp_read_switches(void)
 {
   if (xp_switches_read) return;
@@ -642,7 +654,7 @@ int xp_edge_scores8(double *out, long ldo, long col0, int ne,
   memset(accD, 0, sizeof(double) * (size_t)nq * XP_EB);      /* +0.0 */
   memset(accE, 0, sizeof(int64_t) * (size_t)nq * XP_EB);
   const unsigned GAP = (unsigned)ncode;
-  const int BS = 128;
+  const int BS = xp_pf_bs64;
   for (int s0 = 0; s0 < nsites; s0 += BS) {
     const int s1 = s0 + BS < nsites ? s0 + BS : nsites;
     int q = 0;
@@ -697,7 +709,7 @@ int xp_edge_scores8(double *out, long ldo, long col0, int ne,
   memset(accD, 0, sizeof(double) * (size_t)nq * XP_EB);      /* +0.0 */
   memset(accE, 0, sizeof(int64_t) * (size_t)nq * XP_EB);
   const unsigned GAP = (unsigned)ncode;
-  const int BS = 128;
+  const int BS = xp_pf_bs64;
   for (int s0 = 0; s0 < nsites; s0 += BS) {
     const int s1 = s0 + BS < nsites ? s0 + BS : nsites;
     int q = 0;
@@ -2056,7 +2068,7 @@ int xp_edge_scores8_f32(double *out, long ldo, long col0, int ne,
       const int64_t v = se8[(size_t)lane * nsites + s];
       if (v > (1 << 23) || v < -(1 << 23)) return 1;
     }
-  const int NC = ncode + 1, BS = 64;
+  const int NC = ncode + 1, BS = xp_pf_bs32;
   float *q32 = (float *)malloc(sizeof(float) * (size_t)nrates * ncode * NS);
   __m256 *Tm = (__m256 *)aligned_alloc(32, sizeof(__m256) * (size_t)BS * NC);
   __m256i *Te = (__m256i *)aligned_alloc(32, sizeof(__m256i) * (size_t)BS * NC);
@@ -2225,7 +2237,7 @@ int xp_edge_scores8_f32src(double *out, long ldo, long col0, int ne, const int64
                            int ncode, int nrates, const uint8_t *codes, int nq, const uint32_t *present)
 {
   if (ne < 1 || ne > XP_EB || ncode < 1 || ncode > 31) return -1;
-  const int NC = ncode + 1, BS = 64;
+  const int NC = ncode + 1, BS = xp_pf_bs32;
   const double *D[XP_EB], *P_[XP_EB], *SB[XP_EB][8];
   const int64_t *DE[XP_EB], *PE[XP_EB], *SBE[XP_EB][8];
   int pmode[XP_EB], nsib[XP_EB];

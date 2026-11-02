@@ -194,6 +194,7 @@ def lib(ns=NS):
     L.xp_tt_optimize.argtypes = [V, D, D, I]; L.xp_tt_optimize.restype = I
     L.xp_tt_results.argtypes = [V, V]
     L.xp_tt_free.argtypes = [V]
+    L.xp_set_pf_bs.argtypes = [I, I]
     L.xp_eval_batch.argtypes = [V, I, V, V, V, V, V, V, V, V, I]; L.xp_eval_batch.restype = I
     L.xp_trace_open.argtypes = [ctypes.c_char_p]
     # gamma mixture model (Gmix)
