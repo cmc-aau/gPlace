@@ -2169,6 +2169,14 @@ int xp_tile_walk(int distal, int nunits, const int32_t *uparent, const int32_t *
 static int xp_pfb_rows = 0;
 void xp_pf_bench_alias(int rows) { xp_pfb_rows = rows > 0 ? rows : 0; }
 #define PFB_ROW(q) ((size_t)(xp_pfb_rows ? (q) % xp_pfb_rows : (q)) * nsites)
+/* BENCHMARK ONLY (xp_pf_eq_stats; not for the PR): exponent magnitudes seen by the f32src kernel
+ * in this process: [0] the largest per-site edge exponent |sev|, [1] the largest per-group bound
+ * sum over sites of (max over lanes |sev| + 130) on any query's exponent total (a table row adds
+ * at most |sev| + 128, a renormalisation at most 1 per site), [2] the largest |Eq| written.
+ * Reading resets them. */
+static long long xp_pfs_sev = 0, xp_pfs_bound = 0, xp_pfs_eq = 0;
+void xp_pf_eq_stats(int64_t *out)
+{ out[0] = xp_pfs_sev; out[1] = xp_pfs_bound; out[2] = xp_pfs_eq; xp_pfs_sev = xp_pfs_bound = xp_pfs_eq = 0; }
 static void pf32_queries(const __m256 *Tm, const __m256i *Te, int NC, int s0, int s1,
                          const uint8_t *codes, int nsites, int nq, __m256 *Pq, int64_t *Eq)
 {
@@ -2436,6 +2444,7 @@ int xp_edge_scores8_f32src(double *out, long ldo, long col0, int ne, const int64
   float xa[PF_W] __attribute__((aligned(32))), xb[PF_W] __attribute__((aligned(32)));
   float dv[PF_W] __attribute__((aligned(32))), pv[PF_W] __attribute__((aligned(32)));
   int rc = 0;
+  long long pfs_bound = 0;
   for (int s0 = 0; s0 < nsites && !rc; s0 += BS) {
     const int s1 = s0 + BS < nsites ? s0 + BS : nsites;
     for (int s = s0; s < s1; s++) {
@@ -2477,6 +2486,10 @@ int xp_edge_scores8_f32src(double *out, long ldo, long col0, int ne, const int64
         sev[lane] = (int32_t)ex;
       }
       if (rc) break;
+      { long long m = 0;
+        for (int lane = 0; lane < ne; lane++) { long long a = sev[lane] < 0 ? -(long long)sev[lane] : sev[lane]; if (a > m) m = a; }
+        if (m > xp_pfs_sev) xp_pfs_sev = m;
+        pfs_bound += m + 130; }
       const __m256i sv = _mm256_loadu_si256((const __m256i *)sev);
       const float *qt = q32 + (size_t)c_s * ncode * NS;
       uint32_t pm = present[s];
@@ -2498,6 +2511,10 @@ int xp_edge_scores8_f32src(double *out, long ldo, long col0, int ne, const int64
     if (rc) break;
     pf32_queries(Tm, Te, NC, s0, s1, codes, nsites, nq, Pq, Eq);
   }
+  if (pfs_bound > xp_pfs_bound) xp_pfs_bound = pfs_bound;
+  if (!rc)
+    for (size_t i = 0; i < (size_t)nq * XP_EB; i++) {
+      long long a = Eq[i] < 0 ? -Eq[i] : Eq[i]; if (a > xp_pfs_eq) xp_pfs_eq = a; }
   if (!rc)
     for (int q = 0; q < nq; q++) {
       float p8[XP_EB]; _mm256_storeu_ps(p8, Pq[q]);
