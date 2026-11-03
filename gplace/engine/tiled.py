@@ -645,7 +645,7 @@ class TiledPlacer(Placer):
                     sc = self.scores[:len(rows), :E]
                     if use32:
                         sc[np.isnan(sc)] = np.inf
-                    self._merge(cs, ce, b0, edges, sc)
+                    self._merge(cs, ce, b0, edges, sc, self.lib, self.workers or os.cpu_count())
                     st['pref_merge_s'] += time.time() - tm
                 self.logger.info(f'Prefilter: tile {step}/{nt} ({E:,} edges) done '
                                  f'({time.time() - t0:.0f} s).')

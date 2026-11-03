@@ -144,11 +144,20 @@ def candidates_needed(search, n_edges, n_cand=resources.N_CAND):
     return min(max(int(n_cand), 4 * (tp + 1)), n_edges)
 
 
-def merge_candidates(cs, ce, b0, edges, sc):
+def merge_candidates(cs, ce, b0, edges, sc, lib=None, threads=1):
     """Merge the scores sc of the edges `edges` (rows b0.. of cs/ce) into the candidate lists,
     keeping each query's first K edges in ranking order. The selection is by score; when equal
-    scores straddle the cut-off, that row is resolved by (score, edge number) exactly."""
+    scores straddle the cut-off, that row is resolved by (score, edge number) exactly. Within a
+    row the K kept are in no particular order. With GPLACE_CMERGE=1 and the engine `lib`: in C,
+    on `threads` pthreads (xp_merge_candidates), the same sets."""
     K, E = cs.shape[1], len(edges)
+    if lib is not None and os.environ.get('GPLACE_CMERGE') == '1' and sc.shape[0]:
+        rows = slice(b0, b0 + sc.shape[0])
+        assert cs.flags.c_contiguous and ce.flags.c_contiguous and sc.strides[1] == 8
+        edges = np.ascontiguousarray(edges, np.int64)
+        lib.xp_merge_candidates(P(cs[rows]), P(ce[rows]), K, sc.shape[0], P(sc), sc.strides[0] // 8,
+                                P(edges), E, max(1, int(threads)))
+        return
     step = max(1, resources.MERGE_CELLS // (K + E))
     for a in range(0, sc.shape[0], step):
         b = min(sc.shape[0], a + step)
@@ -754,7 +763,7 @@ class Placer(object):
                 if full:
                     ce[b0:b0 + n] = self.locs[np.lexsort((np.broadcast_to(self.locs, sc.shape), -sc), axis=1)]
                 else:
-                    merge_candidates(cs, ce, b0, self.locs, sc)
+                    merge_candidates(cs, ce, b0, self.locs, sc, self.lib, self.workers or os.cpu_count())
         finally:
             del self.scores
             self._bcodes = None

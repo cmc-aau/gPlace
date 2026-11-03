@@ -1445,6 +1445,96 @@ int xp_eval_batch(const EvCtx *c, int nq, const int32_t *qis, const int64_t *jof
   return B.err;
 }
 
+/* Candidate merge (GPLACE_CMERGE=1): placer.merge_candidates in C, rows on pthreads. Row r keeps
+ * the first K of its K candidates (cs, ce) and the E new scores sc[r] of `edges`, in ranking
+ * order: score descending, ties by ascending edge number, NaN after everything. The K kept are
+ * written in no particular order (every caller orders the rows by (score, edge) at the end), so
+ * the rows hold the same sets as the numpy version's. */
+static inline int mg_better(double as, int64_t ae, double bs, int64_t be)
+{
+  int an = as != as, bn = bs != bs;
+  if (an | bn) return an != bn ? bn : ae < be;
+  return as != bs ? as > bs : ae < be;
+}
+
+/* Heap of K entries with the worst at the root: replace the root and sift it down. */
+static void mg_sift(double *s, int64_t *e, int K, int i)
+{
+  for (;;) {
+    int w = i, l = 2 * i + 1, r = l + 1;
+    if (l < K && mg_better(s[w], e[w], s[l], e[l])) w = l;
+    if (r < K && mg_better(s[w], e[w], s[r], e[r])) w = r;
+    if (w == i) return;
+    double ts = s[i]; s[i] = s[w]; s[w] = ts;
+    int64_t te = e[i]; e[i] = e[w]; e[w] = te;
+    i = w;
+  }
+}
+
+typedef struct {
+  double *cs; int64_t *ce; int K; int64_t nrows; const double *sc; int64_t ld;
+  const int64_t *edges; int64_t E; int64_t next;
+} MgJob;
+
+static void *mg_worker(void *arg)
+{
+  MgJob *J = (MgJob *)arg;
+  const int K = J->K;
+  for (;;) {
+    int64_t r0 = __atomic_fetch_add(&J->next, 64, __ATOMIC_RELAXED);
+    if (r0 >= J->nrows) break;
+    int64_t r1 = r0 + 64 < J->nrows ? r0 + 64 : J->nrows;
+    for (int64_t r = r0; r < r1; r++) {
+      double *s = J->cs + r * K; int64_t *e = J->ce + r * K;
+      for (int i = K / 2 - 1; i >= 0; i--) mg_sift(s, e, K, i);
+      const double *x = J->sc + r * J->ld;
+      const int64_t *ed = J->edges, E = J->E;
+      int64_t j = 0;
+      /* Most scores are below the worst kept one (the root, which only rises): skip 8 at a time
+       * when every one is strictly below it (ordered compare; NaN and ties take the exact test). */
+#if XP_AVX2
+      for (; j + 8 <= E; j += 8) {
+        __m256d th = _mm256_set1_pd(s[0]);
+        __m256d c = _mm256_or_pd(_mm256_cmp_pd(_mm256_loadu_pd(x + j), th, _CMP_NLT_UQ),
+                                 _mm256_cmp_pd(_mm256_loadu_pd(x + j + 4), th, _CMP_NLT_UQ));
+        if (!_mm256_movemask_pd(c)) continue;
+        for (int k = 0; k < 8; k++)
+          if (mg_better(x[j + k], ed[j + k], s[0], e[0])) { s[0] = x[j + k]; e[0] = ed[j + k]; mg_sift(s, e, K, 0); }
+      }
+#elif XP_NEON
+      for (; j + 8 <= E; j += 8) {
+        float64x2_t th = vdupq_n_f64(s[0]);
+        uint64x2_t lt = vandq_u64(vandq_u64(vcltq_f64(vld1q_f64(x + j), th), vcltq_f64(vld1q_f64(x + j + 2), th)),
+                                  vandq_u64(vcltq_f64(vld1q_f64(x + j + 4), th), vcltq_f64(vld1q_f64(x + j + 6), th)));
+        if (vgetq_lane_u64(lt, 0) & vgetq_lane_u64(lt, 1)) continue;
+        for (int k = 0; k < 8; k++)
+          if (mg_better(x[j + k], ed[j + k], s[0], e[0])) { s[0] = x[j + k]; e[0] = ed[j + k]; mg_sift(s, e, K, 0); }
+      }
+#endif
+      for (; j < E; j++)
+        if (mg_better(x[j], ed[j], s[0], e[0])) { s[0] = x[j]; e[0] = ed[j]; mg_sift(s, e, K, 0); }
+    }
+  }
+  return NULL;
+}
+
+void xp_merge_candidates(double *cs, int64_t *ce, int K, int64_t nrows, const double *sc, int64_t ld,
+                         const int64_t *edges, int64_t E, int nthreads)
+{
+  MgJob J = { cs, ce, K, nrows, sc, ld, edges, E, 0 };
+  if (K < 1 || nrows < 1) return;
+  int64_t most = (nrows + 63) / 64;
+  if (nthreads < 1) nthreads = 1;
+  if (nthreads > most) nthreads = (int)most;
+  pthread_t *th = malloc(sizeof(pthread_t) * nthreads);
+  int started = 0;
+  for (int k = 1; k < nthreads; k++)
+    if (pthread_create(&th[k], NULL, mg_worker, &J) == 0) started = k; else break;
+  mg_worker(&J);
+  for (int k = 1; k <= started; k++) pthread_join(th[k], NULL);
+  free(th);
+}
+
 /* ======================================================================================
  * Gamma mixture model (pplacer gmix_model.ml, gamma.ml, linear_c.c "tensor" functions).
  * Glvs are stored site-major: a[s][r][st] (pplacer: rate-major a[r][s][st]); one exponent per
