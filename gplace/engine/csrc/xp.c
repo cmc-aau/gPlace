@@ -2163,12 +2163,19 @@ int xp_tile_walk(int distal, int nunits, const int32_t *uparent, const int32_t *
                                             _mm256_set1_epi32(0x3F800000))); \
     P = _mm256_blendv_ps(P, _mm256_setzero_ps(), z_); \
   } while (0)
+/* BENCHMARK ONLY (xp_pf_bench_alias; not for the PR): when > 0, query q reads the codes of row
+ * q % rows, so the batch's codes occupy `rows` rows of memory while every other per-query array
+ * keeps its full size. The scores are then wrong; only timings are meaningful. */
+static int xp_pfb_rows = 0;
+void xp_pf_bench_alias(int rows) { xp_pfb_rows = rows > 0 ? rows : 0; }
+#define PFB_ROW(q) ((size_t)(xp_pfb_rows ? (q) % xp_pfb_rows : (q)) * nsites)
 static void pf32_queries(const __m256 *Tm, const __m256i *Te, int NC, int s0, int s1,
                          const uint8_t *codes, int nsites, int nq, __m256 *Pq, int64_t *Eq)
 {
   int q = 0;
   for (; q + 4 <= nq; q += 4) {
-    const uint8_t *c0 = codes + (size_t)q * nsites, *c1 = c0 + nsites, *c2 = c1 + nsites, *c3 = c2 + nsites;
+    const uint8_t *c0 = codes + PFB_ROW(q), *c1 = codes + PFB_ROW(q + 1), *c2 = codes + PFB_ROW(q + 2),
+                  *c3 = codes + PFB_ROW(q + 3);
     __m256 P0 = Pq[q], P1 = Pq[q + 1], P2 = Pq[q + 2], P3 = Pq[q + 3];
     for (int sb = s0; sb < s1; sb += XP_RBLK) {
       const int sb1 = sb + XP_RBLK < s1 ? sb + XP_RBLK : s1;
@@ -2188,7 +2195,7 @@ static void pf32_queries(const __m256 *Tm, const __m256i *Te, int NC, int s0, in
     Pq[q] = P0; Pq[q + 1] = P1; Pq[q + 2] = P2; Pq[q + 3] = P3;
   }
   for (; q < nq; q++) {
-    const uint8_t *cq = codes + (size_t)q * nsites;
+    const uint8_t *cq = codes + PFB_ROW(q);
     __m256 P = Pq[q];
     for (int sb = s0; sb < s1; sb += XP_RBLK) {
       const int sb1 = sb + XP_RBLK < s1 ? sb + XP_RBLK : s1;
