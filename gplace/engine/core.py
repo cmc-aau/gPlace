@@ -182,7 +182,6 @@ def lib(ns=NS):
     L.xp_cache_distal.restype = I
     L.xp_cache_proximal.argtypes = [V, V, D, I, V, V, V, V, V, V, V, I, V, V, V, V, V, I, V]
     L.xp_cache_proximal.restype = I
-    L.xp_set_nt.argtypes = [I]; L.xp_set_nt.restype = None
     L.xp_unit_distal.argtypes = [I, V, V, V, V, V, V, V, V, I, V, V, V, V, V, I, V, I, I]
     L.xp_unit_distal.restype = I
     L.xp_unit_proximal.argtypes = [I, V, V, V, V, V, V, V, V, V, V, V, V, V, I, V, V, V, V, V, I, V, I]
@@ -198,8 +197,6 @@ def lib(ns=NS):
     L.xp_eval_batch.argtypes = [V, I, V, V, V, V, V, V, V, V, I]; L.xp_eval_batch.restype = I
     L.xp_merge_candidates.argtypes = [V, V, I, ctypes.c_int64, V, ctypes.c_int64, V, ctypes.c_int64, I]
     L.xp_merge_candidates.restype = None
-    L.xp_pf_bench_alias.argtypes = [I]; L.xp_pf_bench_alias.restype = None
-    L.xp_pf_eq_stats.argtypes = [V]; L.xp_pf_eq_stats.restype = None
     L.xp_trace_open.argtypes = [ctypes.c_char_p]
     # gamma mixture model (Gmix)
     L.xp_discrete_gamma.argtypes = [I, D, V]; L.xp_discrete_gamma.restype = I
