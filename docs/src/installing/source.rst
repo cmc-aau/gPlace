@@ -64,3 +64,15 @@ Hardware details
   with 22,061 queries.
 * **CPUs:** placement is limited by memory bandwidth; on a 64-vCPU AMD EPYC server, 40 worker
   processes were fastest.
+
+
+Unit tests
+----------
+
+From a source checkout, after ``pip install .`` (or ``pip install -e .``):
+
+.. code-block:: bash
+
+    python -m unittest discover -s tests
+
+Tests that need the compiled engine are skipped when it is missing.
