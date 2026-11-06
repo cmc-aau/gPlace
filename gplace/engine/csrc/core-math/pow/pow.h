@@ -59,7 +59,9 @@ double cr_pow(double x, double y);
 /* __builtin_roundeven was introduced in gcc 10:
    https://gcc.gnu.org/gcc-10/changes.html,
    and in clang 17 */
-#if ((defined(__GNUC__) && __GNUC__ >= 10) || (defined(__clang__) && __clang_major__ >= 17)) && !defined(_MSC_VER) && (defined(__aarch64__) || defined(__x86_64__) || defined(__i386__))
+/* gPlace: only where the builtin is one instruction (x86 with SSE4.1, ARM64 with gcc >= 12 or
+   clang); elsewhere gcc calls libm's roundeven, which glibc < 2.25 (manylinux2014) lacks. */
+#if ((defined(__GNUC__) && __GNUC__ >= 10) || (defined(__clang__) && __clang_major__ >= 17)) && !defined(_MSC_VER) && ((defined(__aarch64__) && (defined(__clang__) || __GNUC__ >= 12)) || ((defined(__x86_64__) || defined(__i386__)) && defined(__SSE4_1__)))
 # define roundeven_finite(x) __builtin_roundeven (x)
 #else
 /* round x to nearest integer, breaking ties to even */

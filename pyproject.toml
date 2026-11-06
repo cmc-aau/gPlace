@@ -58,6 +58,8 @@ gplace = [
     "tests/data/parity/*",
     "tests/data/tools/*",
     "tests/data/options/*",
+    "tests/data/posterior/*",
+    "tests/data/posterior/*.refpkg/*",
     "tests/data/fits/*",
 ]
 

@@ -29,3 +29,6 @@ PATH_TEST_REPORT = join(DIR_TEST, 'gplace_test_report.tsv')
 PATH_BATCH_SUMMARY = 'gplace.batch_summary.tsv'
 
 JPLACE_FIELDS = ['distal_length', 'edge_num', 'like_weight_ratio', 'likelihood', 'pendant_length']
+# with posterior probabilities (-p): pplacer's field names in its (sorted) order
+JPLACE_FIELDS_PP = ['distal_length', 'edge_num', 'like_weight_ratio', 'likelihood', 'marginal_like',
+                    'pendant_length', 'post_prob']

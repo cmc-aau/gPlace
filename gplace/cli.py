@@ -127,6 +127,15 @@ def __discard_nonoverlapped(group):
                             'has one, instead of stopping (pplacer\'s --discard-nonoverlapped)')
 
 
+class _PosteriorAction(argparse.Action):
+    """pplacer's -p: posterior probabilities, and keep_at_most 20, keep_factor 0.001, max_strikes 20
+    at that point of the command line (later options override them, earlier ones are overridden)."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        namespace.calc_pp = True
+        namespace.keep_at_most, namespace.keep_factor, namespace.max_strikes = 20, 0.001, 20
+
+
 def __search(parser):
     """pplacer's search settings, under gPlace's and pplacer's spellings (defaults: pplacer's)."""
     with arg_group(parser, 'pplacer settings (default: pplacer\'s; results stay identical to '
@@ -155,6 +164,22 @@ def __search(parser):
                               'reference has one then count), do not check that queries overlap the '
                               'reference sequences, and merge only queries with identical whole sequences '
                               'into one record')
+        grp.add_argument('-p', '--pp', dest='calc_pp', nargs=0, action=_PosteriorAction, default=False,
+                         help='calculate posterior probabilities (pplacer\'s -p): adds each placement\'s '
+                              'marginal likelihood and posterior probability, and, as in pplacer, sets '
+                              '--keep_at_most 20, --keep_factor 0.001 and --max_strikes 20 (options given '
+                              'after -p override these). Much slower than likelihood placement')
+        grp.add_argument('--pp_rel_err', '--pp-rel-err', type=float, default=0.01, metavar='FLOAT',
+                         help='relative error of the posterior probability integration')
+        grp.add_argument('--unif_prior', '--unif-prior', dest='uniform_prior', action='store_true', default=False,
+                         help='-p: uniform prior on the pendant branch length instead of exponential')
+        grp.add_argument('--inform_prior', '--inform-prior', dest='informative_prior', action='store_true',
+                         default=False,
+                         help='-p: exponential prior whose mean, for each edge, is its length plus the average '
+                              'distance to the leaves below it (plus --prior_lower), instead of the average '
+                              'branch length of the tree')
+        grp.add_argument('--prior_lower', '--prior-lower', type=float, default=0., metavar='FLOAT',
+                         help='-p --inform_prior: added to every edge\'s prior mean')
         grp.add_argument('--always_refine', '--always-refine', action='store_true', default=False,
                          help='refine the model before placing: CAT models get new site rate categories '
                               'on the reference tree (pplacer always does this when the query alignment '

@@ -28,7 +28,7 @@ import json
 import math
 import re
 
-from gplace.config.output import JPLACE_FIELDS
+from gplace.config.output import JPLACE_FIELDS, JPLACE_FIELDS_PP
 from gplace.fileio import read_text
 
 _JSON_ESCAPE = re.compile(r'([\\"/\b\f\n\r\t])')
@@ -58,7 +58,9 @@ def write_jplace(path, tree, results, invocation, records=None, classify=None):
     tree : str
         Reference tree with {edge} numbers (Placer.jplace_tree()).
     results : list
-        [(name, placements, warnings)], placements as [distal, edge, lwr, likelihood, pendant].
+        [(name, placements, warnings)], placements as [distal, edge, lwr, likelihood, pendant], or
+        [distal, edge, lwr, likelihood, marginal_like, pendant, post_prob] with posterior
+        probabilities (-p; then every placement has them).
     invocation : str
         Command line recorded in the metadata.
     records : list, optional
@@ -71,13 +73,14 @@ def write_jplace(path, tree, results, invocation, records=None, classify=None):
     pl_of = {name: pl for name, pl, _ in results}
     if records is None:
         records = [[name] for name, _, _ in results]
-    fields = (['classification'] if classify is not None else []) + JPLACE_FIELDS
+    pp = any(len(pl[0]) == 7 for _, pl, _ in results if pl)
+    fields = (['classification'] if classify is not None else []) + (JPLACE_FIELDS_PP if pp else JPLACE_FIELDS)
     with open(path, 'w') as fh:
         fh.write('{"tree": ' + _qs(tree) + ', "placements":\n  [\n')
         for i, names in enumerate(records):
             rows = []
             for p in pl_of[names[0]]:
-                row = '%s, %d, %s, %s, %s' % (_f(p[0]), int(p[1]), _f(p[2]), _f(p[3]), _f(p[4]))
+                row = '%s, %d, ' % (_f(p[0]), int(p[1])) + ', '.join(_f(v) for v in p[2:])
                 if classify is not None:
                     tax = classify(int(p[1]))
                     row = ('null' if tax is None else _qs(tax)) + ', ' + row
@@ -133,6 +136,8 @@ def compare_jplace(path_a, path_b):
            'same_records': _records(path_a) == _records(path_b), 'same_fields': fields_a == fields_b,
            'max_delta': {k: 0.0 for k in ('likelihood', 'like_weight_ratio', 'distal_length', 'pendant_length')},
            'examples': []}
+    if 'post_prob' in fields_a and 'post_prob' in fields_b:      # -p: posterior probabilities
+        rep['max_delta'].update(marginal_like=0.0, post_prob=0.0)
     for n in names:
         if n not in a:
             rep['only_b'] += 1; continue

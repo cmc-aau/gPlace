@@ -196,13 +196,17 @@ class GammaMixin(object):
                 r, st = optimize(tol)
             return r, st
 
+        def marginal(loc, pend, dist):          # tt_edges_from_placement; calc_marg_prob
+            set_edges(loc, pend, dist)
+            return self._marg_prob(tt, loc)
+
         arrays = [qm, reind]                    # the engine holds pointers into these until freed
 
         def free():
             L.xp_tt_free(tt)
             arrays.clear()
 
-        return evaluate, free
+        return evaluate, marginal, free
 
 
 class GammaPlacer(GammaMixin, Placer):

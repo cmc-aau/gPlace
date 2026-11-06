@@ -168,9 +168,16 @@ class OptionsParser(object):
             self.logger.warning(msg)
             self.warnings.info(msg)
             results = [r for r in results if r[1]]
-        n_warn = sum(1 for _, _, w in results if w)
+        n_warn = sum(1 for _, _, w in results if any(x[1] != 'pp' for x in w))
         if n_warn:
             self.warnings.info(f'{n_warn} queries had locations skipped after a GSL error (as pplacer does).')
+        n_pp = sum(1 for _, _, w in results if any(x[1] == 'pp' for x in w))
+        if n_pp:
+            msg = (f'{n_pp} queries have a placement whose posterior probability integration did not converge '
+                   f'after changing bounds 10 times (pplacer warns too); its marginal likelihood is the '
+                   f'placement\'s likelihood.')
+            self.logger.warning(msg)
+            self.warnings.info(msg)
         n_inf = sum(1 for _, pl, _ in results if any(not math.isfinite(p[3]) for p in pl))
         if n_inf:
             msg = (f'{n_inf} queries have a -inf likelihood (pplacer: "encountered -inf for final '
