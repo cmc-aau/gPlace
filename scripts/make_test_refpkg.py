@@ -18,15 +18,15 @@
 
 """Build the small reference package bundled with gPlace for `gplace test`.
 
-The mini refpkg is one clade (~250 genomes) of a GTDB-Tk R226 class-level refpkg,
+The mini refpkg is one clade (~250 genomes) of a GTDB R226 class-level refpkg,
 with the refpkg's own FastTree WAG+CAT model. Queries are GlobDB genomes whose
-GTDB-Tk placement falls inside that clade, plus a few that do not. The expected
-output is produced by running GTDB-Tk's stock pplacer (v1.1.alpha19) on it:
+pplacer placement on the full refpkg falls inside that clade, plus a few that do not.
+The expected output is produced by running the stock pplacer (v1.1.alpha19) on it:
 
     pplacer -m WAG -j 1 -c mini.refpkg -o expected_pplacer.jplace queries.fasta
 
 Usage:
-    make_test_refpkg.py <source refpkg dir> <GTDB-Tk export dir with jplace + msa> <out dir>
+    make_test_refpkg.py <source refpkg dir> <dir of pplacer.class_level.bac120.json + user_msa_file.fasta> <out dir>
                         [--leaves 250] [--queries 16] [--others 4] [--seed 1]
 """
 
@@ -122,7 +122,7 @@ def main():
                'log': ['gPlace scripts/make_test_refpkg.py'], 'rollback': None, 'rollforward': None},
               open(os.path.join(pkg, 'CONTENTS.json'), 'w'), indent=4)
 
-    # queries: best GTDB-Tk placement inside the clade, plus a few outside
+    # queries: best placement on the full refpkg inside the clade, plus a few outside
     inside, outside, seqs = [], [], {}
     for root, _, fnames in sorted(os.walk(a.export)):
         if 'user_msa_file.fasta' in fnames and 'pplacer.class_level.bac120.json' in fnames:
@@ -139,7 +139,7 @@ def main():
     with open(os.path.join(a.out, 'queries.fasta'), 'w') as fh:
         for n in chosen:
             fh.write(f'>{n}\n{seqs[n]}\n')
-    print(f'{len(chosen)} queries ({min(a.queries, len(inside))} placed inside the clade by GTDB-Tk)')
+    print(f'{len(chosen)} queries ({min(a.queries, len(inside))} placed inside the clade)')
 
 
 if __name__ == '__main__':

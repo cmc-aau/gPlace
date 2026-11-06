@@ -19,7 +19,7 @@
 pplacer supports (WAG/LG/JTT/GTR, CAT or gamma rates; see models.py; gamma in gamma.py).
 
 Memory: pplacer caches distal, proximal and supernode vectors for every node
-(3 x nodes x sites x 20 doubles, ~104 GB for the largest GTDB-Tk R226 class-level tree).
+(3 x nodes x sites x 20 doubles, ~104 GB for the largest GTDB R226 class-level tree).
 gPlace stores distal/proximal vectors for internal nodes only, in their state before pplacer's
 final "pull exponents (-10)" pass, and re-applies that pass to a copy at use time; power-of-two
 rescaling is exact, so every value is bit-identical. Leaf vectors are rebuilt on demand in
@@ -116,7 +116,7 @@ _X86_NAN = math.copysign(math.nan, -1.0)     # x86-64's default NaN: its sign bi
 
 
 def _x86_sub(a, b):
-    """a - b as on x86-64, where GTDB-Tk's pplacer runs: inf - inf gives the default NaN, which has
+    """a - b as on x86-64, where pplacer's release binary runs: inf - inf gives the default NaN, which has
     its sign bit set, so pplacer writes -nan. ARM64's default NaN is positive (nan)."""
     return _X86_NAN if a == b and math.isinf(a) else a - b
 

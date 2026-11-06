@@ -17,7 +17,7 @@
 
 """The bundled test sets (gplace/tests/data), for `gplace test` and the unit tests.
 
-The WAG set is GTDB-Tk's own output. The other models (tests/data/models, see its README) and the
+The WAG set's expected output is pplacer v1.1.alpha19's (`pplacer -m WAG`). The other models (tests/data/models, see its README) and the
 taxonomy / duplicate / overlap sets (tests/data/parity) have expected outputs from the stock pplacer
 v1.1.alpha19; the mini.refpkg variants share its tree and alignment and are assembled into work_dir.
 """
@@ -40,7 +40,7 @@ _MINI_VARIANTS = ('LG', 'JTT', 'WAG_emp', 'LG_emp_g1.3x4', 'WAG_g0.5x4', 'JTT_g0
 
 
 def wag_set():
-    return TestSet('WAG (GTDB-Tk)', MINI, os.path.join(TEST_DATA, 'queries.fasta'),
+    return TestSet('WAG + CAT', MINI, os.path.join(TEST_DATA, 'queries.fasta'),
                    os.path.join(TEST_DATA, 'expected_pplacer.jplace'), False, 40)
 
 

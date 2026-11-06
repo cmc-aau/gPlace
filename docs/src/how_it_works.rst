@@ -24,7 +24,7 @@ What pplacer computes
    pplacer's six steps. Steps 1 to 3 run once per reference package and steps 4 to 6 for each
    query. gPlace changes only the cache (step 3) and the prefilter (step 4), shown in green.
 
-For each query, pplacer v1.1.alpha19 (``pplacer -m WAG -c <refpkg>``, as run by GTDB-Tk):
+For each query, pplacer v1.1.alpha19 (``pplacer -m WAG -c <refpkg>``, with a WAG + CAT reference package):
 
 1. **Pre-masks** the alignment: keeps columns informative in at least one reference and one query.
 2. **Builds the model**: WAG exchangeabilities and frequencies, FastTree's 20 CAT rates and
@@ -151,10 +151,11 @@ In short:
   152-221 in another phylum.
 
 Every tool ran on the same server (64 vCPUs, 245 GB of memory), one at a time, with 32 threads and
-at most 200 GiB of memory. The genomes are GlobDB r226 genomes aligned by GTDB-Tk:
+at most 200 GiB of memory. The genomes are GlobDB r226 genomes, aligned to GTDB's 120 bacterial
+marker genes:
 
-* **Tree 2**: GTDB-Tk's R226 class-level reference tree 2 (21,566 reference genomes) and the 22,061
-  genomes GTDB-Tk placed on it, compared with GTDB-Tk's own pplacer output;
+* **Tree 2**: the GTDB R226 class-level reference tree 2 (21,566 reference genomes) and the 22,061
+  genomes that belong on it, compared with pplacer's output;
 * **Full tree**: the full GTDB R226 bacterial tree (136,646 reference genomes) and 10,000 random
   genomes, compared with pplacer's output from a 1 TB server (pplacer: 17 h 13 min and 654.9 GiB;
   gPlace on that server: 13 min 47 s).
@@ -268,14 +269,15 @@ gPlace ran with ``--max_memory 64G``: untiled on tree 2, in 5 tiles on the full 
   as pplacer's (tools that re-root the tree or re-estimate its branch lengths are compared on the
   same edges, matched by their leaves).
 * *Different genus*, *Different phylum*: the GTDB genus or phylum that contains the placement is
-  not the one that contains pplacer's. This is not a full GTDB-Tk classification, which also uses
-  RED and ANI, but it counts the genomes placed in another named group.
-* The tools: pplacer v1.1.alpha19 as run by GTDB-Tk (``-m WAG``); BSCAMPP 1.0.8, which places
-  each genome on a subtree of *b* reference genomes around its closest ones (*b* = 2000 is its
-  default; *b* = 12000 with *V* = 15 votes are GTDB-Tk's settings); Splicer (git 224b604), which
+  not the one that contains pplacer's. This is not a full taxonomic classification, which would
+  also use relative evolutionary divergence and ANI, but it counts the genomes placed in another
+  named group.
+* The tools: pplacer v1.1.alpha19 (``-m WAG``); BSCAMPP 1.0.8, which places each genome on a
+  subtree of *b* reference genomes around its closest ones (*b* = 2000 is its default; also run with
+  *b* = 12000 and *V* = 15 votes); Splicer (git 224b604), which
   splits the tree into pieces and places each genome in one of them; APPLES-2 2.0.11, which places
-  by distances. With pplacer, BSCAMPP and Splicer used pplacer v1.1.alpha19 and GTDB-Tk's model
-  (WAG + CAT); BSCAMPP with EPA-ng used EPA-ng's model (below).
+  by distances. With pplacer, BSCAMPP and Splicer used pplacer v1.1.alpha19 and the reference
+  package's model (WAG + CAT); BSCAMPP with EPA-ng used EPA-ng's model (below).
 * EPA-ng 0.3.8 is not in the tables. It has no CAT model, so it used WAG with 4 gamma rates, and
   with its default settings it ran out of memory while loading tree 2. Without pre-masking it
   placed 1,000 random tree-2 genomes in 14 min 50 s with 192.5 GiB: 892 (89.2%) on pplacer's edge,

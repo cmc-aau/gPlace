@@ -1,4 +1,4 @@
-# Build the engine and check it is bit-exact against GTDB-Tk's pplacer on every push.
+# Build the engine and check it is bit-exact against pplacer v1.1.alpha19 on every push.
 # ARM64 runners are free for public repositories only: the ARM64 job runs when the repository is public.
 name: Tests
 on:

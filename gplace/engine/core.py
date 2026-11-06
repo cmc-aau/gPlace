@@ -34,8 +34,8 @@ from gplace.exceptions import EngineNotBuilt, GPlaceException
 NS = 20
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 
-# pplacer v1.1.alpha19 default preferences (prefs.ml), unchanged by GTDB-Tk's invocation
-# `pplacer -m WAG -j <cpus> -c <refpkg> -o <out.json> <msa>`; Search holds a run's values.
+# pplacer v1.1.alpha19 default preferences (prefs.ml), as in
+# `pplacer -m WAG -j <cpus> -c <refpkg> -o <out.jplace> <queries>`; Search holds a run's values.
 START_PEND = 0.1
 MAX_PEND = 2.0
 INITIAL_TOL = 0.01

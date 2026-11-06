@@ -1,4 +1,4 @@
-# Values returned by the libm inside GTDB-Tk's statically linked pplacer v1.1.alpha19 binary
+# Values returned by the libm inside pplacer's statically linked v1.1.alpha19 release binary
 # (glibc 2.19), obtained by calling hypot/exp/log/pow/sin in the running binary under gdb (sin: the
 # __sin_avx implementation its IFUNC selects on AVX CPUs; __sin_sse2 gives the same values).
 # pow/sin cases: the arguments GSL passes while computing discrete-gamma rates, plus random ones.

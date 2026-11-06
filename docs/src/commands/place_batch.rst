@@ -3,8 +3,8 @@
 place_batch
 ===========
 
-The ``place_batch`` command places many alignments in one run, for example every
-``user_msa_file.fasta`` of a large GTDB-Tk run. List them in a :ref:`batchfile <files/batchfile>`,
+The ``place_batch`` command places many alignments in one run, for example the alignments of many
+samples on a few reference trees. List them in a :ref:`batchfile <files/batchfile>`,
 one line per alignment: the alignment, its reference package and the output jplace file.
 
 Alignments that share a reference package are placed together, so the work on each reference
@@ -38,9 +38,6 @@ Example
 
 .. code-block:: bash
 
-    # make a batchfile from GTDB-Tk output folders (script in the gPlace repository)
-    python scripts/make_gtdbtk_batchfile.py --msa_root gtdbtk_runs \
-        --refpkg_root release226/split/class_level/pplacer > batch.tsv
     gplace place_batch --batchfile batch.tsv --out_dir gplace_out --cpus 40
 
     # within 32 GB: tiles only for the reference packages that need them

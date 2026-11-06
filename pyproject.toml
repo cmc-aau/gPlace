@@ -7,7 +7,7 @@ name = "gtdb-gplace"
 # Version is the ONLY dynamic field
 dynamic = ["version"]
 
-description = "Exact, memory-bounded re-implementation of the pplacer placements used by GTDB-Tk."
+description = "Exact, memory-bounded replacement for pplacer: the same phylogenetic placements with a fraction of the memory and time."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "GPL-3.0-only"

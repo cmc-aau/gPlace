@@ -33,7 +33,7 @@ Validation
 
 Compared with taxit on 54 cases: refpkgs created from real logs of every tree program (19 files:
 FastTree JTT/WAG/LG/GTR, RAxML GTR/WAG/LG+F, RAxML-NG, IQ-TREE, PhyML DNA and protein with model or
-empirical frequencies), GTDB-Tk's 8 class-level refpkgs rebuilt from their own files (their
-``phylo_model`` identical to the one GTDB-Tk ships), every option (rerooting with and without
+empirical frequencies), the 8 GTDB R226 class-level refpkgs rebuilt from their own files (their
+``phylo_model`` identical to the released one), every option (rerooting with and without
 ``rppr``, ``--no-reroot``, ``--clobber``, ``--stats-type``, errors), ``check`` on valid and 11 kinds of
 broken refpkgs, and ``info``.

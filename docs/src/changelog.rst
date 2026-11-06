@@ -8,7 +8,7 @@ Major Changes:
 
 * Initial release: ``place``, ``place_batch``, ``compare``, ``test`` and ``check_install``
   commands; the engine is compiled during ``pip install`` (``build_engine`` rebuilds it).
-* Placement engine reproducing pplacer v1.1.alpha19 (GTDB-Tk's build) bit for bit for WAG +
+* Placement engine reproducing pplacer v1.1.alpha19 (its static release binary) bit for bit for WAG +
   FastTree CAT reference packages, with internal-node-only likelihood storage, a SIMD prefilter
   and placement in forked worker processes.
 * ``benchmark`` command (fastest ``--cpus``, memory and time estimates, SLURM request) and
@@ -67,7 +67,7 @@ Major Changes:
   for the portable engine, used instead of an instruction (identical results).
 * ``--ranked_edges N`` (``place``, ``place_batch``): untiled placement without a queries x edges score
   table; queries are scored in batches of 20,000 and keep their first N ranked edges, as in tiled
-  placement, so memory barely grows with the number of queries (all 127,343 GTDB-Tk genomes on
+  placement, so memory barely grows with the number of queries (all 127,343 GlobDB genomes on
   class-level tree 8: 17.5 GiB instead of 29.5 GiB with ``--ranked_edges 164``). Results are
   identical; the default is unchanged.
 * ``gplace test`` places a test set tile by tile when its untiled placement would not fit in the
@@ -99,3 +99,9 @@ Major Changes:
   unchanged.
 * Every file gPlace opens is closed explicitly (``gplace.fileio`` helpers or ``with`` blocks): no
   ``ResourceWarning: unclosed file`` in the unit-test log.
+* ``place`` takes pplacer's command line: ``-c``, ``-o``, ``-j`` and ``--out-dir`` next to ``--refpkg``,
+  ``--out_file``, ``--cpus`` and ``--out_dir``, and query files at the end of the command line (or
+  anywhere among the options). Without ``-o``, each query file is written to ``<name>.jplace`` as
+  pplacer names it, and several query files give one jplace file each. pplacer's ``--mmap-file``,
+  ``--verbosity`` and ``--timing`` are accepted with no effect; the pplacer options gPlace does not
+  implement stop the run with a message. ``-j 0`` / ``--cpus 0`` place with one process, as pplacer.

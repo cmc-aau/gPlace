@@ -60,7 +60,7 @@ Hardware details
   on Linux or macOS (Apple Silicon: NEON; Intel Macs: AVX2).
 * **Memory:** depends on the reference tree and the number of queries: about
   *2 x internal nodes x sites x 168 bytes + edges x queries x 8 bytes* (with ``--ranked_edges``
-  the second term stops growing past 20,000 queries); 43.8 GiB for GTDB-Tk R226 class-level tree 2
+  the second term stops growing past 20,000 queries); 43.8 GiB for GTDB R226 class-level tree 2
   with 22,061 queries.
 * **CPUs:** placement is limited by memory bandwidth; on a 64-vCPU AMD EPYC server, 40 worker
   processes were fastest.

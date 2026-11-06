@@ -3,7 +3,7 @@
 Using your own tree
 ===================
 
-gPlace places on any reference tree pplacer can use, not only GTDB-Tk's. The simplest way is to
+gPlace places on any reference tree pplacer can use. The simplest way is to
 build a reference package with :ref:`gplace taxit create <commands/taxit>` (the same package
 taxtastic's ``taxit`` builds, usable by pplacer too) from your alignment, your tree and the log or
 statistics file of the program that made the tree (FastTree, RAxML, RAxML-NG, IQ-TREE or PhyML):

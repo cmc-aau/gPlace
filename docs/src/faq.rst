@@ -8,18 +8,26 @@ FAQ
   report problems on the GitHub issue tracker.
 
 **Are the results really identical to pplacer's?**
-  Yes, for the reference packages GTDB-Tk uses. On 127,343 genomes placed on the 8 GTDB-Tk R226
-  class-level trees, every placement matched GTDB-Tk's own output: the same edges, likelihoods,
-  weights and branch lengths, down to the last printed digit. ``gplace test`` repeats this check
-  on bundled data.
+  Yes. On 127,343 genomes placed on the 8 GTDB R226 class-level trees, and 10,000 genomes on the
+  full GTDB R226 bacterial tree, every placement matched pplacer v1.1.alpha19's output: the same
+  edges, likelihoods, weights and branch lengths, down to the last printed digit. The same holds
+  for every other model and option pplacer supports (see :ref:`validation`). ``gplace test``
+  repeats this check on bundled data.
+
+**Can I use my pplacer command lines?**
+  Yes: replace ``pplacer`` with ``gplace place``. gPlace accepts pplacer's options (``-c``, ``-o``,
+  ``-j``, ``--out-dir``, ``-t``/``-r``/``-s``, ``-p``, ``--keep-at-most``, ...) and query files, and
+  names its jplace files as pplacer does. A few rarely used pplacer options are not implemented and
+  stop the run with a message (see :ref:`advanced/pplacer_options`).
 
 **Does the output file look exactly like pplacer's?**
   Every value and the tree are identical. The spacing and the order of the genomes in the file
-  can differ, which programs that read jplace files (including GTDB-Tk) ignore.
+  can differ, which programs that read jplace files ignore.
 
 **How much memory do I need?**
-  For the GTDB-Tk class-level trees, at most 44 GiB. For the full GTDB bacterial tree, tell
-  gPlace how much it may use, e.g. ``--max_memory 64G``, and it stays within it. To get an
+  It depends on the tree: at most 44 GiB for the GTDB class-level trees (up to 21,566 reference
+  genomes). For larger trees, such as the full GTDB bacterial tree, tell gPlace how much it
+  may use, e.g. ``--max_memory 64G``, and it stays within it. To get an
   estimate for your data before running, use
   ``gplace benchmark --refpkg <refpkg> --queries <number of genomes>``. See :ref:`advanced/memory`.
 
@@ -47,8 +55,8 @@ Technical questions
 -------------------
 
 **How was identity established?**
-  By comparing against GTDB-Tk's own jplace files and against fresh runs of GTDB-Tk's pplacer
-  binary, and, where results differed, by tracing that binary under gdb (it is statically linked
+  By comparing against jplace files written by pplacer v1.1.alpha19 and against fresh runs of its
+  release binary, and, where results differed, by tracing that binary under gdb (it is statically linked
   and ships debug symbols) and comparing every likelihood evaluation bit for bit. The scripts are
   in ``scripts/validation``.
 

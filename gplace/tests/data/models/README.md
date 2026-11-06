@@ -1,7 +1,7 @@
 # Test sets for pplacer's other models
 
-Every `*.pplacer.jplace` was written by the stock pplacer v1.1.alpha19 (commit 807f6f3, the build
-GTDB-Tk uses): `pplacer -j 4 -c <refpkg> -o <out> <queries>`.
+Every `*.pplacer.jplace` was written by the stock pplacer v1.1.alpha19 (commit 807f6f3, the statically
+linked release binary): `pplacer -j 4 -c <refpkg> -o <out> <queries>`.
 
 * `mini_<model>.phylo_model.json`: the bundled `mini.refpkg` (its tree and alignment) with another
   model: LG, JTT, empirical frequencies (`_emp`), gamma (`_g<alpha>x<n_cats>`). Queries:

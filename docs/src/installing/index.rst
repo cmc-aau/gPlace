@@ -39,7 +39,7 @@ reuse an existing build, see :doc:`source`.
 What you need to run it
 -----------------------
 
-* **Memory:** depends on the tree. Up to 44 GiB for the GTDB-Tk class-level trees; for the full
+* **Memory:** depends on the tree. Up to 44 GiB for the GTDB class-level trees; for the full
   GTDB bacterial tree, set a limit such as ``--max_memory 64G`` (see :ref:`advanced/memory`).
   ``gplace benchmark`` estimates the memory for your data.
 * **CPUs:** any number. ``--cpus auto`` picks a good number of workers for your computer.

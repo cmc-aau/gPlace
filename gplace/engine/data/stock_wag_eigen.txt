@@ -1,4 +1,4 @@
-# WAG eigendecomposition inside GTDB-Tk's pplacer v1.1.alpha19 (GSL 1.16 gsl_eigen_symmv),
+# WAG eigendecomposition inside pplacer's v1.1.alpha19 release binary (GSL 1.16 gsl_eigen_symmv),
 # dumped under gdb: input matrix D^1/2 B D^1/2 (row-major), eigenvalues, eigenvectors (row-major).
 [input]
 -0x1.107f72c832800p+0

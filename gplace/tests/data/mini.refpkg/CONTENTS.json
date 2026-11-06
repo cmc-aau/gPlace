@@ -1,7 +1,7 @@
 {
     "metadata": {
         "format_version": "1.1",
-        "locus": "gPlace test clade of gtdbtk.package.8.refpkg"
+        "locus": "gPlace test clade of the GTDB R226 class-level reference package 8"
     },
     "files": {
         "phylo_model": "phylo_model.json",

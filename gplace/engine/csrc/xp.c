@@ -2,7 +2,7 @@
  * gPlace placement engine (libgplace_core.so).
  *
  * Exact re-implementation of the numerical core of pplacer v1.1.alpha19 (commit 807f6f3, the
- * build GTDB-Tk uses) for its Gcat (FastTree CAT) and Gmix (discrete gamma) models, protein and
+ * statically linked release binary) for its Gcat (FastTree CAT) and Gmix (discrete gamma) models, protein and
  * DNA: every floating-point result keeps pplacer's operands, operation order and rounding, so
  * placements are bit-identical. Built twice: NS=20 (protein, libgplace_core.so) and NS=4 (DNA,
  * libgplace_core_nt.so).

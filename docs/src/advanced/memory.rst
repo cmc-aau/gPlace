@@ -36,7 +36,7 @@ peak memory gPlace would use, without placing anything (see :ref:`commands/bench
 memory available to it (the machine's memory, or a SLURM or cgroup limit).
 
 The estimate is about *2 x internal nodes x sites x 168 bytes + edges x queries x 8 bytes*, plus
-a little per worker: 43.8 GiB for GTDB-Tk R226 class-level tree 2 with 22,061 queries.
+a little per worker: 43.8 GiB for GTDB R226 class-level tree 2 with 22,061 queries.
 
 
 Many queries in one run
@@ -45,4 +45,4 @@ Many queries in one run
 Untiled placement keeps every query's prefilter score for every edge (8 bytes per edge and query),
 which matters with very many queries in one run. ``--ranked_edges 164`` keeps only each query's first
 164 ranked edges instead (enough for pplacer's default search), with identical results: all 127,343
-GTDB-Tk genomes on class-level tree 8 peak at 17.5 GiB instead of 29.5 GiB, about 7% slower.
+GlobDB genomes on GTDB class-level tree 8 peak at 17.5 GiB instead of 29.5 GiB, about 7% slower.
