@@ -62,6 +62,9 @@ Major Changes:
   that every engine loads. Rebuilds relink the engine whenever the compiled C changes (before, a link
   cached in the build directory could be reused). A failed engine build now ends ``pip install`` with one
   clear message (editable installs used to hide it behind a setuptools ``KeyError``).
+* Engines load on glibc older than 2.25 (the ARM64 wheel, CentOS 7): CORE-MATH's ``exp``, ``pow`` and
+  ``sin`` no longer call the C library's ``roundeven``, which gcc 10 and 11 on ARM64, and gcc on x86-64
+  for the portable engine, used instead of an instruction (identical results).
 * ``--ranked_edges N`` (``place``, ``place_batch``): untiled placement without a queries x edges score
   table; queries are scored in batches of 20,000 and keep their first N ranked edges, as in tiled
   placement, so memory barely grows with the number of queries (all 127,343 GTDB-Tk genomes on
