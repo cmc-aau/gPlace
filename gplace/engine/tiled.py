@@ -394,10 +394,22 @@ class TiledPlacer(Placer):
 
     # ---------------------------------------------------------------- placement --
     def _eval_job(self, job):
+        """Optimise one query's items (loc, pend, dist, tol[, lk]); an item with lk is a kept
+        placement being refined: with -p its marginal likelihood is computed right after, from the
+        refined lengths (from (lk, pend, dist) if the refinement failed, as pplacer keeps them)."""
         qi, items = job
-        evaluate, free = self._query_evaluator(qi)
+        evaluate, marginal, free = self._query_evaluator(qi)
         try:
-            return qi, [(loc,) + tuple(evaluate(loc, pend, dist, tol)) for loc, pend, dist, tol in items]
+            out = []
+            for it in items:
+                loc, pend, dist, tol = it[:4]
+                r, st = evaluate(loc, pend, dist, tol)
+                if len(it) > 4 and self.search.calc_pp:
+                    k = r if r is not None else (it[4], pend, dist)
+                    out.append((loc, r, st, marginal(loc, k[1], k[2])))
+                else:
+                    out.append((loc, r, st))
+            return qi, out
         finally:
             free()
 
@@ -478,11 +490,13 @@ class TiledPlacer(Placer):
             if not done[qi].results:
                 raise GPlaceException(f'empty results for {self.query_names[qi]}!')
             kept[qi] = done[qi].kept(self.lib)
-            work[qi] = [(loc, pend, dist, core.FINAL_TOL) for loc, (lk, pend, dist) in kept[qi]]
-        refined = {}
+            work[qi] = [(loc, pend, dist, core.FINAL_TOL, lk) for loc, (lk, pend, dist) in kept[qi]]
+        refined, marg = {}, {}
         for qi, out in self._evaluate(work):
-            for loc, r, _ in out:
-                refined[(qi, loc)] = r
+            for o in out:
+                refined[(qi, o[0])] = o[1]
+                if len(o) > 3:
+                    marg[(qi, o[0])] = o[3]
         del work, stage1
         results = []
         for qi in range(Q):
@@ -490,7 +504,15 @@ class TiledPlacer(Placer):
             for loc, (lk, pend, dist) in kept[qi]:
                 r = refined[(qi, loc)]
                 ref.append((loc, r if r is not None else (lk, pend, dist)))
-            results.append((self.query_names[qi], weighted_placements(self.lib, ref), done[qi].warns))
+            margs = None
+            if self.search.calc_pp:
+                margs = []
+                for loc, _ in ref:
+                    m, warn = marg[(qi, loc)]
+                    margs.append(m)
+                    if warn:
+                        done[qi].warns.append((loc, 'pp'))
+            results.append((self.query_names[qi], weighted_placements(self.lib, ref, margs), done[qi].warns))
         self.stats['rounds'] = rnd
         self.stats['place_s'] += time.time() - t_start
         self.logger.info('Refined the kept placements.')

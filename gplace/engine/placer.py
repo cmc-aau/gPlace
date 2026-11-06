@@ -121,15 +121,75 @@ def _x86_sub(a, b):
     return _X86_NAN if a == b and math.isinf(a) else a - b
 
 
-def weighted_placements(lib, refined):
+def ll_normalized_prob(lib, lls):
+    """pplacer's ll_normalized_prob: 1 / sum(exp(other - this)) for each log likelihood."""
+    return [1. / sum(lib.xp_exp(_x86_sub(o, ll)) for o in lls) for ll in lls]
+
+
+def weighted_placements(lib, refined, marginals=None):
     """Like-weight ratios and pplacer's placement order for [(loc, (like, pend, dist))];
     returns [[distal_length, edge_num, like_weight_ratio, likelihood, pendant_length]].
+    With marginals (the marginal likelihood of each placement, -p): rows
+    [distal_length, edge_num, like_weight_ratio, likelihood, marginal_like, pendant_length, post_prob].
     A NaN keeps its sign through exp, the sum and the division, on x86-64 and ARM64 alike."""
-    lls = [r[0] for _, r in refined]
-    lwr = [1. / sum(lib.xp_exp(_x86_sub(o, ll)) for o in lls) for ll in lls]
-    pl = [[r[2], loc, w, r[0], r[1]] for (loc, r), w in zip(refined, lwr)]
+    lwr = ll_normalized_prob(lib, [r[0] for _, r in refined])
+    if marginals is None:
+        pl = [[r[2], loc, w, r[0], r[1]] for (loc, r), w in zip(refined, lwr)]
+    else:
+        pp = ll_normalized_prob(lib, marginals)
+        pl = [[r[2], loc, w, r[0], m, r[1], q] for (loc, r), w, m, q in zip(refined, lwr, marginals, pp)]
     pl.sort(key=lambda p: -p[2])            # make_ml_sorted (stable)
     return pl
+
+
+def tree_length(children, bl, root):
+    """Gtree.tree_length: every branch length but the root's, each node's own length first and
+    then its subtrees' totals, left to right."""
+    tot = [0.] * len(children)
+    order, stack = [], [root]
+    while stack:
+        v = stack.pop(); order.append(v); stack.extend(children[v])
+    for v in reversed(order):                   # children before parents
+        acc = 0. if v == root else bl[v]
+        for c in children[v]:
+            acc = acc + tot[c]
+        tot[v] = acc
+    return tot[root]
+
+
+def prior_mean_map(children, bl, root, prior_lower):
+    """Core.prior_mean_map ((+.) prior_lower): for each edge, prior_lower + its length plus the
+    average distance from its lower end to the leaves below (pplacer's --inform-prior means),
+    summed in pplacer's order (leaf distances in subtree order, a left fold)."""
+    means, dist = {}, {}
+    order, stack = [], [root]
+    while stack:
+        v = stack.pop(); order.append(v); stack.extend(children[v])
+    for v in reversed(order):
+        top = prior_lower + bl[v]
+        if not children[v]:
+            means[v] = top
+            dist[v] = np.array([bl[v]])
+            continue
+        d = np.concatenate([dist.pop(c) for c in children[v]])
+        means[v] = float(np.add.accumulate(top + d)[-1]) / float(len(d))
+        dist[v] = bl[v] + d
+    del means[root]
+    return means
+
+
+def pp_prior(tree, bl, search):
+    """The prior on the pendant length for -p (pplacer_run.ml): (uniform, mean) where mean is
+    a float (Flat_exp_prior: tree length / number of edges) or {edge: mean} (--inform-prior)."""
+    if search.uniform_prior:
+        return True, 0.
+    if search.informative_prior:
+        return False, prior_mean_map(tree.children, bl, tree.root, search.prior_lower)
+    return False, tree_length(tree.children, bl, tree.root) / float(tree.n_nodes - 1)
+
+
+_PP_ERRORS = {core.XP_EXCEEDED: 'Minimization.ExceededMaxIter', core.XP_FINDSTART: 'Minimization.FindStartFailure',
+              core.XP_INVALIDSTART: 'Minimization.InvalidStartValues'}
 
 
 _NO_EDGE = np.iinfo(np.int64).max       # filler in the candidate lists: ranks after every edge
@@ -258,6 +318,7 @@ class Placer(object):
         self.statd = np.array(self.model.statd)
         self.x, self.l, self.xit, _ = core.build_diagd(self.model.R, list(self.statd), self.lib)
         self.rates = np.array(self.model.rates)
+        self.pp_prior = pp_prior(self.tree, self.bl, search) if search.calc_pp else None
         self.nrates = len(self.rates)
         self.width = self.ns                                 # doubles per site (gamma: rates x states)
         # pplacer refines the model when the reference sequences come from the query file or with
@@ -834,11 +895,27 @@ class Placer(object):
         return self.locs[np.lexsort((self.locs, -row))]
 
     # ---------------------------------------------------------------- placement --
+    def _marg_prob(self, tt, loc):
+        """Three_tax.calc_marg_prob for the placement tt is set to (-p): (marginal log likelihood,
+        True if pplacer warned that the integration did not converge after changing bounds)."""
+        unif, mu = self.pp_prior
+        out = np.empty(2)
+        st = self.lib.xp_tt_marg_prob(tt, int(unif), mu if unif or isinstance(mu, float) else mu[loc],
+                                      self.search.pp_rel_err, self.search.max_pend, P(out))
+        if st == core.XP_GSL:
+            raise GPlaceException(f'GSL error {int(out[1])} in the posterior probability calculation '
+                                  f'(pplacer: Fatal error: exception Gsl_error.Gsl_exn).')
+        if st != core.XP_OK:
+            raise GPlaceException(f'pplacer stops here: Fatal error: exception {_PP_ERRORS[st]} '
+                                  f'(posterior probability calculation).')
+        return float(out[0]), out[1] == 1.
+
     def _query_evaluator(self, qi):
-        """(evaluate, free) for query qi. evaluate(loc, pend, dist, tol) sets the three-taxon tree
-        on edge loc with starting branch lengths pend/dist and optimises it as pplacer's
-        safe_ml_optimize_location does (after a GSL error: retry from the default lengths);
-        it returns ((like, pend, dist), None), or (None, status) if the location failed."""
+        """(evaluate, marginal, free) for query qi. evaluate(loc, pend, dist, tol) sets the
+        three-taxon tree on edge loc with starting branch lengths pend/dist and optimises it as
+        pplacer's safe_ml_optimize_location does (after a GSL error: retry from the default
+        lengths); it returns ((like, pend, dist), None), or (None, status) if the location failed.
+        marginal(loc, pend, dist) sets it to a placement and returns _marg_prob's result (-p)."""
         L = self.lib
         t = self.tl()
         name = self.query_names[qi]
@@ -875,18 +952,22 @@ class Placer(object):
                 r, st = optimize(tol)
             return r, st
 
+        def marginal(loc, pend, dist):          # tt_edges_from_placement; calc_marg_prob
+            set_edges(loc, pend, dist)
+            return self._marg_prob(tt, loc)
+
         arrays = [qm, catm]                     # the engine holds pointers into these until freed
 
         def free():
             L.xp_tt_free(tt)
             arrays.clear()
 
-        return evaluate, free
+        return evaluate, marginal, free
 
     def place_query(self, qi):
         """Baseball + three-taxon optimisation + keep/refine + LWR (core.ml)."""
         name = self.query_names[qi]
-        evaluate, free = self._query_evaluator(qi)
+        evaluate, marginal, free = self._query_evaluator(qi)
         try:
             bb = Baseball(self.search)
             for loc in self.ranking(qi):
@@ -899,7 +980,15 @@ class Placer(object):
             for loc, (lk, pend, dist) in bb.kept(self.lib):
                 r, _ = evaluate(loc, pend, dist, core.FINAL_TOL)
                 refined.append((loc, r if r is not None else (lk, pend, dist)))
-            pl = weighted_placements(self.lib, refined)
+            margs = None
+            if self.search.calc_pp:
+                margs = []
+                for loc, r in refined:
+                    m, warn = marginal(loc, r[1], r[2])
+                    margs.append(m)
+                    if warn:
+                        bb.warns.append((loc, 'pp'))
+            pl = weighted_placements(self.lib, refined, margs)
         finally:
             free()
         return name, pl, bb.warns

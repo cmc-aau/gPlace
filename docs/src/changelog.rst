@@ -46,6 +46,9 @@ Major Changes:
   ``--no_pre_mask`` and ``--always_refine``.
 * Model refinement as in pplacer: when the query alignment holds the reference sequences, or with
   ``--always_refine``, CAT models get new site categories on the reference tree.
+* Posterior probabilities as pplacer's ``-p`` computes them (``-p``/``--pp``, ``--pp_rel_err``,
+  ``--unif_prior``, ``--inform_prior``, ``--prior_lower``): each placement gets pplacer's
+  ``marginal_like`` and ``post_prob`` fields, with identical values, untiled and tiled.
 * ``place`` without a reference package: ``--tree``, ``--ref_aln``, ``--stats``, ``--ref_dir``
   (pplacer's ``-t``, ``-r``, ``-s``, ``-d``), with RAxML 7 info, PhyML 3.0 stats and JSON model files
   read as pplacer reads them, and pplacer's model settings ``--model_freqs``, ``--gamma_cats``,

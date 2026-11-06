@@ -38,6 +38,43 @@ no placement (``--keep_at_most 0``, or ``--keep_factor`` above 1) is omitted fro
 pplacer does, with a warning.
 
 
+Posterior probabilities
+-----------------------
+
+======================== ======================== ========= ==================================================
+gPlace                   pplacer                  default   meaning
+======================== ======================== ========= ==================================================
+``-p``, ``--pp``         ``-p``                   off       calculate posterior probabilities
+``--pp_rel_err``         ``--pp-rel-err``         0.01      relative error of the integration
+``--unif_prior``         ``--unif-prior``         off       uniform prior on the pendant branch length
+``--inform_prior``       ``--inform-prior``       off       exponential prior with a mean for each edge
+``--prior_lower``        ``--prior-lower``        0         added to each edge's mean (``--inform_prior``)
+======================== ======================== ========= ==================================================
+
+With ``-p``, gPlace computes what pplacer's ``-p`` computes for every kept placement: its
+*marginal likelihood*, the likelihood integrated over the attachment point along the edge and over
+the pendant branch length, weighted by a prior on the pendant branch length; and its *posterior
+probability*, the marginal likelihoods normalised over the query's placements. Each jplace row
+gets the fields ``marginal_like`` and ``post_prob``. The placements stay sorted by like-weight
+ratio, as in pplacer, so the highest posterior probability is not always first.
+
+As in pplacer, ``-p`` also sets ``--keep_at_most 20``, ``--keep_factor 0.001`` and
+``--max_strikes 20`` where it appears on the command line: these options override it when they
+come after ``-p``, and are overridden when they come before. The wider search can change the
+best placement, so ``-p`` results differ from likelihood placement on the same data.
+
+The prior is exponential, with the average branch length of the reference tree as its mean,
+unless ``--unif_prior`` (uniform) or ``--inform_prior`` (for each edge, its length plus the average
+distance from its lower end to the leaves below it, plus ``--prior_lower``). When an integration
+does not reach ``--pp_rel_err`` even after narrowing its range ten times, pplacer warns and uses
+the placement's likelihood as its marginal likelihood; gPlace does the same and says so in its
+log.
+
+Posterior probabilities cost much more time than likelihood placement (each kept placement
+needs hundreds to thousands of likelihood evaluations) but no extra memory, and work with tiled
+placement. GTDB-Tk does not use them.
+
+
 Pre-masking
 -----------
 

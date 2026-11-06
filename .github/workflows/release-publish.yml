@@ -25,6 +25,7 @@ jobs:
         with:
           name: dist-sdist
           path: dist/*.tar.gz
+          retention-days: 7
 
   pypi:
     needs: [wheels, sdist]

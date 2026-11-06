@@ -245,8 +245,20 @@ and the tree string textually identical):
        (CAT and gamma, with other settings)
      - 11
      - identical
+   * - ``-p`` (posterior probabilities): WAG, LG, JTT, empirical frequencies and gamma (4 to 32
+       rates) on the bundled test package; pplacer's own test data (GTR + CAT, GTR and WAG + gamma);
+       ``--unif-prior``, ``--inform-prior``, ``--prior-lower``, ``--pp-rel-err``, ``--max-pend``,
+       ``-p`` before and after other search options; edges of length (almost) 0
+     - 32
+     - identical (``--pp-rel-err 1e-15`` fails in both)
+   * - ``-p`` with the default, uniform and informative (``--prior-lower 0.1``) priors on GTDB-Tk
+       R226 class-level package 8
+     - 343 genomes each
+     - identical, including the placements whose integration does not converge (pplacer then uses
+       the placement's likelihood)
 
-The unit tests (``tests/test_options.py``) repeat a subset against stored pplacer output.
+The unit tests (``tests/test_options.py``, ``tests/test_posterior.py``) repeat a subset against
+stored pplacer output.
 
 How exactness was established
 -----------------------------

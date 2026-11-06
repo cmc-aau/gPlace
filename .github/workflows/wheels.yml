@@ -22,10 +22,13 @@ jobs:
         with:
           output-dir: wheelhouse
 
+      # Kept 7 days (GitHub's default is 90): the wheels are only needed by the jobs below and the
+      # release; artifacts of private repositories count against the account's storage quota.
       - uses: actions/upload-artifact@v7
         with:
           name: dist-wheel-${{ matrix.runner }}
           path: wheelhouse/*.whl
+          retention-days: 7
 
   install-test:
     needs: build

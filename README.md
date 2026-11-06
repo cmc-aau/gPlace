@@ -27,7 +27,7 @@
 * **Memory limits and huge trees:** `--max_memory 64G` keeps a run within a memory limit. gPlace places without tiles when that fits, and otherwise tile by tile, with the largest tiles that fit, and identical results. This places genomes on the full GTDB bacterial tree (273,290 nodes), which would need ~490 GiB untiled. `--tile_edges N` sets the tile size directly.
 * **Every pplacer model:** WAG, LG, JTT (protein) and GTR (DNA), with FastTree CAT or gamma rate variation and model or empirical frequencies, read from the reference package as pplacer does. `--fix_gamma_underflow` optionally avoids pplacer's gamma underflow on large trees (likelihood `-inf`).
 * **Trees from IQ-TREE and RAxML-NG:** reference packages built from their fits (`taxit create --tree-stats`), or the `.iqtree` file / RAxML-NG log given directly with `--stats`, place as pplacer places them; gPlace says which parts of the fitted model pplacer does not use. `--full_model` places with the fit's complete model instead (IQ-TREE: every reversible matrix, fitted frequencies, mean or median `+G`, `+I`, `+R`, protein mixtures such as C20 or LG4X; RAxML-NG: every DNA model and protein matrix, `+FC`/`+FU`, mean or median `+G`, `+I`, `+R`, LG4M, LG4X), checked against the fitting program's own likelihoods.
-* **pplacer's options:** its search settings (`--max_strikes`, `--keep_at_most`, `--no_pre_mask`, ...), model refinement (`--always_refine`, or reference sequences in the query file), reference files without a package (`-t`/`-r`/`-s`/`-d` with RAxML 7, PhyML 3.0 or JSON models) and Stockholm query files, all with pplacer's results; pplacer's option spellings are accepted.
+* **pplacer's options:** its search settings (`--max_strikes`, `--keep_at_most`, `--no_pre_mask`, ...), posterior probabilities (`-p`), model refinement (`--always_refine`, or reference sequences in the query file), reference files without a package (`-t`/`-r`/`-s`/`-d` with RAxML 7, PhyML 3.0 or JSON models) and Stockholm query files, all with pplacer's results; pplacer's option spellings are accepted.
 * **No pplacer or taxtastic needed:** `gplace tog` writes the same tree as `guppy tog` (byte for byte, Newick or phyloXML), and `gplace taxit create/check/info` builds and checks reference packages as taxtastic's `taxit` does.
 * **Self-verifying installation:** `gplace check_install` checks the compiled engine bit for bit against values taken from GTDB-Tk's pplacer binary; `gplace test` places bundled genomes and compares them with pplacer's own output.
 
@@ -197,7 +197,7 @@ The other models (LG, JTT, empirical frequencies, GTR, gamma) were compared with
 
 ## Citing gPlace
 
-Please cite pplacer, GTDB-Tk and pplacer, whose placements gPlace reproduces (see the documentation's references page).
+gPlace reproduces pplacer's placements on the GTDB reference trees. If you use gPlace, please cite pplacer and GTDB (see the documentation's references page).
 
 ## License
 
