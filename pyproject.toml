@@ -76,5 +76,9 @@ manylinux-aarch64-image = "manylinux2014"
 test-command = "gplace check_install && gplace test --models --cpus 2"
 
 [tool.cibuildwheel.linux]
-environment = { GPLACE_BUILD_JOBS = "4", GPLACE_BUILD_DIR = "/tmp/gplace_build" }
+# PIP_PREFER_BINARY: the wheel is tested inside the manylinux2014 container (glibc 2.17), where
+# current numpy has no wheel (numpy >= 2.3 ships manylinux_2_28 only); without it pip tries to
+# compile the newest numpy from source and the test step fails. With it pip takes the newest numpy
+# that has a wheel for the container (2.2.x).
+environment = { GPLACE_BUILD_JOBS = "4", GPLACE_BUILD_DIR = "/tmp/gplace_build", PIP_PREFER_BINARY = "1" }
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"

@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/src/_static/gPlace-stacked-dark.svg">
-    <img src="docs/src/_static/gPlace-stacked.svg" alt="gPlace" width="220">
+    <img src="https://raw.githubusercontent.com/cmc-aau/gPlace/main/docs/src/_static/gPlace-stacked.svg" alt="gPlace" width="220">
   </picture>
 </p>
 
