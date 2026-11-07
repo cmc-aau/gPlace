@@ -39,6 +39,9 @@ jobs:
       - name: Placement test (bit-identical to pplacer)
         run: gplace test --models --cpus 3 --out_dir test_out
 
+      - name: Tiled placement test (the tree in tiles of 40 edges; same results)
+        run: gplace test --tile_edges 40 --cpus 3
+
       - name: Portable engine (scalar kernels; same results)
         env:
           GPLACE_ENGINE_VARIANT: portable

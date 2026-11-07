@@ -105,3 +105,9 @@ Major Changes:
   pplacer names it, and several query files give one jplace file each. pplacer's ``--mmap-file``,
   ``--verbosity`` and ``--timing`` are accepted with no effect; the pplacer options gPlace does not
   implement stop the run with a message. ``-j 0`` / ``--cpus 0`` place with one process, as pplacer.
+* Tiled placement starts its worker processes once per pass over the tiles (the prefilter, each
+  baseball round, the refinement) instead of once per tile, and rebuilds the tiles of a pass with one
+  thread pool: 10,000 genomes on the GTDB R232 bacterial tree in 370 tiles (``--max_memory 8.5G``,
+  64 CPUs) take 25 minutes instead of 2 h 49 min, with identical results. Before each fork, freed
+  memory goes back to the system (``malloc_trim`` on Linux, ``malloc_zone_pressure_relief`` on macOS),
+  which keeps the longer-lived workers within the planned memory.

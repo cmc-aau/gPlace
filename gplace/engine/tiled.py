@@ -44,6 +44,7 @@ import threading
 import time
 from collections import defaultdict, namedtuple
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -70,6 +71,41 @@ def _tile_prefilter_group(g):
 
 def _tile_eval(job):
     return placer_mod._PLACER._eval_job(job)
+
+
+def _tile_prefilter_at(task):
+    """One prefilter group in a worker of a pass's pool: (tile, batch start, batch rows, tile edges,
+    group)."""
+    ti, b0, nq, E, g = task
+    pl = placer_mod._PLACER
+    pl._worker_tile(ti, prefilter=True)
+    pl._worker_batch(b0, nq, E)
+    pl._batch_prefilter_group(g)
+
+
+def _tile_eval_at(task):
+    """One query's optimisations on a tile in a worker of a pass's pool: (tile, job)."""
+    ti, job = task
+    pl = placer_mod._PLACER
+    pl._worker_tile(ti)
+    return pl._eval_job(job)
+
+
+class _Lists:
+    """Lists of node numbers held in two arrays (CSR): ls[i] is a new list equal to lists[i]."""
+
+    def __init__(self, lists):
+        self.ptr = np.cumsum([0] + [len(x) for x in lists], dtype=np.int64)
+        self.ind = np.fromiter((v for x in lists for v in x), np.int64, int(self.ptr[-1]))
+
+    def __getitem__(self, i):
+        return self.ind[self.ptr[i]:self.ptr[i + 1]].tolist()
+
+    def __len__(self):
+        return len(self.ptr) - 1
+
+    def array(self, i):
+        return self.ind[self.ptr[i]:self.ptr[i + 1]]
 
 
 # ---------------------------------------------------------------------- tiling plan --
@@ -209,6 +245,7 @@ class TiledPlacer(Placer):
         self.max_edges = max(len(t['nodes']) for t in self.tiles)
         self.stats = defaultdict(float)           # phase timings (seconds) and counts, for benchmark
         self.record_work = False                  # benchmark: keep every placement job, by tile
+        self._threads = None                      # the tile rebuilds' threads during a pass (_rebuild_threads)
         self.work_log = defaultdict(list)
 
     def memory_estimate(self, workers=None):
@@ -234,6 +271,82 @@ class TiledPlacer(Placer):
             placer_mod._PLACER = None
             gc.unfreeze()
 
+    @contextmanager
+    def _pass_pool(self):
+        """One pool of self.workers forked processes for a whole pass over the tiles, instead of
+        one per tile: the workers read each tile from the shared vectors, which the parent rebuilds
+        between tiles while they wait (_worker_tile, _worker_batch)."""
+        placer_mod._PLACER = self
+        self._worker_arrays()
+        try:
+            with _fork_pool(self.workers) as pool, self._rebuild_threads():
+                yield pool
+        finally:
+            placer_mod._PLACER = None
+            gc.unfreeze()
+
+    @contextmanager
+    def _rebuild_threads(self):
+        """One thread pool for the tile rebuilds of a pass (_materialise) instead of one per tile;
+        a pass's worker processes are forked before it starts, never with its threads running."""
+        self._threads = ThreadPoolExecutor(self.cpus)
+        try:
+            yield
+        finally:
+            self._threads.shutdown()
+            self._threads = None
+
+    def _pass_map(self, pool, fn, tasks, chunksize=1):
+        """fn over tasks in a pass's pool; returns (results, seconds)."""
+        t0 = time.time()
+        out = list(pool.imap_unordered(fn, tasks, chunksize=chunksize))
+        return out, time.time() - t0
+
+    def _worker_arrays(self):
+        """The per-node lists a worker reads (children, parents, branch lengths, leaf rows, the
+        tiles' slots and edges) as arrays, made once before the first pass's pool. A worker that
+        reads the parent's Python objects writes their reference counts, so the kernel copies every
+        page it touches: over a pass of hundreds of tiles each worker would end up with a copy of the
+        whole tree. Reading arrays copies nothing (the values are the same: the branch lengths as
+        float64, node numbers as int64)."""
+        if getattr(self, '_warrays', None) is None:
+            leaf_row = np.full(self.nnodes, -1, np.int64)
+            for v, r in self.leaf_row.items():
+                leaf_row[v] = r
+            self._warrays = {'children': _Lists(self.children), 'parent': np.array(self.parent, np.int64),
+                             'bl': np.array(self.bl, np.float64), 'leaf_row': leaf_row,
+                             'slots': _Lists([t['internal'] + t['child_roots'] for t in self.tiles]),
+                             'locs': _Lists([[v for v in t['nodes'] if v != self.root] for t in self.tiles])}
+
+    def _worker_tile(self, ti, prefilter=False):
+        """In a worker of a pass's pool: tile ti's slot index (and, for the prefilter, its edges), as
+        _materialise and _ranked_candidates set them in the parent; on the first task, the tree
+        read from _worker_arrays."""
+        w = self._warrays
+        if not getattr(self, '_wstarted', False):
+            self.children, self.parent, self.bl, self.leaf_row = w['children'], w['parent'], w['bl'], w['leaf_row']
+            self._wstarted = True
+        if getattr(self, '_wtile', None) != ti:
+            self.iidx = {v: k for k, v in enumerate(w['slots'][ti])}
+            self._tile_in_memory = ti
+            self._wtile, self._wlocs = ti, False
+        if prefilter and not self._wlocs:
+            self.locs = w['locs'].array(ti)
+            self._wlocs = True
+
+    def _worker_batch(self, b0, nq, E):
+        """In a worker of a pass's pool: the query batch the parent has put in _bcodes_buf."""
+        if getattr(self, '_wbatch', None) != (b0, nq):
+            self._bcodes = self._bcodes_buf[:nq]      # a new view: per-batch caches (gamma) see it
+            self._wbatch = (b0, nq)
+        self._qb = (nq, E)
+
+    def _fill_batch(self, rows, key):
+        """Put the codes of the query rows in the shared batch buffer (if not there already)."""
+        if self._buf_key != key:
+            self._bcodes_buf[:len(rows)] = self.codes[rows]
+            self._buf_key = key
+
     # ------------------------------------------------------------------ tiles --
     def _materialise(self, ti, need_p=True):
         """Rebuild tile ti's distal (and proximal) vectors from the stored boundary vectors, with
@@ -249,7 +362,7 @@ class TiledPlacer(Placer):
         internal = set(tile['internal'])
         n = len(tile['internal'])
         lock = threading.Lock(); done = threading.Event(); errs = []; count = [0]
-        ex = ThreadPoolExecutor(self.cpus)
+        ex = self._threads or ThreadPoolExecutor(self.cpus)
         pending = {v: sum(1 for c in self.children[v] if c in internal) for v in tile['internal']}
 
         def distal_task(v):
@@ -275,7 +388,10 @@ class TiledPlacer(Placer):
                 raise errs[0]
             r = tile['root']
             kr = self.iidx[r]
-            self.bD[r] = self.darr[kr].copy(); self.bDe[r] = self.dexp[kr].copy()
+            # Stored once: later passes compute the same vectors, and replacing them would leave the
+            # old copies with the workers of a pass's pool (copy-on-write) until the pass ends.
+            if r not in self.bD:
+                self.bD[r] = self.darr[kr].copy(); self.bDe[r] = self.dexp[kr].copy()
             if not need_p:
                 return
             if r == self.root:
@@ -303,9 +419,11 @@ class TiledPlacer(Placer):
                 raise errs[0]
             for c in tile['child_roots']:
                 k = self.iidx[c]
-                self.bP[c] = self.parr[k].copy(); self.bPe[c] = self.pexp[k].copy()
+                if c not in self.bP:
+                    self.bP[c] = self.parr[k].copy(); self.bPe[c] = self.pexp[k].copy()
         finally:
-            ex.shutdown()
+            if ex is not self._threads:
+                ex.shutdown()
 
     def cache(self):
         """Allocate one tile's vectors; store the distal vector of every tile root (bottom-up)."""
@@ -315,8 +433,9 @@ class TiledPlacer(Placer):
         self.parr = shared_zeros((self.n_slots, S, self.width)); self.pexp = shared_zeros((self.n_slots, S), np.int64)
         self.bD, self.bDe, self.bP, self.bPe = {}, {}, {}, {}
         t0 = time.time()
-        for ti in range(len(self.tiles)):
-            self._materialise(ti, need_p=False)
+        with self._rebuild_threads():
+            for ti in range(len(self.tiles)):
+                self._materialise(ti, need_p=False)
         self.stats['boundary_s'] = time.time() - t0
 
     # ---------------------------------------------------------------- prefilter --
@@ -341,35 +460,38 @@ class TiledPlacer(Placer):
         ce = np.full((n, K), _NO_EDGE, np.int64)
         qb = min(self.query_batch, n)
         self.scores = shared_zeros((qb, self.max_edges))
+        self._bcodes_buf = shared_zeros((qb, self.codes.shape[1]), self.codes.dtype)
+        self._buf_key = None
         t0, nt = time.time(), len(self.tiles)
         st['pref_probe_n'] = probe
         try:
-            for step, ti in enumerate(reversed(range(nt)), 1):   # top-down: stores boundary proximals
-                tm = time.time()
-                self._materialise(ti, need_p=True)
-                st['pref_rebuild_s'] += time.time() - tm
-                edges = np.array([v for v in self.tiles[ti]['nodes'] if v != self.root], np.int64)
-                if not len(edges):
-                    continue
-                self.locs = edges
-                E = len(edges)
-                groups = [(i, min(E, i + 8)) for i in range(0, E, 8)]
-                for b0 in range(0, n, qb):
-                    rows = qidx[b0:b0 + qb]
-                    if probe and b0 == 0:           # benchmark only: its scores are overwritten
-                        self._bcodes = np.ascontiguousarray(self.codes[rows[:probe]])
-                        self._qb = (len(rows[:probe]), E)
-                        st['pref_probe_s'] += self._pool_map(_tile_prefilter_group, groups, chunksize=2)[1]
-                    self._bcodes = np.ascontiguousarray(self.codes[rows])
-                    self._qb = (len(rows), E)
-                    st['pref_batch_s'] += self._pool_map(_tile_prefilter_group, groups, chunksize=2)[1]
+            with self._pass_pool() as pool:
+                for step, ti in enumerate(reversed(range(nt)), 1):   # top-down: stores boundary proximals
                     tm = time.time()
-                    self._merge(cs, ce, b0, edges, self.scores[:len(rows), :E])
-                    st['pref_merge_s'] += time.time() - tm
-                self.logger.info(f'Prefilter: tile {step}/{nt} ({E:,} edges) done '
-                                 f'({time.time() - t0:.0f} s).')
+                    self._materialise(ti, need_p=True)
+                    st['pref_rebuild_s'] += time.time() - tm
+                    edges = np.array([v for v in self.tiles[ti]['nodes'] if v != self.root], np.int64)
+                    if not len(edges):
+                        continue
+                    self.locs = edges
+                    E = len(edges)
+                    groups = [(i, min(E, i + 8)) for i in range(0, E, 8)]
+                    for b0 in range(0, n, qb):
+                        rows = qidx[b0:b0 + qb]
+                        if probe and b0 == 0:           # benchmark only: its scores are overwritten
+                            self._fill_batch(rows[:probe], ('probe', b0))
+                            tasks = [(ti, b0, len(rows[:probe]), E, g) for g in groups]
+                            st['pref_probe_s'] += self._pass_map(pool, _tile_prefilter_at, tasks, 2)[1]
+                        self._fill_batch(rows, ('batch', b0))
+                        tasks = [(ti, b0, len(rows), E, g) for g in groups]
+                        st['pref_batch_s'] += self._pass_map(pool, _tile_prefilter_at, tasks, 2)[1]
+                        tm = time.time()
+                        self._merge(cs, ce, b0, edges, self.scores[:len(rows), :E])
+                        st['pref_merge_s'] += time.time() - tm
+                    self.logger.info(f'Prefilter: tile {step}/{nt} ({E:,} edges) done '
+                                     f'({time.time() - t0:.0f} s).')
         finally:
-            del self.scores
+            del self.scores, self._bcodes_buf
             self._bcodes = None
         st['pref_s'] += time.time() - t0
         order = np.lexsort((ce, -cs), axis=1)
@@ -421,16 +543,17 @@ class TiledPlacer(Placer):
             for it in items:
                 by_tile[self.tile_of[it[0]]][qi].append(it)
         out = []
-        for ti in sorted(by_tile, reverse=True):
-            self._materialise(ti, need_p=True)
-            jobs = list(by_tile[ti].items())
-            if self.record_work:
-                self.work_log[ti].extend(jobs)
-            res, _, inner = self._pool_map(_tile_eval, jobs,
-                                           chunksize=max(1, min(8, len(jobs) // (16 * self.workers))))
-            out.extend(res)
-            self.stats['eval_s'] += inner
-            self.stats['evals'] += sum(len(items) for _, items in jobs)
+        with self._pass_pool() as pool:
+            for ti in sorted(by_tile, reverse=True):
+                self._materialise(ti, need_p=True)
+                jobs = list(by_tile[ti].items())
+                if self.record_work:
+                    self.work_log[ti].extend(jobs)
+                res, inner = self._pass_map(pool, _tile_eval_at, [(ti, job) for job in jobs],
+                                            chunksize=max(1, min(8, len(jobs) // (16 * self.workers))))
+                out.extend(res)
+                self.stats['eval_s'] += inner
+                self.stats['evals'] += sum(len(items) for _, items in jobs)
         return out
 
     def _replay(self, qi, stage1):

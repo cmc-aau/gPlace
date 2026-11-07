@@ -29,6 +29,7 @@ Speed: the likelihood-vector cache is built by a dependency-driven thread pool; 
 and the placements run in forked worker processes, with the large arrays in shared memory.
 """
 
+import ctypes
 import gc
 import json
 import logging
@@ -62,9 +63,29 @@ def shared_zeros(shape, dtype=np.float64):
 _PLACER = None                                  # the Placer seen by forked workers
 
 
+def _free_memory_call():
+    """The C library's call that gives freed malloc memory back to the system, or None."""
+    try:
+        libc = ctypes.CDLL(None)
+    except OSError:
+        return None
+    if hasattr(libc, 'malloc_trim'):                        # glibc
+        return lambda: libc.malloc_trim(0)
+    if hasattr(libc, 'malloc_zone_pressure_relief'):        # macOS: every zone (NULL), as much as possible (0)
+        f = libc.malloc_zone_pressure_relief
+        f.argtypes, f.restype = [ctypes.c_void_p, ctypes.c_size_t], ctypes.c_size_t
+        return lambda: f(None, 0)
+    return None
+
+
+_free_memory = _free_memory_call()
+
+
 def _fork_pool(n):
     gc.collect()
     gc.freeze()                                 # keep object pages shared after fork
+    if _free_memory is not None:
+        _free_memory()                          # freed memory back to the system: not shared, so not copied
     return multiprocessing.get_context('fork').Pool(n)
 
 
