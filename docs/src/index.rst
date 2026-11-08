@@ -32,9 +32,7 @@ Quick start
 .. code-block:: bash
 
     # install (see Installing gPlace)
-    git clone https://github.com/cmc-aau/gPlace.git
-    cd gPlace
-    pip install .
+    python -m pip install gtdb-gplace
     gplace check_install
 
     # place aligned sequences on a pplacer reference package: pplacer's command line

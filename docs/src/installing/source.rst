@@ -1,10 +1,29 @@
-Advanced installation
-=====================
+Installing from source
+======================
 
 gPlace's placement engine is written in C (``gplace/engine/csrc/xp.c``) and links three third-party C
 libraries that exactness depends on: GSL 1.16, CORE-MATH and glibc 2.19's ``hypot`` and ``log1p``.
-``pip install .`` compiles them; the results are identical on every platform and with every
+Installing from source compiles them; the results are identical on every platform and with every
 compiler.
+
+
+Install from GitHub
+-------------------
+
+You need a C compiler and ``make``, which most Linux systems have. If yours does not, conda can
+provide them (first command below); on macOS, run ``xcode-select --install``.
+
+.. code-block:: bash
+
+    conda create -n gplace -c conda-forge python=3.12 gcc make    # optional: a fresh environment
+    conda activate gplace
+
+    git clone https://github.com/cmc-aau/gPlace.git
+    cd gPlace
+    pip install .            # also builds gPlace's engine: a few minutes, the first time only
+    gplace check_install
+
+The build downloads one library (GSL 1.16) from a GNU mirror; without internet access, see below.
 
 
 Build requirements

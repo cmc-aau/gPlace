@@ -33,7 +33,7 @@ GiB = 2 ** 30
 
 # tiled placement (gplace.engine.tiled)
 QUERY_BATCH = 20000         # queries scored per prefilter sweep of a tile
-N_CAND = 160                # ranked edges kept per query (pplacer's search uses at most ~41)
+N_CAND = 160                # minimum ranked edges per query; candidates_needed() keeps 164 by default
 MERGE_CELLS = 4_000_000     # candidate-merge chunk size (rows x columns)
 
 

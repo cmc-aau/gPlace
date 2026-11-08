@@ -217,8 +217,8 @@ _NO_EDGE = np.iinfo(np.int64).max       # filler in the candidate lists: ranks a
 
 
 def candidates_needed(search, n_edges, n_cand=resources.N_CAND):
-    """Ranked edges kept per query: n_cand, more when --max_pitches allows more pitches (4 per
-    pitch, as the default 160 for 40), every edge when --max_strikes 0 lifts the limit."""
+    """Ranked edges kept per query: 4 per edge pplacer's search can use (max_pitches + 1: 164 with
+    the default 40), at least n_cand; every edge when --max_strikes 0 lifts the limit."""
     tp = search.t_max_pitches
     if tp == math.inf:
         return n_edges

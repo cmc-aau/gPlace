@@ -5,25 +5,21 @@ Installing gPlace
 
 gPlace runs on 64-bit Linux (x86-64 or ARM64) and macOS, with Python 3.12 or newer.
 
-.. note::
+Install with pip
+----------------
 
-   gPlace is not on PyPI or Bioconda yet: install it from GitHub as below.
-
-
-Install from GitHub
--------------------
-
-You need a C compiler and ``make``, which most Linux systems have. If yours does not, conda can
-provide them (first command below); on macOS, run ``xcode-select --install``.
+gPlace is on PyPI as ``gtdb-gplace``; the command it installs is ``gplace``.
 
 .. code-block:: bash
 
-    conda create -n gplace -c conda-forge python=3.12 gcc make    # optional: a fresh environment
+    conda create -n gplace -c conda-forge python=3.12    # optional: a fresh environment
     conda activate gplace
 
-    git clone https://github.com/cmc-aau/gPlace.git
-    cd gPlace
-    pip install .            # also builds gPlace's engine: a few minutes, the first time only
+    python -m pip install gtdb-gplace
+
+On Linux (x86-64 and ARM64), pip installs a prebuilt package: nothing is compiled. On macOS, pip
+compiles gPlace's engine during the install, which needs a C compiler and ``make``
+(``xcode-select --install``) and takes a few minutes (see :doc:`pip`).
 
 Then check that it works:
 
@@ -32,8 +28,7 @@ Then check that it works:
     gplace check_install     # should end with "Installation OK"
     gplace test              # places 20 bundled genomes and compares them with pplacer's output
 
-The build downloads one library (GSL 1.16) from a GNU mirror. Without internet access, or to
-reuse an existing build, see :doc:`source`.
+To upgrade later: ``python -m pip install --upgrade gtdb-gplace``.
 
 
 What you need to run it
@@ -51,6 +46,6 @@ Other ways to install
 .. toctree::
    :maxdepth: 1
 
-   source
    pip
+   source
    bioconda

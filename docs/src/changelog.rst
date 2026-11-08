@@ -1,6 +1,31 @@
 Change log
 ==========
 
+0.1.1
+-----
+
+Major Changes:
+
+* Tiled placement starts its worker processes once per pass over the tiles (the prefilter, each
+  baseball round, the refinement) instead of once per tile, and rebuilds the tiles of a pass with one
+  thread pool: 10,000 genomes on the GTDB R232 bacterial tree in 370 tiles (``--max_memory 8.5G``,
+  64 CPUs) take 25 minutes instead of 2 h 49 min, with identical results. Before each fork, freed
+  memory goes back to the system (``malloc_trim`` on Linux, ``malloc_zone_pressure_relief`` on macOS),
+  which keeps the longer-lived workers within the planned memory.
+
+Documentation:
+
+* The installation pages start with pip: gPlace is on PyPI as ``gtdb-gplace``
+  (``python -m pip install gtdb-gplace``), with prebuilt wheels for Linux (x86-64 and ARM64); on macOS
+  pip compiles the engine from the source package. Installing from GitHub is described in
+  "Installing from source".
+* "How gPlace works" has new figures: an exponent pull at the bit level, when pplacer and gPlace
+  apply the final pull (new section "Exponents and the final pull"), and tiled placement step by step
+  (the prefilter tile by tile, baseball in rounds, the ranked edges kept per query).
+* Corrected numbers: tiled placement keeps 164 ranked edges per query by default (4 x 41), not 160;
+  pplacer's search stops after 41 successfully optimised edges (``--max_pitches`` 40, plus the last
+  one), not after 40 edges tried.
+
 0.1.0
 -----
 
@@ -105,9 +130,3 @@ Major Changes:
   pplacer names it, and several query files give one jplace file each. pplacer's ``--mmap-file``,
   ``--verbosity`` and ``--timing`` are accepted with no effect; the pplacer options gPlace does not
   implement stop the run with a message. ``-j 0`` / ``--cpus 0`` place with one process, as pplacer.
-* Tiled placement starts its worker processes once per pass over the tiles (the prefilter, each
-  baseball round, the refinement) instead of once per tile, and rebuilds the tiles of a pass with one
-  thread pool: 10,000 genomes on the GTDB R232 bacterial tree in 370 tiles (``--max_memory 8.5G``,
-  64 CPUs) take 25 minutes instead of 2 h 49 min, with identical results. Before each fork, freed
-  memory goes back to the system (``malloc_trim`` on Linux, ``malloc_zone_pressure_relief`` on macOS),
-  which keeps the longer-lived workers within the planned memory.
