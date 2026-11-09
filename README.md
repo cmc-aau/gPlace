@@ -8,8 +8,11 @@
 <p align="center">
   <a href="https://github.com/cmc-aau/gPlace/actions/workflows/tests.yml"><img alt="Unit tests" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/pchaumeil/08bdf557b640135e66112abccdc87bcc/raw/gplace-tests.json"></a>
   <a href="https://github.com/cmc-aau/gPlace/actions/workflows/tests.yml"><img alt="pplacer parity" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/pchaumeil/08bdf557b640135e66112abccdc87bcc/raw/gplace-parity.json"></a>
+  <br>
   <a href="https://anaconda.org/bioconda/gtdb-gplace"><img alt="Bioconda" src="https://img.shields.io/conda/vn/bioconda/gtdb-gplace?label=bioconda"></a>
+  <a href="https://anaconda.org/bioconda/gtdb-gplace"><img alt="Bioconda downloads" src="https://img.shields.io/conda/dn/bioconda/gtdb-gplace?label=bioconda%20downloads"></a>
   <a href="https://pypi.org/project/gtdb-gplace/"><img alt="PyPI" src="https://img.shields.io/pypi/v/gtdb-gplace?label=PyPI"></a>
+  <a href="https://pepy.tech/projects/gtdb-gplace"><img alt="PyPI downloads" src="https://img.shields.io/pepy/dt/gtdb-gplace?label=PyPI%20downloads"></a>
 </p>
 
 > [!WARNING]
