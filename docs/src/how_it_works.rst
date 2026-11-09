@@ -24,7 +24,7 @@ What pplacer computes
    pplacer's six steps. Steps 1 to 3 run once per reference package and steps 4 to 6 for each
    query. gPlace changes only the cache (step 3) and the prefilter (step 4), shown in green.
 
-For each query, pplacer v1.1.alpha19 (``pplacer -m WAG -c <refpkg>``, as run by GTDB-Tk):
+For each query, pplacer v1.1.alpha19 (``pplacer -m WAG -c <refpkg>``, with a WAG + CAT reference package):
 
 1. **Pre-masks** the alignment: keeps columns informative in at least one reference and one query.
 2. **Builds the model**: WAG exchangeabilities and frequencies, FastTree's 20 CAT rates and
@@ -36,7 +36,8 @@ For each query, pplacer v1.1.alpha19 (``pplacer -m WAG -c <refpkg>``, as run by 
    supernode) and ranks the edges.
 5. **Baseball**: fully optimises edges in ranked order (pendant and distal branch lengths,
    alternating GSL Brent, tolerance 0.01) until 6 edges are more than 3 log-units worse than the
-   best so far, or 40 edges have been tried.
+   best so far, or 41 edges have been optimised (``--max_pitches`` 40, plus the last one); an edge
+   whose optimisation fails is skipped and not counted.
 6. **Keeps and refines**: up to 7 edges within log(0.01) of the best are re-optimised at 1e-5;
    the like-weight ratios are normalised likelihoods.
 
@@ -46,7 +47,7 @@ For each query, pplacer v1.1.alpha19 (``pplacer -m WAG -c <refpkg>``, as run by 
 
    Steps 5 and 6 for one query (illustrative values). A strike is an edge more than 3 log-likelihood
    units below the best so far (the strike box follows the best); the search stops at the 6th strike, or
-   after 40 edges, and the edges after it are never optimised. At most 7 edges within a factor 0.01 of
+   after 41 successfully optimised edges, and the edges after it are never optimised. At most 7 edges within a factor 0.01 of
    the best likelihood are kept, refined and normalised into like-weight ratios.
 
 What gPlace changes
@@ -54,9 +55,9 @@ What gPlace changes
 
 Only what is stored and when it is computed:
 
-* distal/proximal vectors are stored for **internal nodes only**, before pplacer's final
-  "pull exponents (-10)" pass, which is re-applied to a copy when a vector is used. Rescaling by
-  powers of two is exact, so every value is bit-identical;
+* distal/proximal vectors are stored for **internal nodes only**, as they are before pplacer's
+  final exponent pull, which gPlace applies to a copy when a vector is used (see
+  `Exponents and the final pull`_);
 * **leaf vectors are rebuilt on demand**: a leaf's distal vector is its sequence, and its
   proximal vector is its parent's proximal vector times its siblings' distal vectors, in
   pplacer's operation order;
@@ -82,6 +83,43 @@ search, which uses at most 41 successful ones), as tiled placement does. A query
 past them, after many failed optimisations, is scored against every edge again and its ranking
 continues in the same order, so results are identical; memory then barely grows with the number of
 queries.
+
+Exponents and the final pull
+----------------------------
+
+Likelihoods are products of many probabilities and soon become too small for a double (the
+smallest is about 1e-308). pplacer therefore stores each site of a vector as 20 numbers and one
+whole-number exponent *e* shared by the site: each value is *number x 2^e*. A **pull** moves powers
+of two from the numbers into *e*: when the largest number of a site is below a limit, every number
+of the site is multiplied by the same power of two (so that the largest lands between 0.5 and 1),
+and that power is subtracted from *e*.
+
+.. figure:: /_static/figures/pull.svg
+   :width: 100%
+   :alt: Four values of one site before and after a pull: each is multiplied by 2 to the 28, its exponent changes, its 52 mantissa bits are identical, and the site exponent goes from 0 to minus 28.
+
+   One site before and after a pull. Multiplying by a power of two changes only the exponent of each
+   double: its 52 mantissa bits are kept, so nothing is rounded and *number x 2^e* is unchanged. The
+   result depends only on the vector itself.
+
+pplacer pulls a site while it builds the cache, when its largest number falls below
+2\ :sup:`-51`. Once every vector is built, before any query is placed, it pulls every site of
+every vector again with a much stricter limit, 2\ :sup:`-11` (its "pull exponents (-10)" step).
+gPlace stores its vectors as they are before that final pass, and applies the pass to a copy
+whenever a vector is used:
+
+.. figure:: /_static/figures/pull_order.svg
+   :width: 100%
+   :alt: Two rows of three steps. pplacer: build all vectors, pull every vector, place. gPlace: build the internal-node vectors, store them as built, copy and pull when a vector is used, rebuilding a leaf vector first; the vectors used have the same bits.
+
+   pplacer builds every vector, leaves included, then pulls them all; gPlace builds the
+   internal-node vectors, keeps them as built, and pulls a copy when one is used. The copy has
+   exactly the bits pplacer holds after its final pass.
+
+Why not store the pulled vectors? gPlace rebuilds a leaf's vectors when it places, whereas pplacer
+built them before its final pass, from vectors that were not pulled yet. Built from pulled vectors,
+the same values would be split differently between numbers and exponents, which can change the last
+bits of a likelihood. Kept as built, gPlace's vectors are exactly the inputs pplacer used.
 
 Tiled placement
 ---------------
@@ -110,18 +148,50 @@ parts become tile roots (leaves never root a tile).
    gPlace's cut (``tile_layout``) of a 24-leaf tree with ``--tile_edges 12``. With its two boundary
    vectors (D and P), each tile is rebuilt on its own, exactly as in the untiled cache.
 
-pplacer's algorithm is unchanged; only the order of the work is:
+pplacer's algorithm is unchanged; only the order of the work is. pplacer places one query at a
+time and moves between edges all over the tree; with tiles, that would mean rebuilding a tile for
+almost every edge. gPlace groups the work instead, so that each pass over the tree rebuilds each
+tile once:
 
-1. **Prefilter**, tile by tile and in batches of 20,000 queries: each query keeps its 160 best
-   edges in pplacer's ranking order (score descending, ties by ascending edge number), which is
-   pplacer's global ranking without a *queries x edges* score table.
-2. **Baseball in rounds**: each first-stage optimisation starts from pplacer's default branch
-   lengths, so its result does not depend on the edges tried before. The next 8 ranked edges of
-   every query still searching are optimised, grouped by tile, and pplacer's stopping rule is
-   replayed on the stored results; a few extra edges are evaluated and discarded. pplacer's
-   search needs at most 41 successful edges; a query with many failed optimisations that runs
-   out of candidates is re-ranked with more.
+1. **Prefilter**, tile by tile and in batches of 20,000 queries. Each query keeps its 164 best edges
+   (4 x 41) in pplacer's ranking order: score descending, ties by ascending edge number. That order
+   is strict, so merging each tile's best edges into the list gives exactly the start of pplacer's
+   ranking of all the edges, without a *queries x edges* score table.
+
+   .. figure:: /_static/figures/tiled_prefilter.svg
+      :width: 100%
+      :alt: Three tiles of ten edges, one in memory at a time. One query's list of best edges is updated after each tile; after the last tile it is the start of pplacer's ranking, with two equal scores ordered by edge number.
+
+      The prefilter for one query, on a tree in three tiles. After the last tile, the query's list
+      is the start of pplacer's ranking of every edge.
+
+2. **Baseball in rounds**. Each first-stage optimisation starts from pplacer's starting branch
+   lengths (``--start_pend`` for the pendant branch, half the edge for the distal one), so its
+   result does not depend on the edges tried before it: edges can be optimised in any order. Each round optimises the next 8 ranked edges of
+   every query still searching, grouped by tile, so a tile is rebuilt once per round for all the
+   queries. pplacer's stopping rule is then replayed on the stored results, in rank order; edges
+   optimised past the point where pplacer's search stops are discarded.
+
+   .. figure:: /_static/figures/tiled_rounds.svg
+      :width: 100%
+      :alt: Three queries' ranked edges coloured by tile. Round 1 optimises ranks 1 to 8 of every query, tile by tile; the replay stops query 1 at rank 7 and query 3 at rank 8, and discards query 1's rank 8. Round 2 optimises query 2's ranks 9 to 16; it stops at rank 12 and ranks 13 to 16 are discarded. The kept edges are circled.
+
+      Rounds for three queries (illustrative values). Query 1's 6th strike is rank 7, so its rank 8
+      was optimised for nothing; query 2 needs a second round. The kept edges, circled, are the ones
+      pplacer keeps.
+
 3. **Refinement** of the kept edges at 1e-5, tile by tile, then the like-weight ratios.
+
+pplacer's search uses at most 41 successful optimisations. An optimisation that fails is skipped
+and not counted, so the 164 ranked edges leave room for 123 failures. A query that uses them all
+without stopping is ranked again with 4 times as many edges, and its first 164 are checked to be
+unchanged (with a larger ``--max_pitches``, each query keeps 4 x (max_pitches + 1) edges).
+
+.. figure:: /_static/figures/ranked_edges.svg
+   :width: 100%
+   :alt: A bar of 164 ranked edges: at most 41 successful optimisations, and 123 spare edges for failed ones. A query that uses all 164 is ranked again with 656 edges, the first 164 unchanged.
+
+   The ranked edges kept per query, and what happens when a query uses them all.
 
 Each pass rebuilds the tiles, so tiled placement is 1.7-2.5x slower than untiled placement on a
 tree that fits in memory; ``--max_memory`` therefore places untiled whenever it can.
@@ -151,10 +221,11 @@ In short:
   152-221 in another phylum.
 
 Every tool ran on the same server (64 vCPUs, 245 GB of memory), one at a time, with 32 threads and
-at most 200 GiB of memory. The genomes are GlobDB r226 genomes aligned by GTDB-Tk:
+at most 200 GiB of memory. The genomes are GlobDB r226 genomes, aligned to GTDB's 120 bacterial
+marker genes:
 
-* **Tree 2**: GTDB-Tk's R226 class-level reference tree 2 (21,566 reference genomes) and the 22,061
-  genomes GTDB-Tk placed on it, compared with GTDB-Tk's own pplacer output;
+* **Tree 2**: the GTDB R226 class-level reference tree 2 (21,566 reference genomes) and the 22,061
+  genomes that belong on it, compared with pplacer's output;
 * **Full tree**: the full GTDB R226 bacterial tree (136,646 reference genomes) and 10,000 random
   genomes, compared with pplacer's output from a 1 TB server (pplacer: 17 h 13 min and 654.9 GiB;
   gPlace on that server: 13 min 47 s).
@@ -268,14 +339,15 @@ gPlace ran with ``--max_memory 64G``: untiled on tree 2, in 5 tiles on the full 
   as pplacer's (tools that re-root the tree or re-estimate its branch lengths are compared on the
   same edges, matched by their leaves).
 * *Different genus*, *Different phylum*: the GTDB genus or phylum that contains the placement is
-  not the one that contains pplacer's. This is not a full GTDB-Tk classification, which also uses
-  RED and ANI, but it counts the genomes placed in another named group.
-* The tools: pplacer v1.1.alpha19 as run by GTDB-Tk (``-m WAG``); BSCAMPP 1.0.8, which places
-  each genome on a subtree of *b* reference genomes around its closest ones (*b* = 2000 is its
-  default; *b* = 12000 with *V* = 15 votes are GTDB-Tk's settings); Splicer (git 224b604), which
+  not the one that contains pplacer's. This is not a full taxonomic classification, which would
+  also use relative evolutionary divergence and ANI, but it counts the genomes placed in another
+  named group.
+* The tools: pplacer v1.1.alpha19 (``-m WAG``); BSCAMPP 1.0.8, which places each genome on a
+  subtree of *b* reference genomes around its closest ones (*b* = 2000 is its default; also run with
+  *b* = 12000 and *V* = 15 votes); Splicer (git 224b604), which
   splits the tree into pieces and places each genome in one of them; APPLES-2 2.0.11, which places
-  by distances. With pplacer, BSCAMPP and Splicer used pplacer v1.1.alpha19 and GTDB-Tk's model
-  (WAG + CAT); BSCAMPP with EPA-ng used EPA-ng's model (below).
+  by distances. With pplacer, BSCAMPP and Splicer used pplacer v1.1.alpha19 and the reference
+  package's model (WAG + CAT); BSCAMPP with EPA-ng used EPA-ng's model (below).
 * EPA-ng 0.3.8 is not in the tables. It has no CAT model, so it used WAG with 4 gamma rates, and
   with its default settings it ran out of memory while loading tree 2. Without pre-masking it
   placed 1,000 random tree-2 genomes in 14 min 50 s with 192.5 GiB: 892 (89.2%) on pplacer's edge,

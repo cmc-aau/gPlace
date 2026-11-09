@@ -2,7 +2,7 @@
  * gPlace placement engine (libgplace_core.so).
  *
  * Exact re-implementation of the numerical core of pplacer v1.1.alpha19 (commit 807f6f3, the
- * build GTDB-Tk uses) for its Gcat (FastTree CAT) and Gmix (discrete gamma) models, protein and
+ * statically linked release binary) for its Gcat (FastTree CAT) and Gmix (discrete gamma) models, protein and
  * DNA: every floating-point result keeps pplacer's operands, operation order and rounding, so
  * placements are bit-identical. Built twice: NS=20 (protein, libgplace_core.so) and NS=4 (DNA,
  * libgplace_core_nt.so).
@@ -1597,6 +1597,164 @@ void xp_merge_candidates(double *cs, int64_t *ce, int K, int64_t nrows, const do
   mg_worker(&J);
   for (int k = 1; k <= started; k++) pthread_join(th[k], NULL);
   free(th);
+}
+
+/* ======================================================================================
+ * Posterior probabilities (pplacer -p): Three_tax.calc_marg_prob and find_upper_limit.
+ * The marginal likelihood of a placement integrates exp(log_like - base_ll) * prior(pend) over
+ * the distal length (0..cut) and the pendant length (0..upper) with GSL's qng, nested as in
+ * pplacer, then base_ll + log(integral / cut). The integrands set the branch lengths through
+ * tt_set_pend/tt_set_dist, so the cut drifts exactly as pplacer's set_dist_bl makes it drift.
+ * ====================================================================================== */
+#include <gsl/gsl_integration.h>
+#include <gsl/gsl_randist.h>
+
+typedef struct { TT *t; int unif; double mu, base_ll, upper, rel_err, target; } MargCtx;
+
+/* Which paths of the calculation ran (per process; for the tests): 0 calls, 1 upper limit by
+ * halving (prior 0), 2 upper limit = max_pend (GSL_EINVAL), 3 upper limit found by the start
+ * finder (FoundMin), 4 by Brent, 5 outer integrations failed (GSL_ETOL, bounds halved), 6 inner
+ * integrations failed inside the outer one (NaN), 7 set_dist_bl asserts inside it (NaN), 8 cut =~ 0,
+ * 9 gave up after 10 failures, 10 outer qng with 21 points, 11 with 43, 12 with 87. */
+static long long pp_cnt[13];
+void xp_pp_counters(long long *out, int reset)
+{
+  memcpy(out, pp_cnt, sizeof pp_cnt);
+  if (reset) memset(pp_cnt, 0, sizeof pp_cnt);
+}
+
+static double pp_prior(const MargCtx *c, double x)      /* Uniform_prior, or exponential_pdf ~mu */
+{
+  return c->unif ? 1. : gsl_ran_exponential_pdf(x, c->mu);
+}
+
+static double pp_inner_f(double pend, void *p)          /* fun pend_bl -> ... */
+{
+  MargCtx *c = (MargCtx *)p;
+  tt_set_pend(c->t, pend);
+  return exp(tt_log_like(c->t) - c->base_ll) * pp_prior(c, pend);
+}
+
+static int pp_inner(MargCtx *c, double *v)              /* inner_integration () */
+{
+  gsl_function F; F.function = &pp_inner_f; F.params = c;
+  double err; size_t n;
+  return gsl_integration_qng(&F, 0., c->upper, 0., c->rel_err, v, &err, &n);
+}
+
+static double pp_outer_f(double dist, void *p)          /* fun dist_bl -> set_dist_bl; inner () */
+{
+  MargCtx *c = (MargCtx *)p;
+  TT *t = c->t;
+  /* An exception inside a GSL callback (set_dist_bl's assert, or the inner integration's
+   * Gsl_exn) is caught by ocamlgsl's gslfun_callback (caml_callback_exn), which returns NaN:
+   * the outer qng then fails to converge (GSL_ETOL). The assert fires before any change. */
+  if (!((t->dist_bl + t->prox_bl) - dist >= 0.)) { pp_cnt[7]++; return NAN; }
+  tt_set_dist(t, dist);
+  double v;
+  if (pp_inner(c, &v) != GSL_SUCCESS) { pp_cnt[6]++; return NAN; }
+  return v;
+}
+
+static double pp_ul_f(double pend, void *p)             /* find_upper_limit's f */
+{
+  MargCtx *c = (MargCtx *)p;
+  tt_set_pend(c->t, pend);
+  double like = tt_log_like(c->t) + log(pp_prior(c, pend));
+  double x = fabs(c->target - like);
+  return x == INFINITY ? 100000.0 : x;
+}
+
+/* Minimization.brent ~max_iters with bisection_start_finder ~max_iters, on GSL's Brent, for a
+ * function that raises nothing (xp_brent is the same for the branch length objective). Sets
+ * *gsl_errno on XP_GSL. */
+static int pp_brent(double (*f)(double, void *), void *p, int max_iters, double raw_start,
+                    double left, double right, double tol, double *res, int *gsl_errno)
+{
+  if (left >= raw_start || raw_start >= right) return XP_INVALIDSTART;
+  double righty = f(right, p);                     /* (f left, f right): right-to-left */
+  double lefty = f(left, p);
+  double smaller = (lefty < righty) ? left : right;
+  double miny = (lefty <= righty) ? lefty : righty;
+  double prev = raw_start, start;
+  int it = 1;
+  for (;;) {
+    double pv = f(prev, p);
+    if (pv < miny) { start = prev; break; }
+    else if (fabs(prev - smaller) < tol) { *res = (pv < miny) ? prev : smaller; pp_cnt[3]++; return XP_OK; }
+    else if (it > max_iters) return XP_FINDSTART;
+    prev = (prev + smaller) / 2.; it++;
+  }
+  gsl_function F; F.function = f; F.params = p;
+  gsl_min_fminimizer *s = gsl_min_fminimizer_alloc(gsl_min_fminimizer_brent);
+  int st = gsl_min_fminimizer_set(s, &F, start, left, right);
+  if (st) { gsl_min_fminimizer_free(s); *gsl_errno = st; return XP_GSL; }
+  for (int step = 1; ; step++) {
+    if (step > max_iters) { gsl_min_fminimizer_free(s); return XP_EXCEEDED; }
+    st = gsl_min_fminimizer_iterate(s);
+    if (st) { gsl_min_fminimizer_free(s); *gsl_errno = st; return XP_GSL; }
+    double lo = gsl_min_fminimizer_x_lower(s), hi = gsl_min_fminimizer_x_upper(s);
+    if (hi - lo < tol) { *res = gsl_min_fminimizer_x_minimum(s); gsl_min_fminimizer_free(s); pp_cnt[4]++; return XP_OK; }
+  }
+}
+
+/* find_upper_limit: where the log likelihood plus log prior has dropped about 10 units below
+ * its value at the current (ML) pendant length; changes the pendant length. */
+static int pp_upper_limit(MargCtx *c, double max_pend, double *upper, int *gsl_errno)
+{
+  const double orig = c->t->pend_bl;
+  if (pp_prior(c, orig) == 0.) {
+    double cur = orig;
+    for (;;) {
+      double next = cur / 2.;
+      if (pp_prior(c, next) > exp(-10.)) { *upper = cur; pp_cnt[1]++; return XP_OK; }
+      if (next == cur) return XP_FINDSTART;        /* pplacer would loop forever */
+      cur = next;
+    }
+  }
+  c->target = -10. + c->base_ll + log(pp_prior(c, orig));
+  double start = orig + ((max_pend - orig) / 2.);
+  int st = pp_brent(&pp_ul_f, c, 10, start, orig, max_pend, 0.02, upper, gsl_errno);
+  if (st == XP_GSL && *gsl_errno == GSL_EINVAL) { *upper = max_pend; pp_cnt[2]++; return XP_OK; }
+  return st;
+}
+
+/* Three_tax.calc_marg_prob for the placement the TT is set to (xp_tt_set with the refined
+ * lengths). unif: uniform prior, else exponential with mean mu. out = (marginal log likelihood,
+ * 1 if pplacer warned "integration did not converge after changing bounds 10 times").
+ * Returns XP_OK, or the exception pplacer does not catch (XP_GSL with the GSL error in
+ * out[1], XP_EXCEEDED, XP_FINDSTART, XP_INVALIDSTART). */
+int xp_tt_marg_prob(TT *t, int unif, double mu, double rel_err, double max_pend, double *out)
+{
+  MargCtx c; c.t = t; c.unif = unif; c.mu = mu; c.rel_err = rel_err; c.target = 0.;
+  c.base_ll = tt_log_like(t);
+  pp_cnt[0]++;
+  const double cut_bl = t->dist_bl + t->prox_bl;
+  int gerr = 0, n_exceptions = 0;
+  double upper;
+  out[1] = 0.;
+  int st = pp_upper_limit(&c, max_pend, &upper, &gerr);
+  if (st) { if (st == XP_GSL) out[1] = gerr; return st; }
+  for (;;) {
+    if (n_exceptions >= 10) { out[0] = c.base_ll; out[1] = 1.; pp_cnt[9]++; return XP_OK; }
+    c.upper = upper;
+    double v; int gst;
+    if (fabs(cut_bl - 0.) < 1e-5) {                /* cut_bl =~ 0. */
+      pp_cnt[8]++;
+      tt_set_dist(t, cut_bl / 2.);
+      gst = pp_inner(&c, &v);
+    } else {
+      gsl_function F; F.function = &pp_outer_f; F.params = &c;
+      double r, err; size_t n;
+      gst = gsl_integration_qng(&F, 0., cut_bl, 0., rel_err, &r, &err, &n);
+      v = r / cut_bl;
+      pp_cnt[n == 21 ? 10 : n == 43 ? 11 : 12]++;
+    }
+    if (gst == GSL_ETOL) { n_exceptions++; pp_cnt[5]++; upper = upper / 2.; continue; }
+    if (gst) { out[1] = gst; return XP_GSL; }
+    out[0] = c.base_ll + log(v);
+    return XP_OK;
+  }
 }
 
 /* ======================================================================================

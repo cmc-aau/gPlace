@@ -3,9 +3,9 @@
 Models
 ======
 
-**In short:** with GTDB-Tk's reference packages you do not need this page: the model (WAG with
-FastTree's CAT rates) comes from the package, as in pplacer. It matters for reference packages
-built for other trees (see :ref:`advanced/own_trees`).
+**In short:** with a reference package you do not need this page: the model comes from the
+package, as in pplacer (for the GTDB reference packages, WAG with FastTree's CAT rates). It matters
+when you build reference packages or give reference files yourself (see :ref:`advanced/own_trees`).
 
 gPlace reproduces every evolutionary model pplacer v1.1.alpha19 supports, bit for bit. Like
 pplacer, it reads the model from the reference package's ``phylo_model`` JSON file (pplacer's
@@ -32,7 +32,7 @@ pplacer, it reads the model from the reference package's ``phylo_model`` JSON fi
        ``SiteCategories``) or ``gamma`` (``gamma.alpha``, ``gamma.n_cats``: every site under all
        discrete-gamma rates, averaged)
 
-GTDB-Tk's reference packages are WAG + Price-CAT with model frequencies. Reference packages built
+The GTDB reference packages are WAG + Price-CAT with model frequencies. Reference packages built
 with ``taxit create`` from FastTree logs (CAT), RAxML/PhyML statistics (gamma), or IQ-TREE and RAxML-NG
 fits (gamma) work as they are; for IQ-TREE and RAxML-NG see :ref:`advanced/own_trees` (which parts of a
 fitted model pplacer uses). ``place --full_model`` places with an IQ-TREE or RAxML-NG fit's complete model
@@ -86,7 +86,7 @@ Memory
 
 The likelihood vectors hold *states x rates* numbers per site: 20 for protein CAT, 4 for DNA CAT,
 80 for protein with 4 gamma rates. ``--max_memory`` and ``gplace benchmark`` take this into
-account; tiled placement works for every model. Measured on the GTDB-Tk R226 class-level reference
+account; tiled placement works for every model. Measured on the GTDB R226 class-level reference
 package 8 (13,714 nodes, 343 genomes): WAG + CAT 33.1 GiB with pplacer, 11.0 GiB with gPlace;
 WAG + gamma 125.7 GiB with pplacer, 42.2 GiB with gPlace untiled and 6.3 GiB with tiles of at most
 2,000 edges.

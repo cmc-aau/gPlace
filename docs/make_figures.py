@@ -543,9 +543,337 @@ def fig_engines():
     return f.save()
 
 
+# Exponent pull ----------------------------------------------------------------------------------
+
+EXP_FILL, EXP_LINE = ORANGE_L, ORANGE                      # what a pull changes: the exponents
+MANT_FILL, MANT_LINE = '#e8eff8', VEC_D                    # what it keeps: the mantissa bits
+
+
+def pow2(e, size=9.5):
+    """2 to the power e (raw SVG text; the exponent is raised, so it must end the text)."""
+    return '2' + f'<tspan dy="-6" font-size="{size}">{str(e).replace("-", "−")}</tspan>'
+
+
+def sci(x):
+    """x as 3.1e−9."""
+    m, e = f'{x:.1e}'.split('e')
+    return f'{m}e{int(e)}'.replace('-', '−')
+
+
+def pull_site():
+    """Four values of one site and pplacer's pull of that site (Glv.perhaps_pull_exponent): for each
+    value, (value, binary exponent, the 52 mantissa bits in hex) before and after; and the power of
+    two the site is multiplied by."""
+    import struct
+    vals = [3.1e-9, 1.2e-10, 7.4e-12, 2.0e-9]
+    _, twoexp = math.frexp(max(vals))
+    rows = []
+    for v in vals:
+        w = v * 2.0 ** -twoexp
+        row = []
+        for x in (v, w):
+            b = struct.unpack('>Q', struct.pack('>d', x))[0]
+            row.append((x, ((b >> 52) & 0x7ff) - 1023, f'{b & ((1 << 52) - 1):013x}'))
+        assert row[0][2] == row[1][2]                      # the pull keeps every mantissa bit
+        rows.append(row)
+    return rows, -twoexp
+
+
+def fig_pull():
+    rows, k = pull_site()
+    f = Figure('pull', 900, 352, 'One exponent pull, bit by bit',
+               f'Four values of one site before and after a pull. Every value is multiplied by 2 to the power '
+               f'{k}: its exponent changes, its 52 mantissa bits are identical, and the site exponent goes from 0 '
+               f'to -{k}, so every value times 2 to the power e is unchanged.', period=10)
+    f.add(T(20, 30, 'One site of a likelihood vector, before and after a pull', 15, weight='bold'),
+          T(20, 49, '4 of its 20 values; each double is drawn as its binary exponent and its 52 mantissa bits',
+            12.5, fill=MUTED))
+    t_row = [1.4 + 0.45 * i for i in range(len(rows))]
+    for side, dx in ((0, 0), (1, 456)):
+        f.add(T(20 + dx, 82, 'Before the pull' if side == 0 else 'After the pull', 13.5, weight='bold'),
+              T(20 + dx, 102, 'value', 11.5, fill=MUTED),
+              T(152 + dx, 102, 'exponent', 11.5, anchor='middle', fill=MUTED),
+              T(304 + dx, 102, 'mantissa bits', 11.5, anchor='middle', fill=MUTED))
+        for i, row in enumerate(rows):
+            x, e, m = row[side]
+            y = 112 + 40 * i
+            items = [T(20 + dx, y + 20, sci(x) if side == 0 else f'{x:.4f}', 13, cls='mono'),
+                     R(108 + dx, y, 88, 30, fill=EXP_FILL, stroke=EXP_LINE, stroke_width=1.2, rx=5),
+                     T(152 + dx, y + 20, pow2(e), 13, anchor='middle', raw=True),
+                     R(204 + dx, y, 200, 30, fill=MANT_FILL, stroke=MANT_LINE, stroke_width=1.2, rx=5),
+                     T(304 + dx, y + 19.5, m, 12.5, anchor='middle', cls='mono')]
+            f.add(*(items if side == 0 else [G(items, class_=f.show(t_row[i]))]))
+        e_box = [R(108 + dx, 280, 296, 30, fill=EXP_FILL, stroke=EXP_LINE, stroke_width=1.2, rx=5),
+                 T(256 + dx, 300, f'site exponent e = {0 if side == 0 else "−" + str(k)}', 13, anchor='middle',
+                   weight='bold')]
+        f.add(*(e_box if side == 0 else [G(e_box, class_=f.show(t_row[-1] + 0.7))]))
+    f.add(G([T(440, 176, '× ' + pow2(k), 13, anchor='middle', weight='bold', raw=True),
+             P('M414 187 H462', stroke=INK, stroke_width=1.6),
+             P('M456 181 l6 6 l-6 6', stroke=INK, stroke_width=1.6, stroke_linecap='round', stroke_linejoin='round')],
+            class_=f.show(0.6)))
+    t_end = t_row[-1] + 1.6
+    f.add(R(20, 326, 13, 13, fill=EXP_FILL, stroke=EXP_LINE, stroke_width=1.2, rx=3),
+          T(40, 337, f'changes: every exponent +{k}, the site exponent e −{k}', 12.5, fill=MUTED),
+          G([check(484, 332, 7.5), T(498, 337, 'identical: the 52 mantissa bits, so nothing is rounded', 12.5,
+                                      weight='bold', fill=ACCENT)], class_=f.show(t_end)))
+    return f.save()
+
+
+def fig_pull_order():
+    f = Figure('pull_order', 900, 334, 'When the final exponent pull happens, in pplacer and in gPlace',
+               'pplacer builds every vector, leaves included, then pulls every stored vector, then places. '
+               'gPlace builds the internal-node vectors, stores them as built, and pulls a copy when a vector '
+               'is used; a leaf vector is rebuilt first, from the inputs pplacer used when it built it. The '
+               'vectors used are bit-identical.', period=9)
+    xs, W, H = [130, 390, 650], 230, 72
+    for x, head in zip(xs, ['1 · Build the cache', '2 · Final pull (−10)', '3 · Place the queries']):
+        f.add(T(x, 50, head, 13, weight='bold', fill=MUTED))
+    lanes = [('pplacer', 70, [('Build all vectors', 'every node, leaves too', False),
+                              ('Pull every vector', 'the cache is overwritten', True),
+                              ('Place', 'reads the pulled vectors', False)]),
+             ('gPlace', 200, [('Build vectors', 'internal nodes only', False),
+                              ('Store them as built', 'no pull here', False),
+                              ('Copy, then pull', 'a leaf: rebuilt first', True)])]
+    for li, (name, y, cards) in enumerate(lanes):
+        f.add(T(20, y + H / 2 + 5, name, 15, weight='bold'))
+        for j, (title, what, pull) in enumerate(cards):
+            x = xs[j]
+            f.add(R(x, y, W, H, fill=EXP_FILL if pull else '#ffffff', stroke=EXP_LINE if pull else FAINT,
+                    stroke_width=1.2, rx=8),
+                  T(x + 16, y + 30, title, 14.5, weight='bold', fill=ORANGE_T if pull else INK),
+                  T(x + 16, y + 53, what, 12.5, fill=MUTED))
+            t = 0.6 + 1.0 * (3 * li + j)
+            f.add(R(x, y, W, H, stroke=ORANGE, stroke_width=2.5, rx=8,
+                    class_=f'{f.show(t, t + 0.95, fade=0.2)} transient'))
+            if j < 2:
+                ax = x + W + 9
+                f.add(P(f'M{ax} {y + H / 2 - 6} l7 6 l-7 6', stroke=FAINT, stroke_width=2, stroke_linecap='round',
+                        stroke_linejoin='round'))
+    cx1, cx3 = xs[0] + W / 2, xs[2] + W / 2
+    f.add(L(cx1, 146, cx1, 196, stroke=MUTED, stroke_width=1.2, stroke_dasharray='4 3'),
+          T(cx1 + 9, 175, 'same operations', 12, fill=MUTED),
+          L(cx3, 146, cx3, 196, stroke=MUTED, stroke_width=1.2, stroke_dasharray='4 3'),
+          G([check(cx3 + 17, 171, 7.5), T(cx3 + 31, 175.5, 'same bits', 12.5, weight='bold', fill=ACCENT)],
+            class_=f.show(6.8)))
+    cx2 = xs[1] + W / 2
+    f.add(P(f'M{cx2} 276 V298 H{cx3} V281', stroke=ACCENT, stroke_width=1.6, stroke_linejoin='round'),
+          P(f'M{cx3 - 6} 287 l6 -7 l6 7', stroke=ACCENT, stroke_width=1.6, stroke_linecap='round',
+            stroke_linejoin='round'),
+          T((cx2 + cx3) / 2, 320, 'a rebuilt leaf vector gets exactly the inputs pplacer used in step 1', 12.5,
+            anchor='middle', fill=MUTED))
+    return f.save()
+
+
+# Tiled placement, step by step ------------------------------------------------------------------
+
+TILE_ABC = [('A', TILES[0]), ('B', TILES[2]), ('C', TILES[4])]
+GREY_CELL = '#e4e1da'
+# prefilter scores of one query on a 30-edge tree in three tiles of 10 edges (edges 1-10: tile A, ...);
+# edges 13 and 27 tie
+PREF_SCORES = {1: -412, 2: -407, 3: -419, 4: -401, 5: -416, 6: -425, 7: -403, 8: -430, 9: -414, 10: -421,
+               11: -413, 12: -418, 13: -409, 14: -422, 15: -404, 16: -427, 17: -431, 18: -410, 19: -424,
+               20: -433, 21: -415, 22: -406, 23: -420, 24: -426, 25: -429, 26: -417, 27: -409, 28: -432,
+               29: -423, 30: -435}
+
+
+def best_edges(tiles_seen, k=8):
+    """The query's first k edges in pplacer's ranking (score descending, ties by ascending edge
+    number) among the tiles seen so far."""
+    return sorted((e for e in PREF_SCORES if (e - 1) // 10 in tiles_seen), key=lambda e: (-PREF_SCORES[e], e))[:k]
+
+
+def fig_tiled_prefilter():
+    t = [0.6, 4.0, 7.4]
+    f = Figure('tiled_prefilter', 900, 352, 'The prefilter of tiled placement, tile by tile',
+               'One query is scored against a 30-edge tree in three tiles, one tile in memory at a time. After '
+               'each tile its best edges are merged into a short list; after the last tile the list is the '
+               'start of pplacer\'s ranking of all the edges. Edges 13 and 27 have equal scores, so the lower '
+               'edge number comes first, as in pplacer.', period=12)
+    f.add(T(20, 30, 'Prefilter, tile by tile', 15, weight='bold'),
+          T(206, 30, 'one query shown; every query of a batch (up to 20,000) is scored at once', 12.5, fill=MUTED))
+    lists = [best_edges(range(k + 1)) for k in range(3)]
+    for k, (name, colour) in enumerate(TILE_ABC):
+        x = 20 + 295 * k
+        on, off = t[k], (t[k + 1] if k < 2 else None)
+        f.add(R(x, 66, 270, 164, fill=PAPER, stroke=colour, stroke_width=2, rx=8,
+                class_=f'{f.show(on, off - 0.3 if off else None, fade=0.25)} transient'),
+              R(x, 66, 270, 164, stroke=FAINT, stroke_width=1.2, rx=8),
+              T(x + 14, 88, f'tile {name}', 13.5, weight='bold', fill=colour),
+              T(x + 256, 88, 'in memory', 12, anchor='end', weight='bold', fill=ACCENT,
+                class_=f'{f.show(on, off - 0.3 if off else None, fade=0.25)} transient'))
+        for j in range(10):
+            e = 10 * k + j + 1
+            h = 10 + (PREF_SCORES[e] + 440) * 2.5
+            bx = x + 22 + 24 * j
+            f.add(R(bx, 210 - h, 14, h, fill=colour, opacity=.28, rx=2),
+                  T(bx + 7, 224, str(e), 10.5, anchor='middle', fill=MUTED))
+            member = [p for p in range(3) if e in lists[p]]
+            if member:
+                last = member[-1]
+                cls = f.show(t[member[0]], t[last + 1] - 0.3 if last < 2 else None, fade=0.25)
+                f.add(R(bx, 210 - h, 14, h, fill=colour, rx=2, class_=cls + ('' if last == 2 else ' transient')))
+    f.add(T(20, 262, 'The query\'s best edges so far', 13, weight='bold'),
+          T(880, 262, '8 shown; gPlace keeps 164', 12, anchor='end', fill=MUTED))
+    for p, edges in enumerate(lists):
+        final = p == 2
+        cls = f.show(t[p], None if final else t[p + 1] - 0.3, fade=0.25)
+        items = [T(244, 262, 'after the last tile: the start of pplacer\'s ranking' if final else
+                   f'after tile {TILE_ABC[p][0]}', 12.5, weight='bold', fill=ACCENT if final else MUTED)]
+        for i, e in enumerate(edges):
+            x = 20 + 108 * i
+            colour = TILE_ABC[(e - 1) // 10][1]
+            items += [R(x, 274, 100, 48, fill=colour, rx=6),
+                      T(x + 50, 295, f'edge {e}', 13, anchor='middle', weight='bold', fill='#ffffff'),
+                      T(x + 50, 313, f'−{-PREF_SCORES[e]}', 12, anchor='middle', fill='#ffffff')]
+        if final:
+            i13, i27 = edges.index(13), edges.index(27)
+            x1, x2 = 20 + 108 * i13 + 10, 20 + 108 * i27 + 90
+            items += [P(f'M{x1} 328 v6 H{x2} v-6', stroke=MUTED, stroke_width=1.2),
+                      T((x1 + x2) / 2, 348, 'equal scores: lower edge number first', 11.5, anchor='middle',
+                        fill=MUTED)]
+        f.add(G(items, class_=cls + ('' if final else ' transient')))
+    return f.save()
+
+
+# Each query's tiles along its ranking, and the first-stage log-likelihoods of the edges pplacer's
+# search reaches (illustrative values; edges optimised past the stop get no value)
+ROUND_QUERIES = [
+    ('query 1', 'AABCABCBCABBCAAC', [-1000, -1003.4, -1006, -1005.1, -1008, -1007, -1009]),
+    ('query 2', 'CBCABCABACBACABC', [-1200, -1198.5, -1199.4, -1205.2, -1200.9, -1206, -1204.8, -1196,
+                                     -1203.3, -1197.9, -1208, -1210]),
+    ('query 3', 'BACBACABACCBABCA', [-800, -804.9, -801, -806, -807, -805.5, -809, -808]),
+]
+
+
+def replay(lls, max_strikes=6, strike_box=3.0):
+    """pplacer's baseball rule on first-stage log-likelihoods in rank order: a mark per edge and the
+    number of edges the search uses."""
+    best, strikes, marks = -math.inf, 0, []
+    for i, v in enumerate(lls):
+        if v > best:
+            best, mark = v, 'best'
+        elif v < best - strike_box:
+            strikes += 1
+            mark = f'×{strikes}'
+        else:
+            mark = 'ok'
+        marks.append(mark)
+        if mark[0] == '×' and strikes >= max_strikes:
+            return marks, i + 1
+    raise ValueError('the search does not stop')
+
+
+def fig_tiled_rounds(round_size=8):
+    f = Figure('tiled_rounds', 900, 400, 'The baseball search of tiled placement, in rounds',
+               'Three queries\' ranked edges, coloured by tile. Each round optimises the next 8 ranked edges of '
+               'every query still searching, tile by tile. pplacer\'s stopping rule is then replayed in rank '
+               'order: query 1 stops at rank 7, so its rank 8 is discarded; query 3 stops at rank 8; query 2 '
+               'needs a second round and stops at rank 12, so its ranks 13 to 16 are discarded. The kept edges '
+               'are refined.', period=22)
+    tile_colour = dict(TILE_ABC)
+    X = lambda r: 112 + 44 * (r - 1)                       # noqa: E731
+    f.add(T(20, 24, 'Baseball in rounds', 15, weight='bold'),
+          T(198, 24, f'the next {round_size} ranked edges of every query still searching, run tile by tile; '
+            'then pplacer\'s rule is replayed', 12.5, fill=MUTED))
+    f.add(P('M112 64 v-6 H458 v6', stroke=MUTED, stroke_width=1.2),
+          T(285, 48, 'round 1', 12.5, anchor='middle', weight='bold'),
+          P('M464 64 v-6 H810 v6', stroke=MUTED, stroke_width=1.2),
+          T(637, 48, 'round 2', 12.5, anchor='middle', weight='bold'))
+    for r in range(1, 17):
+        f.add(T(X(r) + 19, 80, str(r), 11, anchor='middle', fill=MUTED))
+    t_fill = {1: [2.0 + 1.3 * k for k in range(3)], 2: [10.4 + 1.0 * k for k in range(3)]}
+    t_queue = {1: 0.6, 2: 9.4}
+    t_mark = {1: 6.4, 2: 13.6}
+    t_keep = 16.6
+    for q, (name, tiles, lls) in enumerate(ROUND_QUERIES):
+        y = 92 + 72 * q
+        marks, used = replay(lls)
+        rounds = -(-used // round_size)
+        best = max(lls[:used])
+        kept = sorted(range(used), key=lambda i: -lls[i])[:7]
+        kept = {i + 1 for i in kept if lls[i] >= best + math.log(0.01)}
+        f.add(T(20, y + 24, name, 13, weight='bold'))
+        for r in range(1, 17):
+            x, tile = X(r), tiles[r - 1]
+            colour = tile_colour[tile]
+            rnd = -(-r // round_size)
+            f.add(R(x, y, 38, 38, fill='#ffffff', stroke=FAINT, stroke_width=1.2, rx=5),
+                  T(x + 19, y + 24, tile, 12.5, anchor='middle', fill=FAINT))
+            if rnd > rounds:
+                continue
+            tf = t_fill[rnd]['ABC'.index(tile)]
+            tm = t_mark[rnd] + 0.25 * ((r - 1) % round_size)
+            extra = r > used
+            t_extra = t_mark[rnd] + 0.25 * round_size
+            f.add(R(x + .8, y + .8, 36.4, 36.4, stroke=colour, stroke_width=1.6, stroke_dasharray='3 2', rx=5,
+                    class_=f'{f.show(t_queue[rnd], tf, fade=0.2)} transient'),
+                  G([R(x, y, 38, 38, fill=colour, rx=5),
+                     T(x + 19, y + 24, tile, 12.5, anchor='middle', weight='bold', fill='#ffffff')],
+                    class_=f.show(tf, t_extra if extra else None, fade=0.25) + (' transient' if extra else '')))
+            if extra:
+                f.add(G([R(x, y, 38, 38, fill=GREY_CELL, rx=5),
+                         T(x + 19, y + 24, tile, 12.5, anchor='middle', fill=MUTED),
+                         T(x + 19, y + 55, 'extra', 11.5, anchor='middle', fill=MUTED)], class_=f.show(t_extra)))
+                continue
+            mark = marks[r - 1]
+            colour_m, weight = (INK, 'bold') if mark == 'best' else (RED, 'bold') if mark[0] == '×' else (MUTED, None)
+            f.add(T(x + 19, y + 55, mark, 11.5, anchor='middle', weight=weight, fill=colour_m, class_=f.show(tm)))
+            if r in kept:
+                f.add(R(x - 3, y - 3, 44, 44, stroke=ORANGE, stroke_width=2.5, rx=7,
+                        class_=f.show(t_keep + 0.12 * r)))
+    f.add(T(20, 344, 'tile in memory', 12, fill=MUTED))
+    chip_times = {k: [t_fill[1][k], t_fill[2][k], t_keep + 0.9 * k] for k in range(3)}
+    for k, (name, colour) in enumerate(TILE_ABC):
+        x = 112 + 96 * k
+        f.add(R(x, 326, 86, 28, fill='#ffffff', stroke=colour, stroke_width=1.6, rx=6),
+              T(x + 43, 345, f'tile {name}', 12.5, anchor='middle', weight='bold', fill=colour))
+        for tc in chip_times[k]:
+            f.add(G([R(x, 326, 86, 28, fill=colour, rx=6),
+                     T(x + 43, 345, f'tile {name}', 12.5, anchor='middle', weight='bold', fill='#ffffff')],
+                    class_=f'{f.show(tc, tc + 0.9, fade=0.2)} transient'))
+    f.add(T(412, 345, 'each tile is rebuilt once per round, for every query', 12.5, fill=MUTED))
+    f.add(T(20, 386, span('best', weight='bold') + span(': new best so far', fill=MUTED), 12, raw=True),
+          T(170, 386, span('×n', weight='bold', fill=RED) + span(': strike n, more than 3 below the best', fill=MUTED),
+            12, raw=True),
+          T(440, 386, span('extra', weight='bold', fill=MUTED) + span(': optimised, then discarded', fill=MUTED), 12,
+            raw=True),
+          R(664, 374, 16, 16, stroke=ORANGE, stroke_width=2.5, rx=4),
+          T(688, 386, 'kept: refined at 1e-5', 12, fill=MUTED))
+    return f.save()
+
+
+def fig_ranked_edges(n_cand=164, max_pitches=40):
+    used = max_pitches + 1
+    f = Figure('ranked_edges', 900, 206, 'How many ranked edges each query keeps',
+               f'Each query keeps {n_cand} ranked edges. pplacer\'s search uses at most {used} successful '
+               f'optimisations; failed ones are skipped, so {n_cand - used} spare edges remain. A query that uses '
+               f'all {n_cand} is ranked again with {4 * n_cand} edges, and its first {n_cand} are checked to be '
+               'unchanged.')
+    W = 860 / n_cand
+    f.add(T(20, 30, f'Each query\'s {n_cand} ranked edges (4 × {used})', 15, weight='bold'),
+          R(20, 44, used * W, 34, fill=VEC_D, rx=5),
+          T(20 + used * W / 2, 66, str(used), 13.5, anchor='middle', weight='bold', fill='#ffffff'),
+          R(23 + used * W, 44, 857 - used * W, 34, fill=GRID, rx=5),
+          T(23 + used * W + (857 - used * W) / 2, 66, f'{n_cand - used} spare', 13.5, anchor='middle', weight='bold'),
+          T(20, 98, f'at most {used} successful optimisations', 12.5, weight='bold'),
+          T(20, 115, f'pplacer: --max_pitches {max_pitches}, plus the last one', 12, fill=MUTED),
+          T(880, 98, 'room for failed optimisations', 12.5, anchor='end', weight='bold'),
+          T(880, 115, 'pplacer skips them: they do not count', 12, anchor='end', fill=MUTED))
+    W2 = 860 / (4 * n_cand)
+    f.add(T(20, 152, f'A query that uses all {n_cand} without stopping is ranked again with 4 × {n_cand} = '
+            f'{4 * n_cand} edges', 13, weight='bold'),
+          R(20, 164, n_cand * W2, 30, fill=GRID, rx=5),
+          T(20 + n_cand * W2 / 2, 184, f'first {n_cand}: checked unchanged', 12, anchor='middle'),
+          R(23 + n_cand * W2, 164, 857 - n_cand * W2, 30, fill=VEC_D, rx=5),
+          T(23 + n_cand * W2 + (857 - n_cand * W2) / 2, 184, f'{3 * n_cand} more ranked edges: the search goes on',
+            12, anchor='middle', weight='bold', fill='#ffffff'))
+    return f.save()
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
-    for fig in (fig_overview, fig_pipeline, fig_storage, fig_baseball, fig_tiling, fig_engines):
+    for fig in (fig_overview, fig_pipeline, fig_storage, fig_baseball, fig_tiling, fig_engines, fig_pull,
+                fig_pull_order, fig_tiled_prefilter, fig_tiled_rounds, fig_ranked_edges):
         print(f'wrote {fig()}.svg')
 
 

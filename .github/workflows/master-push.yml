@@ -1,7 +1,8 @@
 # Build the Sphinx documentation on every push to main, and publish it with GitHub Pages when the
 # repository is public (one-time setup: Settings > Pages > Source: "GitHub Actions"). For a private
-# repository the built site is attached to the run as the "github-pages" artifact (GitHub Pages for
-# private repositories needs a paid plan).
+# repository (GitHub Pages for private repositories needs a paid plan) a push only checks that the
+# documentation builds; started by hand, the run attaches the built site as the "github-pages"
+# artifact, to download.
 name: Documentation
 on:
   push:
@@ -36,10 +37,16 @@ jobs:
         working-directory: docs
         run: make html
 
+      # Public repository: the site to deploy. Private repository: GitHub Pages is not available, so
+      # the site is only attached when the workflow is started by hand (Actions > Documentation > Run
+      # workflow), as a draft to download; pushes only check that the documentation builds.
+      # Artifacts of private repositories count against the account's storage quota: kept one day.
       - name: Attach the site to the run
+        if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-pages-artifact@v5
         with:
           path: docs/build/html
+          retention-days: 1
 
   deploy:
     needs: build

@@ -130,3 +130,17 @@ class TestGslDownload(unittest.TestCase):
             self.assertIn('GPLACE_GSL_TARBALL', str(ctx.exception))
             self.assertEqual(str(ctx.exception).count('127.0.0.1'), 2)
             self.assertFalse(os.path.exists(out) or os.path.exists(out + '.part'))
+
+
+class TestFreeMemory(unittest.TestCase):
+
+    def test_free_memory_call_found(self):
+        """Before each fork the parent gives freed malloc memory back to the system (placer._fork_pool):
+        glibc's malloc_trim, macOS's malloc_zone_pressure_relief; other C libraries skip it."""
+        import platform
+        import sys
+        from gplace.engine import placer
+        if sys.platform == 'darwin' or platform.libc_ver()[0] == 'glibc':
+            self.assertIsNotNone(placer._free_memory)
+        if placer._free_memory is not None:
+            placer._free_memory()

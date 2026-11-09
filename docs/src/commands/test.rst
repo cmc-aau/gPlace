@@ -3,7 +3,7 @@
 test
 ====
 
-The ``test`` command places 20 GlobDB genomes on a small reference package bundled with gPlace (one 247-genome clade of the GTDB-Tk R226 class-level reference package 8) and compares the result with the output of GTDB-Tk's pplacer v1.1.alpha19 on the same input. It passes only if every printed value and the tree string are identical.
+The ``test`` command places 20 GlobDB genomes on a small reference package bundled with gPlace (one 247-genome clade of the GTDB R226 class-level reference package 8) and compares the result with the output of pplacer v1.1.alpha19 on the same input. It passes only if every printed value and the tree string are identical.
 
 With ``--models`` it also places the bundled test sets of pplacer's other models (see :ref:`models`)
 and compares them with the output of the stock pplacer v1.1.alpha19: the same reference package
@@ -41,5 +41,5 @@ Example
 .. code-block:: text
 
     [2026-09-26 20:20:13] INFO: Placing 20 queries on gplace/tests/data/mini.refpkg (493 nodes, 4,891 sites, 8 CPUs).
-    [2026-09-26 20:20:16] INFO: 20/20 genomes: every printed value identical to GTDB-Tk's pplacer v1.1.alpha19; reference tree string identical: True.
+    [2026-09-26 20:20:16] INFO: 20/20 genomes: every printed value identical to pplacer v1.1.alpha19; reference tree string identical: True.
     [2026-09-26 20:20:16] INFO: Test passed (2.2 s). Output: /tmp/gplace_test

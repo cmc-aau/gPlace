@@ -3,9 +3,10 @@
 pplacer's options
 =================
 
-GTDB-Tk runs pplacer with its default settings, and so does gPlace: nothing on this page is needed
-to reproduce GTDB-Tk. Every other pplacer option is available too, under gPlace's name and under
-pplacer's own spelling, and gives the same output as pplacer (see :ref:`validation/options`).
+gPlace takes pplacer's command line (``gplace place -c <refpkg> -o <out.jplace> <queries>``, see
+:ref:`commands/place`) and uses pplacer's default settings, so a plain ``pplacer -c <refpkg>`` run
+needs nothing on this page. pplacer's other options are available too, under gPlace's name and under
+pplacer's own spelling, and give the same output as pplacer (see :ref:`validation/options`).
 They work the same way with :ref:`commands/place_batch`, except reference files without a
 reference package and query files holding the reference sequences, which need
 :ref:`commands/place`.
@@ -38,6 +39,43 @@ no placement (``--keep_at_most 0``, or ``--keep_factor`` above 1) is omitted fro
 pplacer does, with a warning.
 
 
+Posterior probabilities
+-----------------------
+
+======================== ======================== ========= ==================================================
+gPlace                   pplacer                  default   meaning
+======================== ======================== ========= ==================================================
+``-p``, ``--pp``         ``-p``                   off       calculate posterior probabilities
+``--pp_rel_err``         ``--pp-rel-err``         0.01      relative error of the integration
+``--unif_prior``         ``--unif-prior``         off       uniform prior on the pendant branch length
+``--inform_prior``       ``--inform-prior``       off       exponential prior with a mean for each edge
+``--prior_lower``        ``--prior-lower``        0         added to each edge's mean (``--inform_prior``)
+======================== ======================== ========= ==================================================
+
+With ``-p``, gPlace computes what pplacer's ``-p`` computes for every kept placement: its
+*marginal likelihood*, the likelihood integrated over the attachment point along the edge and over
+the pendant branch length, weighted by a prior on the pendant branch length; and its *posterior
+probability*, the marginal likelihoods normalised over the query's placements. Each jplace row
+gets the fields ``marginal_like`` and ``post_prob``. The placements stay sorted by like-weight
+ratio, as in pplacer, so the highest posterior probability is not always first.
+
+As in pplacer, ``-p`` also sets ``--keep_at_most 20``, ``--keep_factor 0.001`` and
+``--max_strikes 20`` where it appears on the command line: these options override it when they
+come after ``-p``, and are overridden when they come before. The wider search can change the
+best placement, so ``-p`` results differ from likelihood placement on the same data.
+
+The prior is exponential, with the average branch length of the reference tree as its mean,
+unless ``--unif_prior`` (uniform) or ``--inform_prior`` (for each edge, its length plus the average
+distance from its lower end to the leaves below it, plus ``--prior_lower``). When an integration
+does not reach ``--pp_rel_err`` even after narrowing its range ten times, pplacer warns and uses
+the placement's likelihood as its marginal likelihood; gPlace does the same and says so in its
+log.
+
+Posterior probabilities cost much more time than likelihood placement (each kept placement
+needs hundreds to thousands of likelihood evaluations) but no extra memory, and work with tiled
+placement.
+
+
 Pre-masking
 -----------
 
@@ -58,8 +96,8 @@ Taxonomy, duplicates and non-overlapping queries
   ``seq_info`` file, e.g. one built with ``taxit create --taxonomy ... --seq-info ...``, every
   placement gets a ``classification`` field: the taxon of its edge by *edge painting* (the most
   specific rank at which exactly one taxon is cut by the edge), or with ``--mrca_class`` the
-  taxonomic MRCA of the reference sequences below the edge. GTDB-Tk's reference packages have no
-  taxonomy, so their output has no such field.
+  taxonomic MRCA of the reference sequences below the edge. Reference packages without a taxonomy,
+  such as the GTDB ones, give no such field.
 * **Duplicates.** Queries whose sequences are identical after pre-masking are placed once and
   written as one record listing all their names.
 * **Non-overlapping queries.** A query with no residue in any column where a reference sequence
@@ -119,7 +157,27 @@ Model refinement
 When the query alignment contains the reference sequences (all of them; some but not all stops
 the run), pplacer uses them as the reference alignment and refines the model before placing;
 ``--always_refine`` refines it in any case. For CAT models (FastTree reference packages, such as
-GTDB-Tk's) the refinement chooses a new rate category for every site: the category with the
+the GTDB ones) the refinement chooses a new rate category for every site: the category with the
 highest likelihood of the reference alignment on the reference tree, penalised as in pplacer
 (log-likelihood + 2 log(rate) - 3 rate). Placements then differ from those with the package's
 categories. For gamma models refinement changes nothing (as in pplacer).
+
+
+Options gPlace does not implement
+---------------------------------
+
+These pplacer options write extra files or change what pplacer computes in ways gPlace does not
+reproduce. Given to ``gplace place``, they stop the run with a message (with their default value,
+which changes nothing, they are accepted):
+
+* ``--map-identity``, ``--map-mrca``: MAP sequences and percent identity (``--map-mrca-min`` only
+  applies to them);
+* ``--groups`` (above 1): placing the queries in groups;
+* ``--fig-cutoff`` (above 0), ``--fig-eval-all``, ``--fig-eval-discrepancy-tree``, ``--fig-tree``:
+  fig-based search;
+* ``--fantasy`` (above 0): fantasy baseball (``--fantasy-frac`` only applies to it);
+* ``--write-masked``, ``--write-pre-masked``: masked alignments;
+* ``--pretend``, ``--check-like``: input checks and reference likelihood reports.
+
+``--mmap-file``, ``--verbosity`` and ``--timing`` are accepted and change nothing: gPlace needs no
+scratch file, and logs its progress and timings in ``gplace.log``.

@@ -1,5 +1,5 @@
 # gdb Python script: run with  gdb -q -batch -x <this file> --args pplacer --version  (see README.md)
-# log1p evaluated inside GTDB-Tk's pplacer binary: every argument GSL 1.16's gsl_cdf_gamma_Pinv passes
+# log1p evaluated inside pplacer's v1.1.alpha19 binary: every argument GSL 1.16's gsl_cdf_gamma_Pinv passes
 # for discrete gamma rates with 21..300 categories (log1p(-P), P = i/n > 0.95), plus random and special
 # inputs. Writes log1p_inputs.txt and log1p_stock_vals.txt (IEEE bits, hex) in the current directory.
 import gdb, random

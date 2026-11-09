@@ -6,8 +6,8 @@ References
 Citing
 ------
 
-gPlace reproduces pplacer's placements on the GTDB reference trees. If you use gPlace, please
-cite **pplacer** and **GTDB**:
+gPlace reproduces pplacer's placements. If you use gPlace, please cite **pplacer**, and the source
+of your reference tree, for example **GTDB**:
 
 .. list-table::
    :widths: 100
@@ -21,7 +21,7 @@ cite **pplacer** and **GTDB**:
 Software gPlace builds on
 -------------------------
 
-For reference, the tools, models and libraries behind gPlace and the GTDB-Tk reference packages:
+For reference, the tools, models and libraries behind gPlace and the GTDB reference packages:
 
 .. list-table::
    :widths: 20 80
@@ -29,10 +29,6 @@ For reference, the tools, models and libraries behind gPlace and the GTDB-Tk ref
 
    * - Software
      - Reference
-   * - GTDB-Tk
-     - Chaumeil PA, Mussig AJ, Hugenholtz P, Parks DH. 2022. GTDB-Tk v2: memory friendly classification with the genome taxonomy database. *Bioinformatics*, 38:5315–5316. https://doi.org/10.1093/bioinformatics/btac672
-
-       Chaumeil PA, Mussig AJ, Hugenholtz P, Parks DH. 2020. GTDB-Tk: a toolkit to classify genomes with the Genome Taxonomy Database. *Bioinformatics*, 36:1925–1927. https://doi.org/10.1093/bioinformatics/btz848
    * - FastTree
      - Price MN, Dehal PS, Arkin AP. 2010. FastTree 2 – approximately maximum-likelihood trees for large alignments. *PLoS ONE*, 5:e9490. https://doi.org/10.1371/journal.pone.0009490
    * - WAG

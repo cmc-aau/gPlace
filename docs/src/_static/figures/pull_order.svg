@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 334" width="900" height="334" role="img" aria-labelledby="title desc">
+<title id="title">When the final exponent pull happens, in pplacer and in gPlace</title>
+<desc id="desc">pplacer builds every vector, leaves included, then pulls every stored vector, then places. gPlace builds the internal-node vectors, stores them as built, and pulls a copy when a vector is used; a leaf vector is rebuilt first, from the inputs pplacer used when it built it. The vectors used are bit-identical.</desc>
+<style>text{font-family:"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif}.mono{font-family:Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace}.static-only{display:none}@keyframes growX{from{transform:scaleX(0)}}@keyframes growY{from{transform:scaleY(0)}}@keyframes fadein{from{opacity:0}}@keyframes draw{from{stroke-dashoffset:1}}.a1{animation:ka1 9s ease-in-out infinite}@keyframes ka1{0.000%{opacity:0}6.667%{opacity:0}8.889%{opacity:1}17.222%{opacity:1}19.444%{opacity:0}100.000%{opacity:0}}.a2{animation:ka2 9s ease-in-out infinite}@keyframes ka2{0.000%{opacity:0}17.778%{opacity:0}20.000%{opacity:1}28.333%{opacity:1}30.556%{opacity:0}100.000%{opacity:0}}.a3{animation:ka3 9s ease-in-out infinite}@keyframes ka3{0.000%{opacity:0}28.889%{opacity:0}31.111%{opacity:1}39.444%{opacity:1}41.667%{opacity:0}100.000%{opacity:0}}.a4{animation:ka4 9s ease-in-out infinite}@keyframes ka4{0.000%{opacity:0}40.000%{opacity:0}42.222%{opacity:1}50.556%{opacity:1}52.778%{opacity:0}100.000%{opacity:0}}.a5{animation:ka5 9s ease-in-out infinite}@keyframes ka5{0.000%{opacity:0}51.111%{opacity:0}53.333%{opacity:1}61.667%{opacity:1}63.889%{opacity:0}100.000%{opacity:0}}.a6{animation:ka6 9s ease-in-out infinite}@keyframes ka6{0.000%{opacity:0}62.222%{opacity:0}64.444%{opacity:1}72.778%{opacity:1}75.000%{opacity:0}100.000%{opacity:0}}.a7{animation:ka7 9s ease-in-out infinite}@keyframes ka7{0.000%{opacity:0}75.556%{opacity:0}78.889%{opacity:1}93.333%{opacity:1}96.667%{opacity:0}100.000%{opacity:0}}@media (prefers-reduced-motion:reduce){*{animation:none!important}.transient{display:none}.static-only{display:inline}}</style>
+<text x="130" y="50" font-size="13" fill="#6b6b6b" font-weight="bold">1 · Build the cache</text>
+<text x="390" y="50" font-size="13" fill="#6b6b6b" font-weight="bold">2 · Final pull (−10)</text>
+<text x="650" y="50" font-size="13" fill="#6b6b6b" font-weight="bold">3 · Place the queries</text>
+<text x="20" y="111" font-size="15" fill="#141414" font-weight="bold">pplacer</text>
+<rect x="130" y="70" width="230" height="72" fill="#ffffff" stroke="#d6d3cc" stroke-width="1.2" rx="8"/>
+<text x="146" y="100" font-size="14.5" fill="#141414" font-weight="bold">Build all vectors</text>
+<text x="146" y="123" font-size="12.5" fill="#6b6b6b">every node, leaves too</text>
+<rect x="130" y="70" width="230" height="72" fill="none" stroke="#d4972f" stroke-width="2.5" rx="8" class="a1 transient"/>
+<path d="M369 100.0 l7 6 l-7 6" fill="none" stroke="#d6d3cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="390" y="70" width="230" height="72" fill="#fdf3e4" stroke="#d4972f" stroke-width="1.2" rx="8"/>
+<text x="406" y="100" font-size="14.5" fill="#8f5e12" font-weight="bold">Pull every vector</text>
+<text x="406" y="123" font-size="12.5" fill="#6b6b6b">the cache is overwritten</text>
+<rect x="390" y="70" width="230" height="72" fill="none" stroke="#d4972f" stroke-width="2.5" rx="8" class="a2 transient"/>
+<path d="M629 100.0 l7 6 l-7 6" fill="none" stroke="#d6d3cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="650" y="70" width="230" height="72" fill="#ffffff" stroke="#d6d3cc" stroke-width="1.2" rx="8"/>
+<text x="666" y="100" font-size="14.5" fill="#141414" font-weight="bold">Place</text>
+<text x="666" y="123" font-size="12.5" fill="#6b6b6b">reads the pulled vectors</text>
+<rect x="650" y="70" width="230" height="72" fill="none" stroke="#d4972f" stroke-width="2.5" rx="8" class="a3 transient"/>
+<text x="20" y="241" font-size="15" fill="#141414" font-weight="bold">gPlace</text>
+<rect x="130" y="200" width="230" height="72" fill="#ffffff" stroke="#d6d3cc" stroke-width="1.2" rx="8"/>
+<text x="146" y="230" font-size="14.5" fill="#141414" font-weight="bold">Build vectors</text>
+<text x="146" y="253" font-size="12.5" fill="#6b6b6b">internal nodes only</text>
+<rect x="130" y="200" width="230" height="72" fill="none" stroke="#d4972f" stroke-width="2.5" rx="8" class="a4 transient"/>
+<path d="M369 230.0 l7 6 l-7 6" fill="none" stroke="#d6d3cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="390" y="200" width="230" height="72" fill="#ffffff" stroke="#d6d3cc" stroke-width="1.2" rx="8"/>
+<text x="406" y="230" font-size="14.5" fill="#141414" font-weight="bold">Store them as built</text>
+<text x="406" y="253" font-size="12.5" fill="#6b6b6b">no pull here</text>
+<rect x="390" y="200" width="230" height="72" fill="none" stroke="#d4972f" stroke-width="2.5" rx="8" class="a5 transient"/>
+<path d="M629 230.0 l7 6 l-7 6" fill="none" stroke="#d6d3cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="650" y="200" width="230" height="72" fill="#fdf3e4" stroke="#d4972f" stroke-width="1.2" rx="8"/>
+<text x="666" y="230" font-size="14.5" fill="#8f5e12" font-weight="bold">Copy, then pull</text>
+<text x="666" y="253" font-size="12.5" fill="#6b6b6b">a leaf: rebuilt first</text>
+<rect x="650" y="200" width="230" height="72" fill="none" stroke="#d4972f" stroke-width="2.5" rx="8" class="a6 transient"/>
+<line x1="245" y1="146" x2="245" y2="196" stroke="#6b6b6b" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="254" y="175" font-size="12" fill="#6b6b6b">same operations</text>
+<line x1="765" y1="146" x2="765" y2="196" stroke="#6b6b6b" stroke-width="1.2" stroke-dasharray="4 3"/>
+<g class="a7"><circle cx="782" cy="171" r="7.5" fill="#8f5e12"/><path d="M778.62 171 l2.4 2.4 l4.35 -4.65" fill="none" stroke="#ffffff" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/><text x="796" y="175.5" font-size="12.5" fill="#8f5e12" font-weight="bold">same bits</text></g>
+<path d="M505.0 276 V298 H765.0 V281" fill="none" stroke="#8f5e12" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M759.0 287 l6 -7 l6 7" fill="none" stroke="#8f5e12" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="635" y="320" font-size="12.5" fill="#6b6b6b" text-anchor="middle">a rebuilt leaf vector gets exactly the inputs pplacer used in step 1</text>
+</svg>

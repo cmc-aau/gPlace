@@ -1,6 +1,6 @@
 e_hypot.c is sysdeps/ieee754/dbl-64/e_hypot.c from GNU C Library 2.19 (unmodified; the
 fdlibm-derived implementation, Copyright (C) 1993 Sun Microsystems, freely redistributable
-with its notice preserved). GTDB-Tk's pplacer v1.1.alpha19 is statically linked with glibc 2.19;
+with its notice preserved). pplacer's v1.1.alpha19 release binary is statically linked with glibc 2.19;
 GSL 1.16's Householder/Givens code calls libm hypot(), and glibc >= 2.35 ships a different
 hypot(), which changes the WAG eigendecomposition in its last bits.
 

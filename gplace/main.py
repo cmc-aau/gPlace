@@ -168,9 +168,16 @@ class OptionsParser(object):
             self.logger.warning(msg)
             self.warnings.info(msg)
             results = [r for r in results if r[1]]
-        n_warn = sum(1 for _, _, w in results if w)
+        n_warn = sum(1 for _, _, w in results if any(x[1] != 'pp' for x in w))
         if n_warn:
             self.warnings.info(f'{n_warn} queries had locations skipped after a GSL error (as pplacer does).')
+        n_pp = sum(1 for _, _, w in results if any(x[1] == 'pp' for x in w))
+        if n_pp:
+            msg = (f'{n_pp} queries have a placement whose posterior probability integration did not converge '
+                   f'after changing bounds 10 times (pplacer warns too); its marginal likelihood is the '
+                   f'placement\'s likelihood.')
+            self.logger.warning(msg)
+            self.warnings.info(msg)
         n_inf = sum(1 for _, pl, _ in results if any(not math.isfinite(p[3]) for p in pl))
         if n_inf:
             msg = (f'{n_inf} queries have a -inf likelihood (pplacer: "encountered -inf for final '
@@ -208,26 +215,65 @@ class OptionsParser(object):
             self.logger.info('--model: no effect, the statistics file names the model (as in pplacer v1.1.alpha19).')
         return ref
 
+    @staticmethod
+    def pplacer_jplace_name(path):
+        """pplacer's output name for a query file: its base name without .gz and without its last
+        extension, + .jplace (pplacer_run.ml, MaybeZipped.chop_extension)."""
+        base = os.path.basename(path[:-3] if path.endswith('.gz') else path)
+        dot = base.rfind('.')
+        return (base[:dot] if dot >= 0 else base) + '.jplace'
+
     def place(self, options):
-        """Place the queries of one alignment on one reference (package)."""
+        """Place the queries of each alignment on one reference (package), as pplacer does: given with
+        --msa_file, or as pplacer's command line gives them (each placed on its own)."""
         from gplace.engine.core import read_alignment
         from gplace.engine.jplace import write_jplace
+        if options.pplacer_unsupported:
+            raise GPlaceExit(f'pplacer\'s {", ".join(dict.fromkeys(options.pplacer_unsupported))}: not '
+                             f'supported by gPlace (see the documentation\'s pplacer options page).')
+        files = list(options.alignment)
+        if options.msa_file:
+            if files:
+                raise GPlaceExit('Give the query alignment either with --msa_file or at the end of the command '
+                                 'line, not both.')
+            files = [options.msa_file]
+        if not files:      # pplacer: this warning, exit status 0
+            self.logger.warning('No query alignment to place: give it at the end of the command line, as in '
+                                'pplacer, or with --msa_file (gplace place -h for help).')
+            return
+        if len(files) > 1 and options.out_file:
+            raise GPlaceExit('--out_file (-o) may not be given with several alignments (as in pplacer).')
+        given = [o for o, v in (('--mmap-file', options.mmap_file), ('--verbosity', options.verbosity is not None),
+                                ('--timing', options.timing)) if v]
+        if given:
+            self.logger.info(f'{", ".join(given)}: pplacer option(s) with no effect in gPlace.')
+        if options.cpus.strip().lstrip('-').isdigit() and int(options.cpus) < 1:
+            self.logger.info(f'--cpus {options.cpus}: one process (pplacer places in a single process with -j 0).')
+            options.cpus = '1'
         tiling = self._tiling_options(options)
         search = self._search_options(options)
-        self._check_file(options.msa_file, 'Query alignment')
-        reference = self._reference(options)
-        out_dir = os.path.dirname(os.path.abspath(options.out_file))
-        make_sure_path_exists(out_dir)
-        queries = read_alignment(options.msa_file)
-        self.logger.info(f'Read {len(queries):,} sequences from {options.msa_file}')
-        placer, results, secs, classify = self._place_group(
-            reference, queries, options.cpus, *tiling, fix_gamma=options.fix_gamma_underflow,
-            mrca_class=options.mrca_class, discard_nonoverlapped=options.discard_nonoverlapped,
-            search=search, always_refine=options.always_refine, ranked_edges=options.ranked_edges)
-        records = placer.records([r[0] for r in results])
-        write_jplace(options.out_file, placer.jplace_tree(), results, ' '.join(sys.argv), records, classify)
-        self.logger.info(f'Wrote {len(results):,} placements ({len(records):,} records) to '
-                         f'{options.out_file} ({secs:.1f} s).')
+        for msa in files:
+            self._check_file(msa, 'Query alignment')
+        outs = [options.out_file or os.path.join(options.out_dir or '.', self.pplacer_jplace_name(f)) for f in files]
+        for i, (msa, out) in enumerate(zip(files, outs), 1):
+            if len(files) > 1:
+                self.logger.info(f'Alignment {i}/{len(files)}: {msa} -> {out}')
+            reference = self._reference(options)
+            make_sure_path_exists(os.path.dirname(os.path.abspath(out)))
+            queries = read_alignment(msa)
+            self.logger.info(f'Read {len(queries):,} sequences from {msa}')
+            placer, results, secs, classify = self._place_group(
+                reference, queries, options.cpus, *tiling, fix_gamma=options.fix_gamma_underflow,
+                mrca_class=options.mrca_class, discard_nonoverlapped=options.discard_nonoverlapped,
+                search=search, always_refine=options.always_refine, ranked_edges=options.ranked_edges)
+            records = placer.records([r[0] for r in results])
+            write_jplace(out, placer.jplace_tree(), results, ' '.join(sys.argv), records, classify)
+            self.logger.info(f'Wrote {len(results):,} placements ({len(records):,} records) to '
+                             f'{out} ({secs:.1f} s).')
+            if len(files) > 1:
+                placer.release()
+                del placer, results, queries
+                gc.collect()
 
     def place_batch(self, options):
         """Place many alignments; queries sharing a reference package are placed in one pass."""
@@ -475,7 +521,7 @@ class OptionsParser(object):
         return informative(RA).any(axis=0)
 
     def run_test(self, options):
-        """Place the bundled test genomes and compare with GTDB-Tk's pplacer output; with --models,
+        """Place the bundled test genomes and compare with pplacer v1.1.alpha19's output; with --models,
         also the test sets of pplacer's other models (expected outputs from the stock pplacer)."""
         from gplace.engine import testsets
         from gplace.engine.jplace import write_jplace, compare_jplace
@@ -517,7 +563,7 @@ class OptionsParser(object):
                                                                    'identical', 'same_tree')]) + '\n')
         r = report[0][1]
         self.logger.info(f'{r["identical"]}/{r["genomes"]} genomes: every printed value identical to '
-                         f'GTDB-Tk\'s pplacer v1.1.alpha19; reference tree string identical: {r["same_tree"]}.')
+                         f'pplacer v1.1.alpha19; reference tree string identical: {r["same_tree"]}.')
         if len(sets) > 1:
             n_other = len(sets) - 1
             n_bad = sum(1 for f in failed if f != sets[0][0].name)
@@ -545,11 +591,11 @@ class OptionsParser(object):
             self.logger.info(f'Engine ({what}): {path}')
             self.logger.info(f'        {L.xp_engine_version().decode()}')
             n, bad = selftest.check_libm(ns)
-            self.logger.info(f'  libm vs GTDB-Tk pplacer binary (hypot/exp/log/pow/sin/log1p): {n - bad}/{n} identical')
+            self.logger.info(f'  libm vs pplacer v1.1.alpha19 binary (hypot/exp/log/pow/sin/log1p): {n - bad}/{n} identical')
             ok &= bad == 0
             if ns == 20:
                 si, se, sv = selftest.check_wag_eigen()
-                self.logger.info(f'  WAG model vs GTDB-Tk pplacer binary: input {"identical" if si else "DIFFERENT"}, '
+                self.logger.info(f'  WAG model vs pplacer v1.1.alpha19 binary: input {"identical" if si else "DIFFERENT"}, '
                                  f'eigenvalues {"identical" if se else "DIFFERENT"}, '
                                  f'eigenvectors {"identical" if sv else "DIFFERENT"}')
                 ok &= si and se and sv
@@ -567,7 +613,7 @@ class OptionsParser(object):
         if not ok:
             raise GPlaceExit('The engine is not bit-exact on this system; placements would not be '
                              'guaranteed identical to pplacer.')
-        self.logger.info('Installation OK: the engines reproduce GTDB-Tk\'s pplacer arithmetic bit for bit.')
+        self.logger.info('Installation OK: the engines reproduce pplacer v1.1.alpha19\'s arithmetic bit for bit.')
 
     def build_engine(self, options):
         """Compile the engines, then run the installation checks."""

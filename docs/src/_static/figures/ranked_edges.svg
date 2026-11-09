@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 206" width="900" height="206" role="img" aria-labelledby="title desc">
+<title id="title">How many ranked edges each query keeps</title>
+<desc id="desc">Each query keeps 164 ranked edges. pplacer's search uses at most 41 successful optimisations; failed ones are skipped, so 123 spare edges remain. A query that uses all 164 is ranked again with 656 edges, and its first 164 are checked to be unchanged.</desc>
+<style>text{font-family:"Helvetica Neue", Helvetica, Arial, "Liberation Sans", sans-serif}.mono{font-family:Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace}.static-only{display:none}@keyframes growX{from{transform:scaleX(0)}}@keyframes growY{from{transform:scaleY(0)}}@keyframes fadein{from{opacity:0}}@keyframes draw{from{stroke-dashoffset:1}}@media (prefers-reduced-motion:reduce){*{animation:none!important}.transient{display:none}.static-only{display:inline}}</style>
+<text x="20" y="30" font-size="15" fill="#141414" font-weight="bold">Each query's 164 ranked edges (4 × 41)</text>
+<rect x="20" y="44" width="215" height="34" fill="#5b83b5" rx="5"/>
+<text x="127.5" y="66" font-size="13.5" fill="#ffffff" text-anchor="middle" font-weight="bold">41</text>
+<rect x="238" y="44" width="642" height="34" fill="#ece9e3" rx="5"/>
+<text x="559" y="66" font-size="13.5" fill="#141414" text-anchor="middle" font-weight="bold">123 spare</text>
+<text x="20" y="98" font-size="12.5" fill="#141414" font-weight="bold">at most 41 successful optimisations</text>
+<text x="20" y="115" font-size="12" fill="#6b6b6b">pplacer: --max_pitches 40, plus the last one</text>
+<text x="880" y="98" font-size="12.5" fill="#141414" text-anchor="end" font-weight="bold">room for failed optimisations</text>
+<text x="880" y="115" font-size="12" fill="#6b6b6b" text-anchor="end">pplacer skips them: they do not count</text>
+<text x="20" y="152" font-size="13" fill="#141414" font-weight="bold">A query that uses all 164 without stopping is ranked again with 4 × 164 = 656 edges</text>
+<rect x="20" y="164" width="215" height="30" fill="#ece9e3" rx="5"/>
+<text x="127.5" y="184" font-size="12" fill="#141414" text-anchor="middle">first 164: checked unchanged</text>
+<rect x="238" y="164" width="642" height="30" fill="#5b83b5" rx="5"/>
+<text x="559" y="184" font-size="12" fill="#ffffff" text-anchor="middle" font-weight="bold">492 more ranked edges: the search goes on</text>
+</svg>

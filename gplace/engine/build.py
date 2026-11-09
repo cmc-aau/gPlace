@@ -22,12 +22,12 @@ here; CORE-MATH; glibc 2.19's hypot and log1p). Variants, all with the same resu
 (NEON kernels) and "portable" (scalar, -DXP_FORCE_SCALAR); elsewhere "portable" only. The loader
 picks one per CPU (core.engine_variant). Linux and macOS (Apple clang; Apple Silicon and Intel).
 
-Bit-identity with GTDB-Tk's pplacer requires the same numerical libraries as its statically
-linked binary: GSL 1.16 (whose eigen-solver differs from GSL 2.x in the last bits), glibc 2.19's
-hypot() and log1p() (called by GSL; glibc >= 2.35 changed hypot) and correctly-rounded
-exp/log/pow/sin (glibc 2.19's are; CORE-MATH provides the same correctly-rounded results, also for
-GSL's own calls). Every object is compiled with -ffp-contract=off, so no multiply-add is fused
-implicitly.
+Bit-identity with pplacer requires the same numerical libraries as its statically linked
+v1.1.alpha19 release binary: GSL 1.16 (whose eigen-solver differs from GSL 2.x in the last
+bits), glibc 2.19's hypot() and log1p() (called by GSL; glibc >= 2.35 changed hypot) and
+correctly-rounded exp/log/pow/sin (glibc 2.19's are; CORE-MATH provides the same
+correctly-rounded results, also for GSL's own calls). Every object is compiled with
+-ffp-contract=off, so no multiply-add is fused implicitly.
 """
 
 import hashlib

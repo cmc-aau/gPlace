@@ -1,6 +1,33 @@
 Change log
 ==========
 
+0.1.1
+-----
+
+Major Changes:
+
+* Tiled placement starts its worker processes once per pass over the tiles (the prefilter, each
+  baseball round, the refinement) instead of once per tile, and rebuilds the tiles of a pass with one
+  thread pool: 10,000 genomes on the GTDB R232 bacterial tree in 370 tiles (``--max_memory 8.5G``,
+  64 CPUs) take 25 minutes instead of 2 h 49 min, with identical results. Before each fork, freed
+  memory goes back to the system (``malloc_trim`` on Linux, ``malloc_zone_pressure_relief`` on macOS),
+  which keeps the longer-lived workers within the planned memory.
+
+Documentation:
+
+* The installation pages start with conda and pip: gPlace is on Bioconda and PyPI as ``gtdb-gplace``
+  (``conda create -n gplace -c conda-forge -c bioconda gtdb-gplace``,
+  ``python -m pip install gtdb-gplace``). Bioconda has prebuilt packages for Linux (x86-64 and ARM64)
+  and macOS (Intel and Apple silicon); PyPI has prebuilt wheels for Linux (x86-64 and ARM64), and on
+  macOS pip compiles the engine from the source package. Installing from GitHub is described in
+  "Installing from source".
+* "How gPlace works" has new figures: an exponent pull at the bit level, when pplacer and gPlace
+  apply the final pull (new section "Exponents and the final pull"), and tiled placement step by step
+  (the prefilter tile by tile, baseball in rounds, the ranked edges kept per query).
+* Corrected numbers: tiled placement keeps 164 ranked edges per query by default (4 x 41), not 160;
+  pplacer's search stops after 41 successfully optimised edges (``--max_pitches`` 40, plus the last
+  one), not after 40 edges tried.
+
 0.1.0
 -----
 
@@ -8,7 +35,7 @@ Major Changes:
 
 * Initial release: ``place``, ``place_batch``, ``compare``, ``test`` and ``check_install``
   commands; the engine is compiled during ``pip install`` (``build_engine`` rebuilds it).
-* Placement engine reproducing pplacer v1.1.alpha19 (GTDB-Tk's build) bit for bit for WAG +
+* Placement engine reproducing pplacer v1.1.alpha19 (its static release binary) bit for bit for WAG +
   FastTree CAT reference packages, with internal-node-only likelihood storage, a SIMD prefilter
   and placement in forked worker processes.
 * ``benchmark`` command (fastest ``--cpus``, memory and time estimates, SLURM request) and
@@ -46,6 +73,9 @@ Major Changes:
   ``--no_pre_mask`` and ``--always_refine``.
 * Model refinement as in pplacer: when the query alignment holds the reference sequences, or with
   ``--always_refine``, CAT models get new site categories on the reference tree.
+* Posterior probabilities as pplacer's ``-p`` computes them (``-p``/``--pp``, ``--pp_rel_err``,
+  ``--unif_prior``, ``--inform_prior``, ``--prior_lower``): each placement gets pplacer's
+  ``marginal_like`` and ``post_prob`` fields, with identical values, untiled and tiled.
 * ``place`` without a reference package: ``--tree``, ``--ref_aln``, ``--stats``, ``--ref_dir``
   (pplacer's ``-t``, ``-r``, ``-s``, ``-d``), with RAxML 7 info, PhyML 3.0 stats and JSON model files
   read as pplacer reads them, and pplacer's model settings ``--model_freqs``, ``--gamma_cats``,
@@ -59,9 +89,12 @@ Major Changes:
   that every engine loads. Rebuilds relink the engine whenever the compiled C changes (before, a link
   cached in the build directory could be reused). A failed engine build now ends ``pip install`` with one
   clear message (editable installs used to hide it behind a setuptools ``KeyError``).
+* Engines load on glibc older than 2.25 (the ARM64 wheel, CentOS 7): CORE-MATH's ``exp``, ``pow`` and
+  ``sin`` no longer call the C library's ``roundeven``, which gcc 10 and 11 on ARM64, and gcc on x86-64
+  for the portable engine, used instead of an instruction (identical results).
 * ``--ranked_edges N`` (``place``, ``place_batch``): untiled placement without a queries x edges score
   table; queries are scored in batches of 20,000 and keep their first N ranked edges, as in tiled
-  placement, so memory barely grows with the number of queries (all 127,343 GTDB-Tk genomes on
+  placement, so memory barely grows with the number of queries (all 127,343 GlobDB genomes on
   class-level tree 8: 17.5 GiB instead of 29.5 GiB with ``--ranked_edges 164``). Results are
   identical; the default is unchanged.
 * ``gplace test`` places a test set tile by tile when its untiled placement would not fit in the
@@ -93,3 +126,9 @@ Major Changes:
   unchanged.
 * Every file gPlace opens is closed explicitly (``gplace.fileio`` helpers or ``with`` blocks): no
   ``ResourceWarning: unclosed file`` in the unit-test log.
+* ``place`` takes pplacer's command line: ``-c``, ``-o``, ``-j`` and ``--out-dir`` next to ``--refpkg``,
+  ``--out_file``, ``--cpus`` and ``--out_dir``, and query files at the end of the command line (or
+  anywhere among the options). Without ``-o``, each query file is written to ``<name>.jplace`` as
+  pplacer names it, and several query files give one jplace file each. pplacer's ``--mmap-file``,
+  ``--verbosity`` and ``--timing`` are accepted with no effect; the pplacer options gPlace does not
+  implement stop the run with a message. ``-j 0`` / ``--cpus 0`` place with one process, as pplacer.

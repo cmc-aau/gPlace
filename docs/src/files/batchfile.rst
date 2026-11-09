@@ -26,6 +26,6 @@ Example
 
 .. code-block:: text
 
-    runs/part00/tree_2/user_msa_file.fasta	pplacer/gtdbtk.package.2.refpkg	runs/part00/tree_2/pplacer.class_level.bac120.json
-    runs/part01/tree_2/user_msa_file.fasta	pplacer/gtdbtk.package.2.refpkg	runs/part01/tree_2/pplacer.class_level.bac120.json
-    runs/part00/tree_8/user_msa_file.fasta	pplacer/gtdbtk.package.8.refpkg	runs/part00/tree_8/pplacer.class_level.bac120.json
+    runs/sample1.fasta	refpkgs/tree_a.refpkg	out/sample1.tree_a.jplace
+    runs/sample2.fasta	refpkgs/tree_a.refpkg	out/sample2.tree_a.jplace
+    runs/sample3.fasta	refpkgs/tree_b.refpkg	out/sample3.tree_b.jplace

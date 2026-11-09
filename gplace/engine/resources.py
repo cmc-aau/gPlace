@@ -33,7 +33,7 @@ GiB = 2 ** 30
 
 # tiled placement (gplace.engine.tiled)
 QUERY_BATCH = 20000         # queries scored per prefilter sweep of a tile
-N_CAND = 160                # ranked edges kept per query (pplacer's search uses at most ~41)
+N_CAND = 160                # minimum ranked edges per query; candidates_needed() keeps 164 by default
 MERGE_CELLS = 4_000_000     # candidate-merge chunk size (rows x columns)
 
 
@@ -80,7 +80,7 @@ def estimate_memory(n_nodes, n_internal, n_sites, n_queries, n_leaves, aln_len, 
     per query     : with n_cand, the ranked candidate edges (score + edge while ranking, then the edges)
     inputs        : alignments held as Python strings, bytes and masked arrays
     per worker    : private buffers and page tables for the shared arrays
-    Calibrated on GTDB-Tk R226 class-level tree 2 (22,061 queries, 40 workers): measured cgroup
+    Calibrated on GTDB R226 class-level tree 2 (22,061 queries, 40 workers): measured cgroup
     peak 43.8 GiB (47.0 GB), model 44.7 GiB (48.0 GB); with n_cand 164 (--ranked_edges): measured
     43.4 GiB, model 44.3 GiB; class-level tree 8 with 127,343 queries: score table measured
     29.5 GiB (model 28.4), n_cand 164 measured 17.5 GiB (model 17.8)."""

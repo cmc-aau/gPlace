@@ -7,7 +7,7 @@ name = "gtdb-gplace"
 # Version is the ONLY dynamic field
 dynamic = ["version"]
 
-description = "Exact, memory-bounded re-implementation of the pplacer placements used by GTDB-Tk."
+description = "Exact, memory-bounded replacement for pplacer: the same phylogenetic placements with a fraction of the memory and time."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "GPL-3.0-only"
@@ -59,6 +59,8 @@ gplace = [
     "tests/data/parity/*",
     "tests/data/tools/*",
     "tests/data/options/*",
+    "tests/data/posterior/*",
+    "tests/data/posterior/*.refpkg/*",
     "tests/data/fits/*",
 ]
 
@@ -75,5 +77,9 @@ manylinux-aarch64-image = "manylinux2014"
 test-command = "gplace check_install && gplace test --models --cpus 2"
 
 [tool.cibuildwheel.linux]
-environment = { GPLACE_BUILD_JOBS = "4", GPLACE_BUILD_DIR = "/tmp/gplace_build" }
+# PIP_PREFER_BINARY: the wheel is tested inside the manylinux2014 container (glibc 2.17), where
+# current numpy has no wheel (numpy >= 2.3 ships manylinux_2_28 only); without it pip tries to
+# compile the newest numpy from source and the test step fails. With it pip takes the newest numpy
+# that has a wheel for the container (2.2.x).
+environment = { GPLACE_BUILD_JOBS = "4", GPLACE_BUILD_DIR = "/tmp/gplace_build", PIP_PREFER_BINARY = "1" }
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"

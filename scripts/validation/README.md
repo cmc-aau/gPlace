@@ -1,9 +1,9 @@
-# Validation against GTDB-Tk's pplacer binary
+# Validation against pplacer's v1.1.alpha19 binary
 
-GTDB-Tk's pplacer v1.1.alpha19 (`pplacer v1.1.alpha19-0-g807f6f3`) is a statically linked
-x86-64 binary with debug symbols. These gdb Python scripts read values out of the running binary,
-and were used to establish gPlace's exactness rules. Run them with the binary from the GTDB-Tk
-conda environment. pplacer forks its workers even with `-j 1`, so the scripts set
+pplacer's v1.1.alpha19 Linux release (`pplacer v1.1.alpha19-0-g807f6f3`, `pplacer-linux-v1.1.alpha19.zip`
+on GitHub, also packaged by Bioconda as pplacer 1.1.alpha19) is a statically linked x86-64 binary with
+debug symbols. These gdb Python scripts read values out of the running binary, and were used to establish
+gPlace's exactness rules. Run them with that binary. pplacer forks its workers even with `-j 1`, so the scripts set
 `follow-fork-mode child`.
 
 | Script | What it records | How it was used |
@@ -19,7 +19,7 @@ Examples:
 ```bash
 # trace one genome (outputs TRACE_OUT, hex floats)
 TRACE_OUT=stock_trace.txt gdb -q -batch -x gdb_trace_evaluations.py --args \
-    pplacer -m WAG -j 1 -c gtdbtk.package.8.refpkg -o q1.json q1.fasta
+    pplacer -m WAG -j 1 -c <refpkg> -o q1.json q1.fasta
 
 # eigendecomposition dump
 DUMP_DIR=dump gdb -q -batch -x gdb_dump_eigen.py --args pplacer -m WAG -j 1 -c <refpkg> -o x.json q.fasta

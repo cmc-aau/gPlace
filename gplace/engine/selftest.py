@@ -17,8 +17,8 @@
 
 """Bit-exactness self-tests of the compiled engine (`gplace check_install`).
 
-1. libm: hypot/exp/log/pow/sin/log1p against values returned by the libm inside GTDB-Tk's pplacer binary.
-2. Model: the WAG eigendecomposition against the one dumped from GTDB-Tk's pplacer binary.
+1. libm: hypot/exp/log/pow/sin/log1p against values returned by the libm inside pplacer's v1.1.alpha19 binary.
+2. Model: the WAG eigendecomposition against the one dumped from pplacer's v1.1.alpha19 binary.
 3. Kernels: every SIMD kernel against its scalar reference, on random and extreme inputs, in the
    protein (20-state) and DNA (4-state) engines.
 4. Gamma: the discrete-gamma rates (GSL 1.16) against values whose placements matched the stock

@@ -3,7 +3,7 @@
 check_install
 =============
 
-The ``check_install`` command checks that the compiled engine reproduces pplacer's arithmetic bit for bit on this machine: the CPU and the engine variant it uses (``avx2`` on x86-64 CPUs with AVX2 and FMA, else ``portable``), the libm functions against values taken from GTDB-Tk's pplacer binary, the WAG eigendecomposition against the one inside that binary, and every SIMD kernel against its scalar reference.
+The ``check_install`` command checks that the compiled engine reproduces pplacer's arithmetic bit for bit on this machine: the CPU and the engine variant it uses (``avx2`` on x86-64 CPUs with AVX2 and FMA, else ``portable``), the libm functions against values taken from pplacer's v1.1.alpha19 release binary, the WAG eigendecomposition against the one inside that binary, and every SIMD kernel against its scalar reference.
 
 Arguments
 ---------
@@ -27,7 +27,7 @@ Example
     [2026-09-26 20:19:08] INFO: CPU AVX2/FMA support: yes
     [2026-09-26 20:19:08] INFO: Engine: gplace/engine/lib/libgplace_core.so
     [2026-09-26 20:19:08] INFO:         gplace-core 1: pplacer v1.1.alpha19 exact (GSL 1.16, glibc-2.19 hypot, CORE-MATH exp/log, AVX2)
-    [2026-09-26 20:19:08] INFO: libm vs GTDB-Tk pplacer binary (hypot/exp/log): 1500/1500 identical
-    [2026-09-26 20:19:08] INFO: WAG model vs GTDB-Tk pplacer binary: input identical, eigenvalues identical, eigenvectors identical
+    [2026-09-26 20:19:08] INFO: libm vs pplacer v1.1.alpha19 binary (hypot/exp/log): 1500/1500 identical
+    [2026-09-26 20:19:08] INFO: WAG model vs pplacer v1.1.alpha19 binary: input identical, eigenvalues identical, eigenvectors identical
     [2026-09-26 20:19:09] INFO: SIMD kernels vs scalar references: 254/254 identical
-    [2026-09-26 20:19:09] INFO: Installation OK: the engine reproduces GTDB-Tk's pplacer arithmetic bit for bit.
+    [2026-09-26 20:19:09] INFO: Installation OK: the engine reproduces pplacer v1.1.alpha19's arithmetic bit for bit.

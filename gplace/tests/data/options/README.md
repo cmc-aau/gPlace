@@ -1,7 +1,7 @@
 # Test data for pplacer's options and inputs
 
-Every `*.pplacer.jplace` was written by the stock pplacer v1.1.alpha19 (commit 807f6f3, the build
-GTDB-Tk uses) with `-j 4` and the options in its `invocation` field (local paths removed);
+Every `*.pplacer.jplace` was written by the stock pplacer v1.1.alpha19 (commit 807f6f3, the statically
+linked release binary) with `-j 4` and the options in its `invocation` field (local paths removed);
 `tests/test_options.py` places the same inputs with the same settings and compares.
 
 * `mini.*`, `gtr_g.*`, `wag_g.*`, `dna_cat.*`: search settings on `../mini.refpkg`,

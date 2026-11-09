@@ -3,8 +3,7 @@
 jplace file
 ===========
 
-Placements in the jplace format (version 3), as written by pplacer, e.g. GTDB-Tk's
-``pplacer.class_level.bac120.json``.
+Placements in the jplace format (version 3), as written by pplacer (its ``-o`` file).
 
 * ``tree``: the reference tree with ``{edge}`` numbers, byte-identical to pplacer's (labels
   quoted only when needed, branch lengths ``%g``).

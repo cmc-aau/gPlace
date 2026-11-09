@@ -33,7 +33,7 @@ def print_help():
               ...::: gPlace v%s :::...
 
   Placement:
-    place         -> Place aligned queries on a reference package (same result as pplacer).
+    place         -> Place aligned queries: pplacer's command line, pplacer's result.
     place_batch   -> Place many alignments, pooling queries per reference package.
     compare       -> Compare two jplace files placement by placement.
 
@@ -66,7 +66,13 @@ def main():
         print_help()
         sys.exit(0)
     else:
-        args = get_main_parser().parse_args()
+        parser = get_main_parser()
+        args, extra = parser.parse_known_args()
+        # pplacer takes query files anywhere on its command line: after an option, they come back here
+        if extra and args.subparser_name == 'place' and not any(e.startswith('-') for e in extra):
+            args.alignment += extra
+        elif extra:
+            parser.error('unrecognized arguments: ' + ' '.join(extra))
 
     # setup logger
     log_dir = None
@@ -75,6 +81,9 @@ def main():
     elif hasattr(args, 'out_file') and args.out_file:
         import os
         log_dir = os.path.dirname(os.path.abspath(args.out_file))
+    elif getattr(args, 'subparser_name', None) == 'place':     # jplace files named after the alignments, here
+        import os
+        log_dir = os.getcwd()
     tool = getattr(args, 'subparser_name', None) in ('tog', 'taxit')    # quiet: their output is the point
     logger_setup(log_dir, "gplace.log", "gPlace", __version__, tool,
                  hasattr(args, 'debug') and args.debug)

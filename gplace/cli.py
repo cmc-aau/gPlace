@@ -45,17 +45,31 @@ def __msa_file(group, required):
     group.add_argument('--msa_file', required=required,
                        help='aligned query sequences, protein or DNA as the reference: FASTA, or '
                             'Stockholm if the name ends in .sto or .sth (.gz: gzipped) as in pplacer '
-                            '(e.g. GTDB-Tk user_msa_file.fasta for one class-level tree)')
+                            '(pplacer\'s query file)')
 
 
-def __refpkg(group, required):
-    group.add_argument('--refpkg', required=required,
-                       help='pplacer reference package directory (e.g. gtdbtk.package.N.refpkg)')
+def __alignments(group):
+    group.add_argument('alignment', nargs='*', default=[],
+                       help='query alignment file(s) at the end of the command line, as in pplacer, instead '
+                            'of --msa_file. Each is placed on its own and, without --out_file, written to '
+                            '<name>.jplace in --out_dir, named as pplacer names it (the file name without '
+                            '.gz and its last extension)')
 
 
-def __out_file(group, required):
-    group.add_argument('--out_file', required=required,
-                       help='output jplace file (same content as pplacer\'s -o file)')
+def __refpkg(group, required, pplacer=False):
+    group.add_argument(*(('--refpkg', '-c') if pplacer else ('--refpkg',)), dest='refpkg', required=required,
+                       help='pplacer reference package directory (pplacer\'s -c)')
+
+
+def __out_file(group, required, pplacer=False):
+    group.add_argument(*(('--out_file', '-o') if pplacer else ('--out_file',)), dest='out_file',
+                       required=required, help='output jplace file (same content as pplacer\'s -o file)')
+
+
+def __place_out_dir(group):
+    group.add_argument('--out_dir', '--out-dir', dest='out_dir', default=None,
+                       help='directory for the jplace files named after their alignment (pplacer\'s '
+                            '--out-dir). Default: the current directory; --out_file is used as given')
 
 
 def __batchfile(group, required):
@@ -77,11 +91,50 @@ def __jplace_b(group):
     group.add_argument('--jplace_b', required=True, help='second jplace file')
 
 
-def __cpus(group):
-    group.add_argument('--cpus', default='1', type=str,
+def __cpus(group, pplacer=False):
+    group.add_argument(*(('--cpus', '-j') if pplacer else ('--cpus',)), dest='cpus', default='1', type=str,
                        help='number of CPUs to use, or "auto": the value saved by `gplace benchmark` '
                             'on this machine, otherwise measured during the run (placement is '
-                            'memory-bandwidth bound, so the fastest value is often below the CPU count)')
+                            'memory-bandwidth bound, so the fastest value is often below the CPU count)'
+                            + (' (pplacer\'s -j)' if pplacer else ''))
+
+
+class _PplacerUnsupported(argparse.Action):
+    """A pplacer option gPlace does not implement: recorded in `pplacer_unsupported`, which `place`
+    refuses, unless the value has no effect in pplacer either (its default, or a setting used only by
+    another unsupported option)."""
+    NO_EFFECT = {'--fig-cutoff': lambda v: float(v) == 0, '--fantasy': lambda v: float(v) == 0,
+                 '--groups': lambda v: int(v) <= 1, '--fantasy-frac': lambda v: float(v) == float(v),
+                 '--map-mrca-min': lambda v: float(v) == float(v)}
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        check = self.NO_EFFECT.get(option_string)
+        try:
+            no_effect = check is not None and check(values)
+        except ValueError:
+            parser.error(f'argument {option_string}: invalid value: {values!r}')
+        if not no_effect:
+            setattr(namespace, self.dest, list(getattr(namespace, self.dest) or []) + [option_string])
+
+
+PPLACER_UNSUPPORTED = (('--fig-cutoff', 1), ('--fig-eval-all', 0), ('--fig-eval-discrepancy-tree', 1),
+                       ('--fig-tree', 1), ('--fantasy', 1), ('--fantasy-frac', 1), ('--write-masked', 0),
+                       ('--pretend', 0), ('--check-like', 0), ('--write-pre-masked', 1), ('--map-mrca', 1),
+                       ('--map-mrca-min', 1), ('--map-identity', 0), ('--groups', 1))
+
+
+def __pplacer_compat(parser):
+    """pplacer's options that change nothing in gPlace (accepted), and those gPlace does not
+    implement (recognised, then refused by `place` with a clear message)."""
+    with arg_group(parser, 'pplacer options accepted with no effect') as grp:
+        grp.add_argument('--mmap-file', dest='mmap_file', default=None, metavar='FILE',
+                         help='pplacer\'s scratch file for large allocations; gPlace needs none')
+        grp.add_argument('--verbosity', type=int, default=None, metavar='INT', help='pplacer\'s verbosity level')
+        grp.add_argument('--timing', action='store_true', default=False,
+                         help='pplacer\'s timing report (gPlace logs its timings)')
+    for opt, nargs in PPLACER_UNSUPPORTED:
+        parser.add_argument(opt, dest='pplacer_unsupported', default=[], nargs=None if nargs else 0,
+                            action=_PplacerUnsupported, help=argparse.SUPPRESS)
 
 
 def __tiling(parser):
@@ -127,6 +180,15 @@ def __discard_nonoverlapped(group):
                             'has one, instead of stopping (pplacer\'s --discard-nonoverlapped)')
 
 
+class _PosteriorAction(argparse.Action):
+    """pplacer's -p: posterior probabilities, and keep_at_most 20, keep_factor 0.001, max_strikes 20
+    at that point of the command line (later options override them, earlier ones are overridden)."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        namespace.calc_pp = True
+        namespace.keep_at_most, namespace.keep_factor, namespace.max_strikes = 20, 0.001, 20
+
+
 def __search(parser):
     """pplacer's search settings, under gPlace's and pplacer's spellings (defaults: pplacer's)."""
     with arg_group(parser, 'pplacer settings (default: pplacer\'s; results stay identical to '
@@ -155,6 +217,22 @@ def __search(parser):
                               'reference has one then count), do not check that queries overlap the '
                               'reference sequences, and merge only queries with identical whole sequences '
                               'into one record')
+        grp.add_argument('-p', '--pp', dest='calc_pp', nargs=0, action=_PosteriorAction, default=False,
+                         help='calculate posterior probabilities (pplacer\'s -p): adds each placement\'s '
+                              'marginal likelihood and posterior probability, and, as in pplacer, sets '
+                              '--keep_at_most 20, --keep_factor 0.001 and --max_strikes 20 (options given '
+                              'after -p override these). Much slower than likelihood placement')
+        grp.add_argument('--pp_rel_err', '--pp-rel-err', type=float, default=0.01, metavar='FLOAT',
+                         help='relative error of the posterior probability integration')
+        grp.add_argument('--unif_prior', '--unif-prior', dest='uniform_prior', action='store_true', default=False,
+                         help='-p: uniform prior on the pendant branch length instead of exponential')
+        grp.add_argument('--inform_prior', '--inform-prior', dest='informative_prior', action='store_true',
+                         default=False,
+                         help='-p: exponential prior whose mean, for each edge, is its length plus the average '
+                              'distance to the leaves below it (plus --prior_lower), instead of the average '
+                              'branch length of the tree')
+        grp.add_argument('--prior_lower', '--prior-lower', type=float, default=0., metavar='FLOAT',
+                         help='-p --inform_prior: added to every edge\'s prior mean')
         grp.add_argument('--always_refine', '--always-refine', action='store_true', default=False,
                          help='refine the model before placing: CAT models get new site rate categories '
                               'on the reference tree (pplacer always does this when the query alignment '
@@ -269,14 +347,16 @@ def get_main_parser():
     sub_parsers = main_parser.add_subparsers(title="Subcommands", help="Available subcommands", dest='subparser_name')
 
     with subparser(sub_parsers, 'place', 'Place aligned queries on a reference package or reference '
-                                         'files (bit-identical to pplacer).') as parser:
-        with arg_group(parser, 'required named arguments') as grp:
-            __msa_file(grp, required=True)
-            __out_file(grp, required=True)
+                                         'files (bit-identical to pplacer; pplacer\'s command line works too).') as parser:
+        with arg_group(parser, 'queries and output (gPlace\'s or pplacer\'s names)') as grp:
+            __alignments(grp)
+            __msa_file(grp, required=False)
+            __out_file(grp, required=False, pplacer=True)
+            __place_out_dir(grp)
         with arg_group(parser, 'reference (--refpkg, or --tree with the files below)') as grp:
-            __refpkg(grp, required=False)
+            __refpkg(grp, required=False, pplacer=True)
         with arg_group(parser, 'optional arguments') as grp:
-            __cpus(grp)
+            __cpus(grp, pplacer=True)
             __fix_gamma(grp)
             __mrca_class(grp)
             __discard_nonoverlapped(grp)
@@ -286,6 +366,7 @@ def get_main_parser():
         __tiling(parser)
         __search(parser)
         __reference_files(parser)
+        __pplacer_compat(parser)
 
     with subparser(sub_parsers, 'place_batch', 'Place many alignments, pooling the queries of each '
                                                'reference package into one pass.') as parser:
@@ -326,7 +407,7 @@ def get_main_parser():
         __tiling(parser)
 
     with subparser(sub_parsers, 'test', 'Place the bundled test genomes and check the output is '
-                                        'identical to GTDB-Tk\'s pplacer.') as parser:
+                                        'identical to pplacer\'s.') as parser:
         with arg_group(parser, 'optional arguments') as grp:
             __out_dir(grp, required=False)
             __cpus(grp)

@@ -14,7 +14,7 @@ choice is saved, so ``--cpus auto`` uses it on this machine (same host, CPU mode
 available CPUs).
 
 The memory estimate is for the whole job (all of ``--msa_file``, or ``--queries``); it was
-calibrated on GTDB-Tk R226 class-level tree 2 (22,061 queries: estimated 44.2 GiB and about
+calibrated on GTDB R226 class-level tree 2 (22,061 queries: estimated 44.2 GiB and about
 6 min, measured 43.8 GiB and 5.7 min). With ``--refpkg`` and ``--queries`` only, gPlace prints the memory estimate
 without placing anything.
 
@@ -88,7 +88,7 @@ Example
 
 .. code-block:: bash
 
-    gplace benchmark --refpkg gtdbtk.package.2.refpkg --msa_file tree_2/user_msa_file.fasta --queries 22061
+    gplace benchmark --refpkg my.refpkg --msa_file queries.fasta --queries 22061
 
 .. code-block:: text
 
@@ -111,7 +111,7 @@ Memory only:
 
 .. code-block:: bash
 
-    gplace benchmark --refpkg gtdbtk.package.2.refpkg --queries 50000 --cpus 32
+    gplace benchmark --refpkg my.refpkg --queries 50000 --cpus 32
 
 Tile size for the full GTDB bacterial tree in a 64 GB job:
 

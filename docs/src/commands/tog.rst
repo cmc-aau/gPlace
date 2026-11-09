@@ -26,14 +26,14 @@ Example
 
 .. code-block:: bash
 
-    gplace tog -o gtdbtk.bac120.classify.tree pplacer.bac120.json      # as GTDB-Tk runs guppy tog
+    gplace tog -o placements.tree queries.jplace      # = guppy tog -o placements.tree queries.jplace
     gplace tog --xml --out-dir trees/ placements_*.jplace
 
 Validation
 ----------
 
-Compared with the stock guppy on 607 cases, every output file identical: GTDB-Tk's 112 class-level
-jplaces and gPlace's test jplaces with each option set, a 4,040-query jplace on the full GTDB
+Compared with the stock guppy on 607 cases, every output file identical: pplacer's 112 jplaces on
+the GTDB class-level trees and gPlace's test jplaces with each option set, a 4,040-query jplace on the full GTDB
 bacterial tree, every combination of ``-o`` / ``--out-dir`` / ``--prefix``, several placefiles,
 gzipped input, ``placefile:groups.csv`` splitting, and synthetic placements (labels that need quoting
 or XML escaping, ties, placements at the ends of an edge, multi-name records, float-like labels,

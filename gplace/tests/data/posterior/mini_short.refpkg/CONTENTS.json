@@ -1,0 +1,8 @@
+{
+  "metadata": {"format_version": "1.1"},
+  "files": {
+    "tree": "mini_short_tree.tree",
+    "aln_fasta": "../../mini.refpkg/mini_msa.fa",
+    "phylo_model": "../../mini.refpkg/phylo_model.json"
+  }
+}

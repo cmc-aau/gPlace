@@ -21,7 +21,7 @@ class TestResources(unittest.TestCase):
         self.assertEqual(resources.heuristic_cpus(64), 40)
 
     def test_memory_model_tree2(self):
-        """GTDB-Tk R226 class-level tree 2, 22,061 queries, 40 workers: measured 43.8 GiB peak."""
+        """GTDB R226 class-level tree 2, 22,061 queries, 40 workers: measured 43.8 GiB peak."""
         m = resources.estimate_memory(43130, 21564, 5036, 22061, 21566, 5036, 40) / 2 ** 30
         self.assertGreater(m, 43.8)
         self.assertLess(m, 43.8 * 1.10)

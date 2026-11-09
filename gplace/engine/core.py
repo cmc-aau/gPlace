@@ -34,8 +34,8 @@ from gplace.exceptions import EngineNotBuilt, GPlaceException
 NS = 20
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 
-# pplacer v1.1.alpha19 default preferences (prefs.ml), unchanged by GTDB-Tk's invocation
-# `pplacer -m WAG -j <cpus> -c <refpkg> -o <out.json> <msa>`; Search holds a run's values.
+# pplacer v1.1.alpha19 default preferences (prefs.ml), as in
+# `pplacer -m WAG -j <cpus> -c <refpkg> -o <out.jplace> <queries>`; Search holds a run's values.
 START_PEND = 0.1
 MAX_PEND = 2.0
 INITIAL_TOL = 0.01
@@ -46,20 +46,29 @@ KEEP_FACTOR = 0.01
 MAX_PITCHES = 40
 MAX_STRIKES = 6
 STRIKE_BOX = 3.0
+PP_REL_ERR = 0.01
+PRIOR_LOWER = 0.
 
 
 class Search(object):
     """pplacer's search settings (--ml-tolerance, --start-pend, --max-pend, --max-strikes,
     --strike-box, --max-pitches, --keep-at-most, --keep-factor, --no-pre-mask), checked as
-    Prefs.check does. The final tolerance (1e-5) and the iteration limit (200) are fixed in pplacer."""
+    Prefs.check does. The final tolerance (1e-5) and the iteration limit (200) are fixed in pplacer.
+    Posterior probabilities (-p, --pp-rel-err, --unif-prior, --inform-prior, --prior-lower):
+    calc_pp adds each kept placement's marginal likelihood and posterior probability."""
 
     def __init__(self, ml_tolerance=INITIAL_TOL, start_pend=START_PEND, max_pend=MAX_PEND,
                  max_strikes=MAX_STRIKES, strike_box=STRIKE_BOX, max_pitches=MAX_PITCHES,
-                 keep_at_most=KEEP_AT_MOST, keep_factor=KEEP_FACTOR, no_pre_mask=False):
+                 keep_at_most=KEEP_AT_MOST, keep_factor=KEEP_FACTOR, no_pre_mask=False,
+                 calc_pp=False, pp_rel_err=PP_REL_ERR, uniform_prior=False, informative_prior=False,
+                 prior_lower=PRIOR_LOWER):
         self.ml_tolerance, self.start_pend, self.max_pend = float(ml_tolerance), float(start_pend), float(max_pend)
         self.max_strikes, self.strike_box, self.max_pitches = int(max_strikes), float(strike_box), int(max_pitches)
         self.keep_at_most, self.keep_factor = int(keep_at_most), float(keep_factor)
         self.no_pre_mask = bool(no_pre_mask)
+        self.calc_pp, self.pp_rel_err = bool(calc_pp), float(pp_rel_err)
+        self.uniform_prior, self.informative_prior = bool(uniform_prior), bool(informative_prior)
+        self.prior_lower = float(prior_lower)
         for k in ('ml_tolerance', 'start_pend', 'max_pend', 'strike_box', 'keep_factor'):
             if math.isnan(getattr(self, k)):
                 raise GPlaceException(f'{k} must be a number, not nan.')
@@ -78,7 +87,8 @@ class Search(object):
     def from_options(cls, options):
         """The settings of a parsed command line (attributes missing from it keep the defaults)."""
         names = ('ml_tolerance', 'start_pend', 'max_pend', 'max_strikes', 'strike_box', 'max_pitches',
-                 'keep_at_most', 'keep_factor', 'no_pre_mask')
+                 'keep_at_most', 'keep_factor', 'no_pre_mask', 'calc_pp', 'pp_rel_err', 'uniform_prior',
+                 'informative_prior', 'prior_lower')
         return cls(**{k: getattr(options, k) for k in names if getattr(options, k, None) is not None})
 
     def changed(self):
@@ -192,6 +202,8 @@ def lib(ns=NS):
     L.xp_tt_set.argtypes = [V, V, V, V, V, V, D, D, D]
     L.xp_tt_optimize.argtypes = [V, D, D, I]; L.xp_tt_optimize.restype = I
     L.xp_tt_results.argtypes = [V, V]
+    L.xp_tt_marg_prob.argtypes = [V, I, D, D, D, V]; L.xp_tt_marg_prob.restype = I
+    L.xp_pp_counters.argtypes = [V, I]
     L.xp_tt_free.argtypes = [V]
     L.xp_set_pf_bs.argtypes = [I, I]
     L.xp_eval_batch.argtypes = [V, I, V, V, V, V, V, V, V, V, I]; L.xp_eval_batch.restype = I
