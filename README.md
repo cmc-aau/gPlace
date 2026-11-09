@@ -8,6 +8,8 @@
 <p align="center">
   <a href="https://github.com/cmc-aau/gPlace/actions/workflows/tests.yml"><img alt="Unit tests" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/pchaumeil/08bdf557b640135e66112abccdc87bcc/raw/gplace-tests.json"></a>
   <a href="https://github.com/cmc-aau/gPlace/actions/workflows/tests.yml"><img alt="pplacer parity" src="https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/pchaumeil/08bdf557b640135e66112abccdc87bcc/raw/gplace-parity.json"></a>
+  <a href="https://anaconda.org/bioconda/gtdb-gplace"><img alt="Bioconda" src="https://img.shields.io/conda/vn/bioconda/gtdb-gplace?label=bioconda"></a>
+  <a href="https://pypi.org/project/gtdb-gplace/"><img alt="PyPI" src="https://img.shields.io/pypi/v/gtdb-gplace?label=PyPI"></a>
 </p>
 
 > [!WARNING]

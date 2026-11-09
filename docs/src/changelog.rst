@@ -15,9 +15,11 @@ Major Changes:
 
 Documentation:
 
-* The installation pages start with pip: gPlace is on PyPI as ``gtdb-gplace``
-  (``python -m pip install gtdb-gplace``), with prebuilt wheels for Linux (x86-64 and ARM64); on macOS
-  pip compiles the engine from the source package. Installing from GitHub is described in
+* The installation pages start with conda and pip: gPlace is on Bioconda and PyPI as ``gtdb-gplace``
+  (``conda create -n gplace -c conda-forge -c bioconda gtdb-gplace``,
+  ``python -m pip install gtdb-gplace``). Bioconda has prebuilt packages for Linux (x86-64 and ARM64)
+  and macOS (Intel and Apple silicon); PyPI has prebuilt wheels for Linux (x86-64 and ARM64), and on
+  macOS pip compiles the engine from the source package. Installing from GitHub is described in
   "Installing from source".
 * "How gPlace works" has new figures: an exponent pull at the bit level, when pplacer and gPlace
   apply the final pull (new section "Exponents and the final pull"), and tiled placement step by step

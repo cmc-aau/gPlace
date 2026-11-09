@@ -31,8 +31,9 @@ Quick start
 
 .. code-block:: bash
 
-    # install (see Installing gPlace)
-    python -m pip install gtdb-gplace
+    # install with conda (see Installing gPlace for pip)
+    conda create -n gplace -c conda-forge -c bioconda gtdb-gplace
+    conda activate gplace
     gplace check_install
 
     # place aligned sequences on a pplacer reference package: pplacer's command line

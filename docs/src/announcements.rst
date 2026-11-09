@@ -6,9 +6,11 @@ gPlace 0.1.1
 
 *In progress*
 
-* gPlace is on PyPI: ``python -m pip install gtdb-gplace``. On Linux (x86-64 and ARM64) nothing is
-  compiled; on macOS the engine is compiled during the install. Run ``gplace check_install``
-  afterwards (see :ref:`installing`).
+* gPlace is on Bioconda and PyPI as ``gtdb-gplace``:
+  ``conda create -n gplace -c conda-forge -c bioconda gtdb-gplace`` or
+  ``python -m pip install gtdb-gplace``. Bioconda's packages are prebuilt for Linux and macOS;
+  pip installs a prebuilt package on Linux and compiles the engine on macOS. Run
+  ``gplace check_install`` afterwards (see :ref:`installing`).
 * Tiled placement (``--max_memory``, ``--tile_edges``) is much faster on trees cut into many tiles,
   with identical results.
 

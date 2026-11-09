@@ -3,12 +3,22 @@
 Installing gPlace
 =================
 
-gPlace runs on 64-bit Linux (x86-64 or ARM64) and macOS, with Python 3.12 or newer.
+gPlace runs on 64-bit Linux (x86-64 or ARM64) and macOS, with Python 3.12 or newer. It is on
+Bioconda and PyPI as ``gtdb-gplace``; the command it installs is ``gplace``.
+
+Install with conda
+------------------
+
+.. code-block:: bash
+
+    conda create -n gplace -c conda-forge -c bioconda gtdb-gplace
+    conda activate gplace
+
+Bioconda's packages are prebuilt for Linux (x86-64 and ARM64) and macOS (Intel and Apple silicon):
+nothing is compiled (see :doc:`bioconda`).
 
 Install with pip
 ----------------
-
-gPlace is on PyPI as ``gtdb-gplace``; the command it installs is ``gplace``.
 
 .. code-block:: bash
 
@@ -19,16 +29,22 @@ gPlace is on PyPI as ``gtdb-gplace``; the command it installs is ``gplace``.
 
 On Linux (x86-64 and ARM64), pip installs a prebuilt package: nothing is compiled. On macOS, pip
 compiles gPlace's engine during the install, which needs a C compiler and ``make``
-(``xcode-select --install``) and takes a few minutes (see :doc:`pip`).
+(``xcode-select --install``) and takes a few minutes (see :doc:`pip`); conda avoids this.
 
-Then check that it works:
+Check the installation
+----------------------
 
 .. code-block:: bash
 
     gplace check_install     # should end with "Installation OK"
     gplace test              # places 20 bundled genomes and compares them with pplacer's output
 
-To upgrade later: ``python -m pip install --upgrade gtdb-gplace``.
+To upgrade later, the way you installed it:
+
+.. code-block:: bash
+
+    conda update -n gplace -c conda-forge -c bioconda gtdb-gplace    # conda
+    python -m pip install --upgrade gtdb-gplace                       # pip
 
 
 What you need to run it
@@ -40,12 +56,12 @@ What you need to run it
 * **CPUs:** any number. ``--cpus auto`` picks a good number of workers for your computer.
 
 
-Other ways to install
----------------------
+More details
+------------
 
 .. toctree::
    :maxdepth: 1
 
+   bioconda
    pip
    source
-   bioconda
