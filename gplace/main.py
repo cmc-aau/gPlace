@@ -109,7 +109,7 @@ class OptionsParser(object):
         t0 = time.time()
         reference = Reference.of(refpkg)
         placer = new_placer(reference, queries, cpus, fix_gamma, discard_nonoverlapped, search, always_refine,
-                            ranked_edges)
+                            ranked_edges, max_memory=max_memory if tile_edges is None else None)
         if placer.discarded:
             self.logger.info(f'Discarded {len(placer.discarded):,} queries that do not overlap the reference '
                              f'sequences (--discard_nonoverlapped), e.g. {placer.discarded[0]}.')
@@ -226,7 +226,7 @@ class OptionsParser(object):
     def place(self, options):
         """Place the queries of each alignment on one reference (package), as pplacer does: given with
         --msa_file, or as pplacer's command line gives them (each placed on its own)."""
-        from gplace.engine.core import read_alignment
+        from gplace.engine.core import read_alignment_matrix
         from gplace.engine.jplace import write_jplace
         if options.pplacer_unsupported:
             raise GPlaceExit(f'pplacer\'s {", ".join(dict.fromkeys(options.pplacer_unsupported))}: not '
@@ -260,7 +260,7 @@ class OptionsParser(object):
                 self.logger.info(f'Alignment {i}/{len(files)}: {msa} -> {out}')
             reference = self._reference(options)
             make_sure_path_exists(os.path.dirname(os.path.abspath(out)))
-            queries = read_alignment(msa)
+            queries = read_alignment_matrix(msa)
             self.logger.info(f'Read {len(queries):,} sequences from {msa}')
             placer, results, secs, classify = self._place_group(
                 reference, queries, options.cpus, *tiling, fix_gamma=options.fix_gamma_underflow,

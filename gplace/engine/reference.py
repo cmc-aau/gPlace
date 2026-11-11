@@ -116,6 +116,16 @@ class Reference(object):
             return core.read_stockholm(self._path('aln_sto'))
         return None
 
+    def alignment_matrix(self):
+        """alignment() as a core.Alignment (uppercased, one uint8 matrix); None if there is none."""
+        if 'aln_fasta' in self.files:
+            records = core.fasta_records(self._path('aln_fasta'))
+        elif 'aln_sto' in self.files:
+            records = core.read_stockholm(self._path('aln_sto'))
+        else:
+            return None
+        return core.Alignment.of(records, 'the reference alignment length')
+
     def phylo_model(self):
         """The model as a phylo_model dict (models.model_from_refpkg)."""
         if self._pm is None and self.full_model:

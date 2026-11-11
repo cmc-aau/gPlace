@@ -95,8 +95,7 @@ def emper_freq(align, alphabet, chunk=1 << 20):
         w = np.array(v, dtype=float)
         lut[ord(ch)] = w * (1.0 / l1_norm(w))
     total = np.zeros(ns)
-    for name, seq in align:
-        b = np.frombuffer(seq.encode(), np.uint8)
+    for name, b in core.byte_rows(align):
         b = b[(b != ord('-')) & (b != ord('?'))]
         bad = np.isnan(lut[b, 0])
         if bad.any():
@@ -179,9 +178,23 @@ def width_of(pm):
     return ns
 
 
+def width_of(pm):
+    """Doubles per site in a likelihood vector for a phylo_model (Placer.width: states, times the
+    rates for gamma), before the model is built; None for --full_model fits."""
+    if 'full_fit' in pm:
+        return None
+    ns = alphabet_of(pm).ns
+    if pm.get('ras_model') != 'gamma':
+        return ns
+    try:
+        return ns * int((pm.get('gamma') or {})['n_cats'])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def model_from_refpkg(pm, ref_align, lib=None):
-    """The Model of a refpkg from its phylo_model JSON (pm) and its reference alignment
-    [(name, sequence)] (uppercased; the model is built before pplacer's pre-masking)."""
+    """The Model of a refpkg from its phylo_model JSON (pm) and its reference alignment (a
+    core.Alignment or [(name, sequence)], uppercased; the model is built before pplacer's pre-masking)."""
     alphabet = alphabet_of(pm)
     subs, ras = pm.get('subs_model'), pm.get('ras_model')
     if 'full_fit' in pm:                        # --full_model: the fitting program's matrix, frequencies and rates

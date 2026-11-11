@@ -48,7 +48,7 @@ from gplace.engine.core import P
 from gplace.engine import resources
 from gplace.engine.newick import parse_newick, to_newick
 from gplace.engine.reference import Reference
-from gplace.exceptions import RefpkgMalformed, AlignmentMalformed, GPlaceException
+from gplace.exceptions import RefpkgMalformed, AlignmentMalformed, GPlaceException, GPlaceExit
 
 
 def shared_zeros(shape, dtype=np.float64):
@@ -262,20 +262,13 @@ def _distinct_rows(A):
     return rep_of, first
 
 
-def load_refpkg(refpkg_dir):
-    """(tree text, reference alignment or None, phylo_model dict) of a reference package directory
-    or a reference.Reference."""
-    R = Reference.of(refpkg_dir)
-    return R.tree_text(), R.alignment(), R.phylo_model()
-
-
 class Placer(object):
     """Place aligned queries on one reference (a reference package directory or a
     reference.Reference), exactly as pplacer does (CAT models; gamma models use gamma.GammaPlacer,
     see factory.new_placer)."""
 
     def __init__(self, refpkg_dir, queries, cpus=1, discard_nonoverlapped=False, search=None,
-                 always_refine=False, ranked_edges=None):
+                 always_refine=False, ranked_edges=None, max_memory=None):
         self.logger = logging.getLogger('timestamp')
         self.search = search = search or core.Search()
         if ranked_edges is not None and int(ranked_edges) < 1:
@@ -292,11 +285,12 @@ class Placer(object):
             self.cpus = self.workers = max(1, int(cpus))
             self.cpus_source = 'user'
         self.reference = Reference.of(refpkg_dir)
-        tree_txt, ref, pm = load_refpkg(self.reference)
+        tree_txt, pm = self.reference.tree_text(), self.reference.phylo_model()
         self.alpha = models.alphabet_of(pm)                  # protein or DNA
         self.ns = self.alpha.ns
         self.lib = core.lib(self.ns)
         self.tree = parse_newick(tree_txt)
+        del tree_txt
         self.children = self.tree.children
         self.bl = self.tree.branch_lengths_for_placement()
         self.label = self.tree.label
@@ -308,8 +302,9 @@ class Placer(object):
         ref_names = set(leaf_names)
         if len(ref_names) != len(leaf_names):
             raise RefpkgMalformed('Duplicate leaf names in the reference tree.')
-        in_ref = [q for q in queries if q[0] in ref_names]
-        queries = [q for q in queries if q[0] not in ref_names]
+        # the alignments are core.Alignment matrices (uppercased), never lists of strings
+        queries = core.Alignment.of(queries)
+        in_ref = [i for i, n in enumerate(queries.names) if n in ref_names]
         self.from_input_alignment = bool(in_ref)
         if in_ref:
             if len(in_ref) != len(ref_names):
@@ -317,24 +312,29 @@ class Placer(object):
                                          'alignment file. Are there overlaps between query and '
                                          'reference sequence IDs?')
             seen = set()
-            for nm, _ in in_ref:
+            for i in in_ref:
+                nm = queries.names[i]
                 if nm in seen:
                     raise AlignmentMalformed(f"duplicate reference sequence '{nm}' in the query file")
                 seen.add(nm)
             self.logger.info('Found reference sequences in the query alignment; using those as '
                              'the reference alignment (as pplacer does).')
-            ref = in_ref
-        elif ref is None:
-            raise RefpkgMalformed('Please specify a reference alignment with --ref_aln or --refpkg, or '
-                                  'include all reference sequences in the query alignment.')
-        if not queries:
+            ref = queries.take(in_ref)
+            queries = queries.take([i for i, n in enumerate(queries.names) if n not in ref_names])
+        else:
+            if max_memory is not None:
+                self._check_loading_memory(max_memory, len(leaf_names), queries, pm)
+            ref = self.reference.alignment_matrix()
+            if ref is None:
+                raise RefpkgMalformed('Please specify a reference alignment with --ref_aln or --refpkg, or '
+                                      'include all reference sequences in the query alignment.')
+        if not len(queries):
             raise AlignmentMalformed('No query sequences to place.')
-        names = [n for n, _ in queries]
+        names = list(queries.names)
         if len(set(names)) != len(names):
             raise AlignmentMalformed('Duplicate query names; every query needs a unique name.')
 
         # model (Refpkg.get_aln_fasta uppercases the alignment; the model is built before pre-masking)
-        ref = [(n, s.upper()) for n, s in ref]
         self.model = models.model_from_refpkg(pm, ref, self.lib)
         self.statd = np.array(self.model.statd)
         self.x, self.l, self.xit, _ = core.build_diagd(self.model.R, list(self.statd), self.lib)
@@ -348,38 +348,37 @@ class Placer(object):
         if self.model.ras == 'cat' and not self.refined:
             cats_full = self.model.site_categories
         else:                                                # gamma: every site under every rate
-            cats_full = np.zeros(len(ref[0][1]), dtype=np.int32)    # refined: set below
+            cats_full = np.zeros(ref.length, dtype=np.int32)    # refined: set below
 
         # alignments and pplacer's pre-mask (informative in >=1 reference AND >=1 query)
-        queries = [(n, s.upper()) for n, s in queries]
-        L = len(ref[0][1])
-        for nm, sq in ref + queries:
-            if len(sq) != L:
-                raise AlignmentMalformed(f'Sequence {nm} has length {len(sq)}, expected {L} '
-                                         f'(the reference alignment length).')
+        L = ref.length                                       # each alignment has one length (Alignment.of)
+        if queries.length != L:
+            raise AlignmentMalformed(f'Sequence {names[0]} has length {queries.length}, expected {L} '
+                                     f'(the reference alignment length).')
         if len(cats_full) != L:
             raise RefpkgMalformed(f'The CAT site categories ({len(cats_full)}) do not match the '
                                   f'alignment length ({L}).')
-        RA = np.frombuffer(''.join(s for _, s in ref).encode(), np.uint8).reshape(len(ref), L)
-        QA = np.frombuffer(''.join(s for _, s in queries).encode(), np.uint8).reshape(len(queries), L)
-        for A, seqs in ((RA, ref), (QA, queries)):
-            ok = self.alpha.valid[A].all(axis=1)
-            if not ok.all():
-                i = int(np.nonzero(~ok)[0][0])
-                raise AlignmentMalformed(f'Unknown characters {set(seqs[i][1].upper()) - set(self.alpha.char_map)} '
-                                         f'in {seqs[i][0]}.')
+        RA, QA = ref.matrix, queries.matrix
+        for A, seq_names in ((RA, ref.names), (QA, names)):
+            for i, B in core.row_blocks(A):
+                ok = self.alpha.valid[B].all(axis=1)
+                if not ok.all():
+                    j = i + int(np.nonzero(~ok)[0][0])
+                    bad = {chr(c) for c in np.unique(A[j])} - set(self.alpha.char_map)
+                    raise AlignmentMalformed(f'Unknown characters {bad} in {seq_names[j]}.')
         # pplacer_run.premask: every query must have a residue in a column where some reference
         # has one ("doesn't overlap any reference sequences"), unless --discard-nonoverlapped.
         # --no-pre-mask: every column is kept and nothing is checked or discarded; a query without
         # a residue stops pplacer (core.ml)
         if search.no_pre_mask:
-            empty = np.nonzero(~core.informative(QA).any(axis=1))[0]
-            if len(empty):
-                raise AlignmentMalformed(f"sequence '{names[empty[0]]}' has no informative sites.")
+            for i, B in core.row_blocks(QA):
+                empty = np.nonzero(~core.informative(B).any(axis=1))[0]
+                if len(empty):
+                    raise AlignmentMalformed(f"sequence '{names[i + empty[0]]}' has no informative sites.")
             ref_inf = overlaps = np.ones(L, bool)
         else:
-            ref_inf = core.informative(RA).any(axis=0)
-            overlaps = (core.informative(QA) & ref_inf).any(axis=1)
+            ref_inf = core.any_informative(RA)
+            overlaps = np.concatenate([(core.informative(B) & ref_inf).any(axis=1) for _, B in core.row_blocks(QA)])
         self.discarded = [] if search.no_pre_mask else [names[i] for i in np.nonzero(~overlaps)[0]]
         if self.discarded:
             if not discard_nonoverlapped:
@@ -393,22 +392,23 @@ class Placer(object):
             QA = np.ascontiguousarray(QA[keep_q])
             if not names:
                 raise AlignmentMalformed('No query sequences to place: none overlaps the reference sequences.')
-        mask = ref_inf if search.no_pre_mask else ref_inf & core.informative(QA).any(axis=0)
+        mask = ref_inf if search.no_pre_mask else ref_inf & core.any_informative(QA)
         keep = np.nonzero(mask)[0]
         self.nsites = len(keep)
         self.cats = np.ascontiguousarray(cats_full[keep])
         self.occupied = np.zeros(self.nrates, np.uint8)
         self.occupied[np.unique(self.cats)] = 1
-        self.refA = np.ascontiguousarray(RA[:, keep])
+        self.refA = core.drop_columns(RA, keep)              # RA is ours (read here): masked in place
+        ref.matrix = RA = None
         # pplacer places each distinct (pre-masked) sequence once: query_names/QM hold the first
         # query of every distinct sequence; all_names and rep_of map every query to its row
-        QM = np.ascontiguousarray(QA[:, keep])
+        QM = QA if len(keep) == L else np.take(QA, keep, axis=1)
         rep_of, first = _distinct_rows(QM)
         self.all_names, self.rep_of = names, rep_of
         self.QM = QM if len(first) == len(names) else np.ascontiguousarray(QM[first])
         self.query_names = [names[i] for i in first]
         self._name_index = None
-        rowof = {n: i for i, (n, _) in enumerate(ref)}
+        rowof = {n: i for i, n in enumerate(ref.names)}
         missing = [nm for nm in leaf_names if nm not in rowof]
         if missing:
             raise RefpkgMalformed(f'{len(missing)} tree leaves have no sequence in the reference '
@@ -429,6 +429,26 @@ class Placer(object):
                              'model when ' + ('the reference sequences are in the query alignment).'
                                               if self.from_input_alignment else '--always_refine is given).'))
             self.refine_site_categories()
+
+    def _check_loading_memory(self, max_memory, n_leaves, queries, pm):
+        """Stop before reading the reference alignment if reading it alone would take more than
+        max_memory: under a hard memory limit the process would be killed before the plan's
+        message. The message is the plan's (tiled.plan_tiling) where the model allows planning
+        here, with the sites informative in a query (at least the pre-masked sites)."""
+        load = resources.current_memory() + n_leaves * queries.length + core.Alignment.BLOCK_BYTES
+        if load <= max_memory:
+            return
+        width = models.width_of(pm)
+        if width is not None:
+            from gplace.engine.tiled import plan_tiling
+            sites = queries.length if self.search.no_pre_mask else int(core.any_informative(queries.matrix).sum())
+            plan_tiling(self.tree, sites, len(queries), n_leaves, queries.length,
+                        self.workers or resources.heuristic_cpus(self.cpus), None, max_memory, width=width,
+                        n_cand=self.ranked_edges)                    # raises when no plan fits
+        GiB = resources.GiB
+        raise GPlaceExit(f'--max_memory {max_memory / GiB:.1f} GiB is too small: reading the reference '
+                         f'alignment ({n_leaves:,} sequences of {queries.length:,} columns) needs '
+                         f'--max_memory {load / GiB:.1f}G or more.')
 
     # --------------------------------------------------------------- refinement --
     def _heavy_first_postorder(self):

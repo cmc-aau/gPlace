@@ -29,7 +29,7 @@ import re
 import numpy as np
 
 from gplace.config.common import CONFIG, ENGINE_NAMES, ENGINE_VARIANTS, engine_file
-from gplace.exceptions import EngineNotBuilt, GPlaceException
+from gplace.exceptions import AlignmentMalformed, EngineNotBuilt, GPlaceException
 
 NS = 20
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
@@ -363,13 +363,18 @@ def read_fasta(path):
     """(name, sequence) pairs; the name is the first whitespace-delimited header token. As
     pplacer's Fasta: ';' lines are comments, a .gz file is read gunzipped, and a sequence before
     the first name is an error."""
-    out, name, buf = [], None, []
+    return list(fasta_records(path))
+
+
+def fasta_records(path):
+    """read_fasta's (name, sequence) pairs, one at a time."""
+    name, buf = None, []
     with _open_text(path) as fh:
         for line in fh:
             line = line.rstrip('\n')
             if line.startswith('>'):
                 if name is not None:
-                    out.append((name, ''.join(buf)))
+                    yield name, ''.join(buf)
                 name, buf = line[1:].split()[0] if line[1:].strip() else '', []
             elif line.startswith(';'):
                 continue
@@ -379,8 +384,7 @@ def read_fasta(path):
             else:
                 buf.append(line.strip())
     if name is not None:
-        out.append((name, ''.join(buf)))
-    return out
+        yield name, ''.join(buf)
 
 
 _STOCKHOLM_LINE = re.compile(r'(?:|(# STOCKHOLM 1\.0)|(//)|(#=.+)|(([^ \t\n\r#]+)[ \t]+([^ \t\n\r#]+)))'
@@ -440,3 +444,110 @@ def read_alignment(path):
     if base.endswith(('.sto', '.sth')):
         return read_stockholm(path)
     return read_fasta(path)
+
+
+def read_alignment_matrix(path):
+    """read_alignment as an Alignment (uppercased); a FASTA file is read sequence by sequence into
+    the matrix, without holding its sequences as Python strings."""
+    base = path[:-3] if path.endswith('.gz') else path
+    records = read_stockholm(path) if base.endswith(('.sto', '.sth')) else fasta_records(path)
+    return Alignment.of(records, f'the length of the first sequence in {path}')
+
+
+class Alignment(object):
+    """Aligned sequences as one uint8 matrix (a row per sequence, in input order) and their names,
+    uppercased as pplacer uses them. The matrix is the only copy of the sequences (a reference
+    alignment of 190,000 x 5,000 characters takes 0.9 GiB); iterating gives (name, sequence)
+    pairs one row at a time, as read_fasta's list does."""
+    BLOCK_BYTES = 1 << 26       # rows are read into blocks above glibc's largest mmap threshold
+                                # (32 MiB), so a block is returned to the system once copied
+
+    def __init__(self, names, matrix):
+        self.names, self.matrix = names, matrix
+
+    @classmethod
+    def of(cls, pairs, what='the length of the first sequence'):
+        """From (name, sequence) pairs (an Alignment is returned as it is). Every sequence must
+        have the first one's length; `what` says what that length is in the error."""
+        if isinstance(pairs, Alignment):
+            return pairs
+        names, blocks, n, L, rows = [], [], 0, None, 1
+        for name, seq in pairs:
+            if L is None:
+                L = len(seq)
+                rows = max(1, cls.BLOCK_BYTES // max(L, 1))
+            elif len(seq) != L:
+                raise AlignmentMalformed(f'Sequence {name} has length {len(seq)}, expected {L} ({what}).')
+            seq = seq.upper()
+            try:
+                b = seq.encode('ascii')
+            except UnicodeEncodeError:
+                raise AlignmentMalformed(f'Unknown characters {set(c for c in seq if ord(c) > 127)} '
+                                         f'in {name}.')
+            if n % rows == 0:
+                blocks.append(np.empty((rows, L), np.uint8))
+            blocks[-1][n % rows] = np.frombuffer(b, np.uint8)
+            names.append(name)
+            n += 1
+        if len(blocks) <= 1:
+            return cls(names, blocks[0][:n] if blocks else np.empty((0, 0), np.uint8))
+        matrix = np.empty((n, L), np.uint8)
+        for i in range(len(blocks)):
+            block, blocks[i] = blocks[i], None
+            k = min(rows, n - i * rows)
+            matrix[i * rows:i * rows + k] = block[:k]
+            del block
+        return cls(names, matrix)
+
+    @property
+    def length(self):
+        return self.matrix.shape[1]
+
+    def take(self, rows):
+        """The Alignment of these rows (a copy)."""
+        return Alignment([self.names[i] for i in rows], np.ascontiguousarray(self.matrix[rows]))
+
+    def __len__(self):
+        return len(self.names)
+
+    def __iter__(self):
+        for name, row in zip(self.names, self.matrix):
+            yield name, row.tobytes().decode('ascii')
+
+    def __getitem__(self, i):
+        return self.names[i], self.matrix[i].tobytes().decode('ascii')
+
+
+def byte_rows(align):
+    """(name, uint8 row) of an Alignment or of (name, sequence) pairs."""
+    if isinstance(align, Alignment):
+        return zip(align.names, align.matrix)
+    return ((name, np.frombuffer(seq.encode(), np.uint8)) for name, seq in align)
+
+
+def row_blocks(A, max_bytes=1 << 24):
+    """(first row, block of rows) over a matrix, so per-element temporaries stay small."""
+    step = max(1, max_bytes // max(A.shape[1], 1))
+    for i in range(0, len(A), step):
+        yield i, A[i:i + step]
+
+
+def any_informative(A):
+    """Columns of A that are informative in at least one row (informative(A).any(axis=0))."""
+    out = np.zeros(A.shape[1], bool)
+    for _, B in row_blocks(A):
+        out |= informative(B).any(axis=0)
+    return out
+
+
+def drop_columns(A, keep):
+    """A[:, keep] (keep: increasing column indices) in A's own memory: row i moves to i * len(keep),
+    which is never past where it was, so nothing is overwritten before it is read."""
+    n, L = A.shape
+    K = len(keep)
+    if K == L:
+        return A
+    flat = A.reshape(-1)
+    for i, B in row_blocks(A):
+        flat[i * K:(i + len(B)) * K] = np.take(B, keep, axis=1).reshape(-1)
+    return flat[:n * K].reshape(n, K)

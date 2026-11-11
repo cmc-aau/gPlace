@@ -360,7 +360,8 @@ def alignment_stats(ref_align, alphabet, gap_columns=False):
     columns that are gaps in every sequence (unless run with --force): gap_columns=True keeps them."""
     ns, full = alphabet.ns, (1 << alphabet.ns) - 1
     lut = _state_masks(alphabet)
-    A = np.frombuffer(''.join(s for _, s in ref_align).encode('latin-1'), np.uint8).reshape(len(ref_align), -1)
+    A = ref_align.matrix if isinstance(ref_align, core.Alignment) else \
+        np.frombuffer(''.join(s for _, s in ref_align).encode('latin-1'), np.uint8).reshape(len(ref_align), -1)
     masks = lut[A]
     if not masks.all():
         i, j = map(int, np.argwhere(masks == 0)[0])

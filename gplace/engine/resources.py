@@ -138,6 +138,22 @@ def parse_memory(value):
     return int(size)
 
 
+def current_memory():
+    """This process's resident memory (bytes): /proc/self/statm, else the peak from getrusage
+    (macOS); 0 if unknown."""
+    try:
+        with open('/proc/self/statm') as fh:
+            return int(fh.read().split()[1]) * os.sysconf('SC_PAGE_SIZE')
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        import resource
+        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return peak if platform.system() == 'Darwin' else peak * 1024
+    except (ImportError, OSError):
+        return 0
+
+
 def available_memory():
     """Memory this process may use (bytes): the smallest cgroup limit on its path (SLURM jobs,
     systemd scopes, containers) or the machine's total memory. None if unknown."""
@@ -186,21 +202,18 @@ def refpkg_width(refpkg_dir):
 
 def refpkg_dimensions(refpkg_dir):
     """(n_nodes, n_internal, n_leaves, aln_len, ref_informative_sites) without building anything."""
-    import numpy as np
-    from gplace.engine.core import informative
+    from gplace.engine.core import any_informative
     from gplace.engine.newick import parse_newick
     from gplace.engine.reference import Reference
     from gplace.exceptions import RefpkgMalformed
     R = Reference(refpkg_dir)
     t = parse_newick(R.tree_text())
-    ref = R.alignment()
+    ref = R.alignment_matrix()
     if ref is None:
         raise RefpkgMalformed(f'{refpkg_dir} has no reference alignment (aln_fasta or aln_sto).')
-    L = len(ref[0][1])
-    RA = np.frombuffer(''.join(s for _, s in ref).encode(), np.uint8).reshape(len(ref), L)
-    sites = int(informative(RA).any(axis=0).sum())
+    sites = int(any_informative(ref.matrix).sum())
     n_leaves = len(t.leaves())
-    return t.n_nodes, t.n_nodes - n_leaves, n_leaves, L, sites
+    return t.n_nodes, t.n_nodes - n_leaves, n_leaves, ref.length, sites
 
 
 # ------------------------------------------------------------------ saved tuning --
