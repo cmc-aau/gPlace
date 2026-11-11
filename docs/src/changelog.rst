@@ -12,6 +12,13 @@ Major Changes:
   64 CPUs) take 25 minutes instead of 2 h 49 min, with identical results. Before each fork, freed
   memory goes back to the system (``malloc_trim`` on Linux, ``malloc_zone_pressure_relief`` on macOS),
   which keeps the longer-lived workers within the planned memory.
+* Reference alignments are read straight into one byte matrix, without holding their sequences as
+  Python strings and copies of them: on the GTDB R232 bacterial tree (189,801 sequences) loading takes
+  1.3 GiB instead of 4.8 GiB and 14 s instead of 38 s, and placing 38 genomes on tiles of 1,000 edges
+  peaks at 3.0 GiB instead of 4.8 GiB, with identical results. ``--max_memory`` is also checked before
+  the reference alignment is read: a limit too small even for reading it now stops with the usual
+  "needs --max_memory" message, where a hard memory limit (a cgroup, container or job limit) used to
+  kill the process first (GitHub issue 5).
 
 Documentation:
 
