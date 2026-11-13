@@ -184,6 +184,20 @@ def lib(ns=NS):
     L.xp_edge_scores.argtypes = [V, ctypes.c_long, V, V, V, V, I, I, V, I, V]
     L.xp_edge_scores8.argtypes = [V, ctypes.c_long, ctypes.c_long, I, V, V, V, V, I, I, V, I]
     L.xp_edge_scores8.restype = I
+    L.xp_edge_scores8_f32.argtypes = [V, ctypes.c_long, ctypes.c_long, I, V, V, V, V, I, I, I, V, I, V]
+    L.xp_edge_scores8_f32.restype = I
+    L.xp_edge_scores8_f32src.argtypes = [V, ctypes.c_long, ctypes.c_long, I, V, V, V, V, I, I, I, V, I, V]
+    L.xp_edge_scores8_f32src.restype = I
+    L.xp_cache_distal.argtypes = [V, V, I, V, V, V, V, V, I, V, V, V, V, V, I, V]
+    L.xp_cache_distal.restype = I
+    L.xp_cache_proximal.argtypes = [V, V, D, I, V, V, V, V, V, V, V, I, V, V, V, V, V, I, V]
+    L.xp_cache_proximal.restype = I
+    L.xp_unit_distal.argtypes = [I, V, V, V, V, V, V, V, V, I, V, V, V, V, V, I, V, I, I]
+    L.xp_unit_distal.restype = I
+    L.xp_unit_proximal.argtypes = [I, V, V, V, V, V, V, V, V, V, V, V, V, V, I, V, V, V, V, V, I, V, I]
+    L.xp_unit_proximal.restype = I
+    L.xp_tile_walk.argtypes = [I, I] + [V] * 19 + [V, I, V, V, V, V, V, I, V, I, I]
+    L.xp_tile_walk.restype = I
     L.xp_tt_new.argtypes = [I, V, V, V, V, V, V, I, V]; L.xp_tt_new.restype = V
     L.xp_tt_set.argtypes = [V, V, V, V, V, V, D, D, D]
     L.xp_tt_optimize.argtypes = [V, D, D, I]; L.xp_tt_optimize.restype = I
@@ -191,6 +205,10 @@ def lib(ns=NS):
     L.xp_tt_marg_prob.argtypes = [V, I, D, D, D, V]; L.xp_tt_marg_prob.restype = I
     L.xp_pp_counters.argtypes = [V, I]
     L.xp_tt_free.argtypes = [V]
+    L.xp_set_pf_bs.argtypes = [I, I]
+    L.xp_eval_batch.argtypes = [V, I, V, V, V, V, V, V, V, V, I]; L.xp_eval_batch.restype = I
+    L.xp_merge_candidates.argtypes = [V, V, I, ctypes.c_int64, V, ctypes.c_int64, V, ctypes.c_int64, I]
+    L.xp_merge_candidates.restype = None
     L.xp_trace_open.argtypes = [ctypes.c_char_p]
     # gamma mixture model (Gmix)
     L.xp_discrete_gamma.argtypes = [I, D, V]; L.xp_discrete_gamma.restype = I

@@ -225,11 +225,20 @@ def candidates_needed(search, n_edges, n_cand=resources.N_CAND):
     return min(max(int(n_cand), 4 * (tp + 1)), n_edges)
 
 
-def merge_candidates(cs, ce, b0, edges, sc):
+def merge_candidates(cs, ce, b0, edges, sc, lib=None, threads=1):
     """Merge the scores sc of the edges `edges` (rows b0.. of cs/ce) into the candidate lists,
     keeping each query's first K edges in ranking order. The selection is by score; when equal
-    scores straddle the cut-off, that row is resolved by (score, edge number) exactly."""
+    scores straddle the cut-off, that row is resolved by (score, edge number) exactly. Within a
+    row the K kept are in no particular order. With GPLACE_CMERGE=1 and the engine `lib`: in C,
+    on `threads` pthreads (xp_merge_candidates), the same sets."""
     K, E = cs.shape[1], len(edges)
+    if lib is not None and os.environ.get('GPLACE_CMERGE') == '1' and sc.shape[0]:
+        rows = slice(b0, b0 + sc.shape[0])
+        assert cs.flags.c_contiguous and ce.flags.c_contiguous and sc.strides[1] == 8
+        edges = np.ascontiguousarray(edges, np.int64)
+        lib.xp_merge_candidates(P(cs[rows]), P(ce[rows]), K, sc.shape[0], P(sc), sc.strides[0] // 8,
+                                P(edges), E, max(1, int(threads)))
+        return
     step = max(1, resources.MERGE_CELLS // (K + E))
     for a in range(0, sc.shape[0], step):
         b = min(sc.shape[0], a + step)
@@ -270,6 +279,12 @@ class Placer(object):
     def __init__(self, refpkg_dir, queries, cpus=1, discard_nonoverlapped=False, search=None,
                  always_refine=False, ranked_edges=None, max_memory=None):
         self.logger = logging.getLogger('timestamp')
+        if os.environ.get('GPLACE_EXPERIMENTAL_PD_CACHE') == '1':
+            self.logger.warning('GPLACE_EXPERIMENTAL_PD_CACHE=1: the PD cache is on. It was slower than no '
+                                'cache at 64 workers (AMD EPYC 7763); set it only to measure it.')
+        elif 'GPLACE_PD_CACHE' in os.environ:
+            self.logger.warning('GPLACE_PD_CACHE is no longer read; the PD cache stays off '
+                                '(GPLACE_EXPERIMENTAL_PD_CACHE=1 turns it on, on its own).')
         self.search = search = search or core.Search()
         if ranked_edges is not None and int(ranked_edges) < 1:
             raise GPlaceException('--ranked_edges must be at least 1.')
@@ -653,6 +668,47 @@ class Placer(object):
                                      P(self.dexp[k]), P(tA), P(e2), S)
         self.lib.xp_pull_exponent(P(self.darr[k]), P(self.dexp[k]), S, -50)
 
+    # ------------------------------------------ cache build in C (GPLACE_CNODE) -
+    def _cn_children(self, ch):
+        """Pointer arrays for xp_cache_*: distal rows and exponents (internal), tip codes (leaf)."""
+        n = len(ch)
+        src = np.zeros(n, np.int64); srce = np.zeros(n, np.int64); codes = np.zeros(n, np.int64)
+        keep = []
+        for j, c in enumerate(ch):
+            if self.children[c]:
+                k = self.iidx[c]
+                src[j] = self.darr[k].ctypes.data; srce[j] = self.dexp[k].ctypes.data
+            else:
+                cd = self.refA[self.leaf_row[c]]
+                keep.append(cd); codes[j] = cd.ctypes.data
+        bls = np.array([self.bl[c] for c in ch], np.float64)
+        return src, srce, codes, bls, keep
+
+    def _distal_c(self, v):
+        ch, k = self.children[v], self.iidx[v]
+        src, srce, codes, bls, keep = self._cn_children(ch)
+        st = self.lib.xp_cache_distal(P(self.darr[k]), P(self.dexp[k]), len(ch), P(src), P(srce), P(codes),
+                                      P(bls), P(self._lut), self.nsites, P(self.cats), P(self.x), P(self.l),
+                                      P(self.xit), P(self.rates), self.nrates, P(self.occupied))
+        if st != 0:
+            raise GPlaceException(f'cache kernel failed ({st}) at node {v}.')
+
+    def _proximal_c(self, v):
+        kv, ch = self.iidx[v], self.children[v]
+        src, srce, codes, bls, keep = self._cn_children(ch)
+        out = np.zeros(len(ch), np.int64); oute = np.zeros(len(ch), np.int64); kids = []
+        for j, c in enumerate(ch):
+            if self.children[c]:
+                kc = self.iidx[c]
+                out[j] = self.parr[kc].ctypes.data; oute[j] = self.pexp[kc].ctypes.data; kids.append(c)
+        st = self.lib.xp_cache_proximal(P(self.parr[kv]), P(self.pexp[kv]), float(self.bl[v]), len(ch),
+                                        P(src), P(srce), P(codes), P(bls), P(out), P(oute), P(self._lut),
+                                        self.nsites, P(self.cats), P(self.x), P(self.l), P(self.xit),
+                                        P(self.rates), self.nrates, P(self.occupied))
+        if st != 0:
+            raise GPlaceException(f'cache kernel failed ({st}) at node {v}.')
+        return kids
+
     def _proximal(self, v, t):
         kv, ch = self.iidx[v], self.children[v]
         evp = t.b[2]
@@ -679,9 +735,17 @@ class Placer(object):
         for v in self.internal:
             pending[v] = sum(1 for c in self.children[v] if self.children[c])
 
+        cnode = os.environ.get('GPLACE_CNODE') == '1' and self.width == self.ns \
+            and self.refA.dtype == np.uint8
+        if cnode:
+            self._lut = np.ascontiguousarray(self.alpha.lut, dtype=np.float64)
+
         def distal_task(v):
             try:
-                self._distal(v, self.tl())
+                if cnode:
+                    self._distal_c(v)
+                else:
+                    self._distal(v, self.tl())
                 p = self.parent[v]; ready = False
                 with lock:
                     count[0] += 1; fin = count[0] == n
@@ -708,7 +772,7 @@ class Placer(object):
 
         def prox_task(v):
             try:
-                kids = self._proximal(v, self.tl())
+                kids = self._proximal_c(v) if cnode else self._proximal(v, self.tl())
                 with lock:
                     count[0] += 1; fin = count[0] == n
                 for c in kids:
@@ -773,10 +837,13 @@ class Placer(object):
             self.rank = None
             self.scores = shared_zeros((Qn, E))
             self._bcodes, self._qb = self.codes, (Qn, E)
+            self._pf32_setup()
             start = 0
             if self.workers is None:                   # --cpus auto without a saved benchmark
                 start = self._calibrate(groups)
             self._run_groups(groups[start:], self.workers)
+            if self._pf32:
+                self._pf32_radius()
             self._bcodes = None
             return
         K = min(max(1, int(K)), E)
@@ -798,7 +865,7 @@ class Placer(object):
                 if full:
                     ce[b0:b0 + n] = self.locs[np.lexsort((np.broadcast_to(self.locs, sc.shape), -sc), axis=1)]
                 else:
-                    merge_candidates(cs, ce, b0, self.locs, sc)
+                    merge_candidates(cs, ce, b0, self.locs, sc, self.lib, self.workers or os.cpu_count())
         finally:
             del self.scores
             self._bcodes = None
@@ -878,11 +945,194 @@ class Placer(object):
                                        P(t.e[0]), P(t.b[3]), P(t.e[1]), S)
         return t
 
+    # ------------------------------------------- f32 product prefilter (GPLACE_PF32) --
+    def _pf32_setup(self):
+        """GPLACE_PF32=1: score in f32 product form (xp_edge_scores8_f32) with a per-query error
+        radius, then resolve in f64 every edge whose interval could change the ranking."""
+        # CAT models only: the f32 kernels and the f64 resolve (xp_edge_scores8) are CAT's; a gamma
+        # model (GammaMixin: width R x NS, xp_g_edge_scores8) keeps its own prefilter; the f32 kernels
+        # are on the 20-state SIMD engines only (AVX2, NEON), others keep the f64 prefilter
+        self._pf32 = os.environ.get('GPLACE_PF32') == '1' and self.lib.xp_simd() in (1, 2) and self.ns == 20 \
+            and len(self.alpha.codes) <= 31 and self.model.ras != 'gamma' and self.width == self.ns \
+            and self.search.t_max_pitches != math.inf     # every edge evaluated: no window
+        if not self._pf32:
+            return
+        gap = len(self.alpha.codes)
+        bits = np.zeros(self.nsites, np.uint32)
+        for c in range(gap):
+            bits |= (np.any(self._bcodes == c, axis=0).astype(np.uint32) << np.uint32(c))
+        self._present = bits
+        # roundings per site on the longest path (all non-negative operands, 2^-24 each): f32
+        # inputs 2, util dot 20, running product 1, plus margin; with GPLACE_PF32SRC=1 (supernodes
+        # built in f32 in the kernel) distal 21, proximal 21 (a leaf's rebuild: 41 + 22 per
+        # sibling), statd product 3, util 21, running product 1
+        self._pf32src = os.environ.get('GPLACE_PF32SRC') == '1'
+        if self._pf32src:
+            kmax = max([len(self.children[self.parent[v]]) - 1 for v in range(self.nnodes)
+                        if not self.children[v] and self.parent[v] >= 0] or [0])
+            self._pf32_rounds = 21 + max(21, 41 + 22 * kmax) + 3 + 21 + 1
+        else:
+            self._pf32_rounds = 26
+
+    def _pf32_radius_of(self, codes):
+        nused = (np.asarray(codes) != len(self.alpha.codes)).sum(1)
+        return nused * self._pf32_rounds * 1.01 * 2.0 ** -24 + nused * 2.0 ** -40 + 1e-6
+
+    def _pf32_radius(self):
+        """After the f32 pass: the per-query radius r[q] = n_used * rounds * 1.01 * 2^-24 +
+        n_used * 2^-40 + 1e-6, which bounds |f32 score - f64 score| (every term of every util is
+        non-negative, so each rounding is a relative error of at most 2^-24; 2^-40 per site covers
+        f32 underflow, utils below 2^-90 being left to f64). Order is settled lazily by ranking()."""
+        self._pf32_r = self._pf32_radius_of(self._bcodes)
+        self._pf32_nres = shared_zeros(len(self._pf32_r))   # f64 scores computed per query (diagnostics)
+
+    def _pf32_exact(self, qi, cols):
+        """Query qi's f64 scores (xp_edge_scores8, one edge per call: lanes are independent)
+        against the edges of the columns cols, written into the score table. Uses its own
+        buffers: ranking() runs between the evaluations of place_query."""
+        cols = np.asarray(cols, np.int64)
+        self.scores[qi, cols] = self._pf32_exact_nodes(qi, self.locs[cols])
+        self._pf32_nres[qi] += len(cols)
+
+    def _pf32_exact_nodes(self, qi, nodes):
+        """Query qi's f64 prefilter scores (xp_edge_scores8, one edge per call) against the edges
+        above `nodes`, whose vectors must be in memory (untiled, or their tile materialised)."""
+        t = self.local
+        if not hasattr(t, 'pf_b'):
+            S = self.nsites
+            t.pf_b = [np.empty((S, self.width)) for _ in range(4)]
+            t.pf_e = [np.zeros(S, np.int64) for _ in range(2)]
+            t.pf_sn = np.empty((8, S, self.width)); t.pf_se = np.zeros((8, S), np.int64)
+            t.pf_ten = np.zeros((self.nrates, self.ns, self.ns))
+        gap = len(self.alpha.codes)
+        sub = np.ascontiguousarray(self.codes[[qi]])
+        tmp = np.zeros((1, 8)); out = np.empty(len(nodes))
+        for j, v in enumerate(nodes):
+            v = int(v)
+            self.get_d(v, t.pf_b[0], t.pf_e[0]); self.get_p(v, t.pf_b[1], t.pf_e[1])
+            self.evolve_t(t.pf_b[2], t.pf_b[0], self.bl[v] / 2., t.pf_ten)
+            self.evolve_t(t.pf_b[3], t.pf_b[1], self.bl[v] / 2., t.pf_ten)
+            self.lib.xp_statd_pairwise(P(t.pf_sn[0]), P(t.pf_se[0]), P(self.statd), P(t.pf_b[2]),
+                                       P(t.pf_e[0]), P(t.pf_b[3]), P(t.pf_e[1]), self.nsites)
+            st = self.lib.xp_edge_scores8(P(tmp), 8, 0, 1, P(t.pf_sn), P(t.pf_se), P(self.qevtab),
+                                          P(self.cats), self.nsites, gap, P(sub), 1)
+            if st != 0:
+                raise GPlaceException(f'Prefilter kernel failed ({st}) for edge {v}.')
+            out[j] = tmp[0, 0]
+        return out
+
+    def _pf32_ranking(self, qi):
+        """ranking() under GPLACE_PF32: the order of the f64 scores, from f32 scores known to
+        within +-r. Baseball takes at most N = t_max_pitches + 1 successful entrants, so the walk
+        certifies the first N ranks: every edge whose ceiling (score + r) reaches the N-th
+        largest floor (score - r) is a candidate, and the true first N are among them; every
+        other edge is discarded. Sorted by f32 score, candidates whose intervals chain together
+        (gaps <= 2r) form clusters, and a cluster is scored in f64 and ordered exactly only when
+        the walk reaches it. A search that goes past N (failed optimisations do not count)
+        doubles the window and continues the same way."""
+        row = np.array(self.scores[qi])
+        E = len(row)
+        r = float(self._pf32_r[qi])
+        exact = np.zeros(E, bool)
+        bad = np.nonzero(np.isnan(row))[0]
+        if len(bad):                                   # unbounded f32 scores: f64 first
+            self._pf32_exact(qi, bad); row[bad] = self.scores[qi, bad]; exact[bad] = True
+        yielded = []
+        M = min(self.search.t_max_pitches + 1, E)
+        while True:
+            thr = np.partition(row - r, E - M)[E - M]  # the M-th largest floor
+            cand = np.nonzero(row + r >= thr)[0]
+            cand = cand[np.lexsort((self.locs[cand], -row[cand]))]
+            vals = row[cand]
+            pos, i = 0, 0
+            while i < len(cand) and pos < M:
+                j = i + 1
+                while j < len(cand) and vals[j - 1] - vals[j] <= 2 * r:
+                    j += 1
+                cl = cand[i:j]
+                if len(cl) > 1:
+                    if pos + len(cl) > len(yielded):   # resolve only when the walk is here
+                        todo = cl[~exact[cl]]
+                        if len(todo):
+                            self._pf32_exact(qi, todo); row[todo] = self.scores[qi, todo]
+                            exact[todo] = True
+                    cl = cl[np.lexsort((self.locs[cl], -row[cl]))]
+                for k in cl:
+                    if pos >= M:
+                        break
+                    if pos < len(yielded):
+                        if yielded[pos] != k:
+                            raise GPlaceException(f'Inconsistent f32 ranking for {self.query_names[qi]}.')
+                    else:
+                        yielded.append(int(k))
+                        yield int(self.locs[k])
+                    pos += 1
+                i = j
+            if M >= E:
+                return
+            M = min(2 * M, E)
+
+    def _pf_tensor(self, bl):
+        ten = np.zeros((self.nrates, self.ns, self.ns))
+        self.lib.xp_multi_exp(P(ten), P(self.x), P(self.l), P(self.xit), P(self.rates),
+                              self.nrates, P(self.occupied), bl)
+        return ten
+
+    def _pf32src_group(self, i0, i1, nq):
+        """xp_edge_scores8_f32src for edges locs[i0:i1]: lane descriptors pointing into the cache
+        (the arrays of _supernodes8's get_d / get_p, without building them). Returns its status."""
+        desc = np.zeros((8, 32), np.int64)
+        keep = []
+        def ptr(a):
+            if a is None:
+                return 0
+            a = np.ascontiguousarray(a); keep.append(a); return a.ctypes.data
+        for lane, k in enumerate(range(i0, i1)):
+            v = int(self.locs[k])
+            a, e = self.d_pre(v)
+            desc[lane, 0], desc[lane, 1] = ptr(a), ptr(e)
+            desc[lane, 5] = ptr(self._pf_tensor(self.bl[v] / 2.))
+            if self.children[v]:
+                kk = self.iidx[v]
+                desc[lane, 3], desc[lane, 4] = ptr(self.parr[kk]), ptr(self.pexp[kk])
+            else:                                       # get_p's leaf rebuild, in the kernel
+                pv = self.parent[v]; kp = self.iidx[pv]
+                sibs = [r for r in self.children[pv] if r != v]
+                if len(sibs) > 8:
+                    return 1
+                desc[lane, 2] = 1
+                desc[lane, 3], desc[lane, 4] = ptr(self.parr[kp]), ptr(self.pexp[kp])
+                desc[lane, 6] = ptr(self._pf_tensor(self.bl[pv]))
+                desc[lane, 7] = len(sibs)
+                for j, r in enumerate(sibs):
+                    a, e = self.d_pre(r)
+                    desc[lane, 8 + j], desc[lane, 16 + j] = ptr(a), ptr(e)
+                    desc[lane, 24 + j] = ptr(self._pf_tensor(self.bl[r]))
+        return self.lib.xp_edge_scores8_f32src(P(self.scores), self.max_edges, i0, i1 - i0, P(desc),
+                                               P(self.statd), P(self.qevtab), P(self.cats), self.nsites,
+                                               len(self.alpha.codes), self.nrates, P(self._bcodes), nq,
+                                               P(self._present))
+
     def _batch_prefilter_group(self, g):
         """Prefilter scores of the current query batch (_bcodes, _qb) against edges locs[i0:i1]."""
         i0, i1 = g
         nq, _ = self._qb
+        if getattr(self, '_pf32', False) and self._pf32src:
+            st = self._pf32src_group(i0, i1, nq)
+            if st == 0:
+                return
+            if st != 1:
+                raise GPlaceException(f'f32 prefilter kernel failed ({st}) for edges {i0}..{i1}.')
         t = self._supernodes8(i0, i1)
+        if getattr(self, '_pf32', False):
+            st = self.lib.xp_edge_scores8_f32(P(self.scores), self.max_edges, i0, i1 - i0, P(t.sn8),
+                                              P(t.se8), P(self.qevtab), P(self.cats), self.nsites,
+                                              len(self.alpha.codes), self.nrates, P(self._bcodes), nq,
+                                              P(self._present))
+            if st == 0:
+                return
+            if st != 1:
+                raise GPlaceException(f'f32 prefilter kernel failed ({st}) for edges {i0}..{i1}.')
         st = self.lib.xp_edge_scores8(P(self.scores), self.max_edges, i0, i1 - i0, P(t.sn8), P(t.se8),
                                       P(self.qevtab), P(self.cats), self.nsites, len(self.alpha.codes),
                                       P(self._bcodes), nq)
@@ -894,6 +1144,9 @@ class Placer(object):
         number. From the score table (default), or from the query's stored first edges
         (--ranked_edges): a search that goes past them (rare: many failed optimisations) scores qi
         against every edge again and continues in the same order."""
+        if self.rank is None and getattr(self, '_pf32', False):
+            yield from self._pf32_ranking(qi)
+            return
         if self.rank is None:
             row = self.scores[qi]
             E = len(row)

@@ -47,6 +47,7 @@ include = ["gplace*"]
 [tool.setuptools.package-data]
 gplace = [
     "engine/csrc/*.c",
+    "engine/csrc/*.h",
     "engine/csrc/core-math/*",
     "engine/csrc/core-math/pow/*",
     "engine/csrc/glibc/*",
