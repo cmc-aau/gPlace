@@ -61,6 +61,8 @@ def shared_zeros(shape, dtype=np.float64):
 
 
 _PLACER = None                                  # the Placer seen by forked workers
+TENSOR_BYTES = 128e6                            # rebuild: transition matrices held at a time
+BLOCK_SITES = 160                               # rebuild: fewest sites per thread
 
 
 def _free_memory_call():
@@ -422,6 +424,7 @@ class Placer(object):
         self.internal = [v for v in range(self.nnodes) if self.children[v]]
         self.iidx = {v: k for k, v in enumerate(self.internal)}
         self.local = threading.local()
+        self._tensors = None                         # _rebuild's transition matrices (shared memory)
         self.aln_len = L
         self.n_leaves = len(leaf_names)
         if self.refined:
@@ -638,91 +641,95 @@ class Placer(object):
         self.lib.xp_pull_exponent(P(out), P(oute), self.nsites, -10)
 
     # -------------------------------------------------------------------- cache --
-    def _distal(self, v, t):
-        S, ch, k = self.nsites, self.children[v], self.iidx[v]
-        tA, tB, ten = t.b[0], t.b[1], t.tensor
-        a, e = self.d_pre(ch[0]); self.evolve_t(tA, a, self.bl[ch[0]], ten)
-        if len(ch) == 1:
-            self.darr[k] = tA; self.dexp[k] = e
-        else:
-            b, f = self.d_pre(ch[1]); self.evolve_t(tB, b, self.bl[ch[1]], ten)
-            self.lib.xp_pairwise(P(self.darr[k]), P(self.dexp[k]), P(tA), P(e), P(tB), P(f), S)
-            for c in ch[2:]:
-                a2, e2 = self.d_pre(c); self.evolve_t(tA, a2, self.bl[c], ten)
-                self.lib.xp_pairwise(P(self.darr[k]), P(self.dexp[k]), P(self.darr[k]),
-                                     P(self.dexp[k]), P(tA), P(e2), S)
-        self.lib.xp_pull_exponent(P(self.darr[k]), P(self.dexp[k]), S, -50)
-
-    def _proximal(self, v, t):
-        kv, ch = self.iidx[v], self.children[v]
-        evp = t.b[2]
-        self.evolve_t(evp, self.parr[kv], self.bl[v], t.tensor)
-        kids = []
-        for c in ch:
-            if not self.children[c]:
-                continue                        # leaf proximal: rebuilt on demand
-            kc = self.iidx[c]
-            self._prox_into(self.parr[kc], self.pexp[kc], evp, self.pexp[kv],
-                            [r for r in ch if r != c], t.b[3], t.tensor)
-            kids.append(c)
-        return kids
-
     def cache(self):
-        """Like_stree.calc_distal_and_proximal for internal nodes (pre -10 pull)."""
+        """Like_stree.calc_distal_and_proximal for internal nodes (pre -10 pull), by the engine (_rebuild)."""
         S, n = self.nsites, len(self.internal)
         self.zero_e = np.zeros(S, np.int64)
         self.darr = shared_zeros((n, S, self.width)); self.dexp = shared_zeros((n, S), np.int64)
         self.parr = shared_zeros((n, S, self.width)); self.pexp = shared_zeros((n, S), np.int64)
-        lock = threading.Lock(); done = threading.Event(); errs = []; count = [0]
-        ex = ThreadPoolExecutor(self.cpus)
-        pending = [0] * self.nnodes
-        for v in self.internal:
-            pending[v] = sum(1 for c in self.children[v] if self.children[c])
-
-        def distal_task(v):
-            try:
-                self._distal(v, self.tl())
-                p = self.parent[v]; ready = False
-                with lock:
-                    count[0] += 1; fin = count[0] == n
-                    if p >= 0:
-                        pending[p] -= 1; ready = pending[p] == 0
-                if ready:
-                    ex.submit(distal_task, p)
-                if fin:
-                    done.set()
-            except BaseException as e:
-                errs.append(e); done.set()
-
-        # the starting nodes are taken before any task runs: running tasks decrement pending and
-        # submit parents themselves, so testing pending while submitting could submit a node twice
-        for v in [v for v in self.internal if pending[v] == 0]:
-            ex.submit(distal_task, v)
-        done.wait()
-        if errs:
-            ex.shutdown(); raise errs[0]
-
         kr = self.iidx[self.root]
         self.parr[kr] = self.root_proximal(); self.pexp[kr] = 0
-        count[0] = 0; done.clear()
+        with ThreadPoolExecutor(self.cpus) as ex:
+            self._rebuild(self._schedule(self.root, set(self.internal)), True, ex)
+        self._tensors = None
 
-        def prox_task(v):
-            try:
-                kids = self._proximal(v, self.tl())
-                with lock:
-                    count[0] += 1; fin = count[0] == n
-                for c in kids:
-                    ex.submit(prox_task, c)
-                if fin:
-                    done.set()
-            except BaseException as e:
-                errs.append(e); done.set()
+    def _rebuild_model(self):
+        """What xp_rebuild needs of the model: rate categories per site (1), gamma (0), every site's
+        matrix (its CAT category) and the eigen-system for xp_multi_exp_many (one, not per category)."""
+        return 1, 0, self.cats, (self.x, self.l, self.xit, 0)
 
-        ex.submit(prox_task, self.root)
-        done.wait()
-        ex.shutdown()
-        if errs:
-            raise errs[0]
+    def _schedule(self, top, internal):
+        """The internal nodes below top (top included) for xp_rebuild: the nodes children first, their
+        rows (slot, from self.iidx), their children in tree order (ptr, ch: a row, or -1 - the leaf's row
+        in refA; a child with children outside `internal` is the root of a tile below, whose distal row
+        is set by the caller) and chunks (first node, end, branch lengths of the chunk's child edges then
+        of its nodes' own edges, number of child edges) of at most TENSOR_BYTES of matrices."""
+        post, stack = [], [(top, False)]
+        while stack:
+            v, seen = stack.pop()
+            if seen:
+                post.append(v)
+                continue
+            stack.append((v, True))
+            stack.extend((c, False) for c in reversed(self.children[v]) if c in internal)
+        ptr, ch, ch_bl = [0], [], []
+        for v in post:
+            for c in self.children[v]:
+                ch.append(self.iidx[c] if self.children[c] else -1 - self.leaf_row[c])
+                ch_bl.append(self.bl[c])
+            ptr.append(len(ch))
+        cap = max(1, int(TENSOR_BYTES // (self.nrates * self.ns * self.ns * 8)))
+        chunks, i0, n = [], 0, len(post)
+        while i0 < n:
+            i1 = i0 + 1
+            while i1 < n and ptr[i1 + 1] - ptr[i0] + i1 + 1 - i0 <= cap:
+                i1 += 1
+            bls = np.array(ch_bl[ptr[i0]:ptr[i1]] + [self.bl[v] for v in post[i0:i1]], np.float64)
+            chunks.append((i0, i1, bls, ptr[i1] - ptr[i0]))
+            i0 = i1
+        return {'slot': np.array([self.iidx[v] for v in post], np.int32), 'ptr': np.array(ptr, np.int64),
+                'ch': np.array(ch, np.int32), 'chunks': chunks}
+
+    def _rebuild(self, sch, need_p, ex):
+        """The distal vectors of a schedule's nodes (_schedule) and, with need_p, the proximal vectors
+        of their internal children (the top node's proximal set by the caller), by the engine: every
+        thread of `ex` computes every node for a block of sites (xp_rebuild: each site on its own, so the
+        same values as one thread), chunk by chunk, after the chunk's transition matrices (computed on
+        the threads too). One call per thread and chunk: the threads never wait for each other's Python."""
+        R, gamma, cat, (x, l, xit, per_cat) = self._rebuild_model()
+        tsize = self.nrates * self.ns * self.ns
+        need = max(len(c[2]) for c in sch['chunks'])
+        if self._tensors is None or len(self._tensors) < need:
+            self._tensors = shared_zeros((need, self.nrates, self.ns, self.ns))
+        ten, L, S = self._tensors, self.lib, self.nsites
+        nb = max(1, min(self.cpus, S // BLOCK_SITES))   # more threads only add memory traffic
+        step = -(-S // nb)
+        blocks = [(s, min(S, s + step)) for s in range(0, S, step)]
+        head = (P(self.darr), P(self.dexp), P(self.parr), P(self.pexp), S, R, gamma)
+        mid = (P(cat), P(ten), tsize)
+        tail = (P(sch['slot']), P(sch['ptr']), P(sch['ch']), P(self.refA), P(self.alpha.lut))
+        model = (P(x), P(l), P(xit), P(self.rates), self.nrates, P(self.occupied), per_cat)
+        t0 = ten.ctypes.data
+
+        def run(chunk, proximal, n):
+            i0, i1, bls, n_ch = chunk
+            if n:                                   # the chunk's matrices: n_ch child edges (+ own edges)
+                cut = [n * k // min(n, len(blocks)) for k in range(min(n, len(blocks)) + 1)]
+                b0 = bls.ctypes.data
+                list(ex.map(lambda a, b: L.xp_multi_exp_many(ctypes.c_void_p(t0 + a * tsize * 8),
+                                                             ctypes.c_void_p(b0 + a * 8), b - a, *model),
+                            cut[:-1], cut[1:]))
+            rc = list(ex.map(lambda b: L.xp_rebuild(*head, b[0], b[1], *mid, proximal, i0, i1, *tail), blocks))
+            if any(rc):
+                raise MemoryError('Not enough memory to rebuild the likelihood vectors.')
+
+        chunks = sch['chunks']
+        for k, chunk in enumerate(chunks):          # distal: children first; the last chunk's matrices
+            last = need_p and k == len(chunks) - 1  # also serve the first proximal chunk
+            run(chunk, 0, len(chunk[2]) if last else chunk[3])
+        if need_p:
+            for k, chunk in enumerate(reversed(chunks)):    # proximal: parents first
+                run(chunk, 1, len(chunk[2]) if k else 0)
 
     def root_proximal(self):
         """The root's proximal vector (Glv.set_unit): ones."""

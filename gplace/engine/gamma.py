@@ -129,6 +129,12 @@ class GammaMixin(object):
         self._multi_exp(tensor, bl)
         self.lib.xp_evolve(P(dst), P(src), self.nsites * self.R, P(self.cat_v), P(tensor))
 
+    def _rebuild_model(self):
+        """Placer._rebuild_model for Gmix: R categories per site (virtual site (s, r) under rate r),
+        Gmix's exponent pull, and with a mixture every category's own eigen-system."""
+        eig = (self.x, self.l, self.xit, 0) if self.mix is None else (self.mix['mx'], self.mix['ml'], self.mix['mxit'], 1)
+        return self.R, 1, self.cat_v, eig
+
     def leaf_lv(self, v):
         """make_constant_rate_glv_from_lv_arr: the leaf's likelihood vectors under every rate."""
         return np.ascontiguousarray(np.repeat(self.alpha.lut[self.refA[self.leaf_row[v]]], self.R, axis=0)

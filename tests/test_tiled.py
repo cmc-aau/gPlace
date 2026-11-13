@@ -161,6 +161,100 @@ class TestTiledEngine(unittest.TestCase):
         """Queries running out of ranked candidates are re-ranked; tiny query batches."""
         self.run_mini(tile_edges=60, n_cand=2, round_size=1, query_batch=7)
 
+    def test_engine_rebuild_matches_python(self):
+        """The engine's cache build and tile rebuilds (Placer._rebuild: a block of sites per thread;
+        one chunk of transition matrices, or chunks of one or two nodes) hold the same bits as a
+        Python rebuild node by node with the engine's kernels (protein and DNA CAT, gamma, gamma with
+        --fix_gamma_underflow, an IQ-TREE mixture), untiled and tiled."""
+        import shutil
+        from gplace.engine import placer as placer_mod, testsets
+        from gplace.engine.factory import new_placer, tiled_placer
+        from gplace.engine.reference import Reference
+        models, fits = os.path.join(DATA, 'models'), os.path.join(DATA, 'fits')
+        q_mini, q_dna = os.path.join(DATA, 'queries.fasta'), os.path.join(models, 'like_gtr_queries.fasta')
+        tmp = tempfile.mkdtemp()
+        mixture = Reference(tree=os.path.join(fits, 'full_mix_LG4X.treefile'), ref_aln=os.path.join(MINI, 'mini_msa.fa'),
+                            stats=os.path.join(fits, 'full_mix_LG4X.iqtree'), full_model='auto')
+        cases = (('protein CAT', MINI, q_mini, 40, False), ('DNA CAT', os.path.join(models, 'dna_cat.refpkg'), q_dna, 15, False),
+                 ('protein gamma', testsets._mini_variant('WAG_g0.5x4', tmp), q_mini, 40, False),
+                 ('gamma + fix', testsets._mini_variant('WAG_g0.05x4', tmp), q_mini, 40, True),
+                 ('DNA gamma', os.path.join(models, 'like_gtr.refpkg'), q_dna, 15, False),
+                 ('mixture', mixture, q_mini, 40, False))
+        saved = placer_mod.TENSOR_BYTES, placer_mod.BLOCK_SITES
+
+        def bits(a):
+            return np.ascontiguousarray(a).view(np.uint8)
+
+        def py_distal(pl, v):                       # the Python cache build the engine replaced
+            t, S, ch, k = pl.tl(), pl.nsites, pl.children[v], pl.iidx[v]
+            tA, tB, ten = t.b[0], t.b[1], t.tensor
+            a, e = pl.d_pre(ch[0]); pl.evolve_t(tA, a, pl.bl[ch[0]], ten)
+            if len(ch) == 1:
+                pl.darr[k] = tA; pl.dexp[k] = e
+            else:
+                b, f = pl.d_pre(ch[1]); pl.evolve_t(tB, b, pl.bl[ch[1]], ten)
+                pl.lib.xp_pairwise(core.P(pl.darr[k]), core.P(pl.dexp[k]), core.P(tA), core.P(e), core.P(tB), core.P(f), S)
+                for c in ch[2:]:
+                    a2, e2 = pl.d_pre(c); pl.evolve_t(tA, a2, pl.bl[c], ten)
+                    pl.lib.xp_pairwise(core.P(pl.darr[k]), core.P(pl.dexp[k]), core.P(pl.darr[k]),
+                                       core.P(pl.dexp[k]), core.P(tA), core.P(e2), S)
+            pl.lib.xp_pull_exponent(core.P(pl.darr[k]), core.P(pl.dexp[k]), S, -50)
+
+        def py_rebuild(pl, top, internal, need_p):
+            post, stack = [], [(top, False)]
+            while stack:
+                v, seen = stack.pop()
+                if seen:
+                    post.append(v)
+                    continue
+                stack.append((v, True))
+                stack.extend((c, False) for c in reversed(pl.children[v]) if c in internal)
+            for v in post:
+                py_distal(pl, v)
+            if need_p:
+                t = pl.tl()
+                for v in reversed(post):            # parents first
+                    kv, ch = pl.iidx[v], pl.children[v]
+                    evp = t.b[2]
+                    pl.evolve_t(evp, pl.parr[kv], pl.bl[v], t.tensor)
+                    for c in ch:
+                        if pl.children[c]:
+                            kc = pl.iidx[c]
+                            pl._prox_into(pl.parr[kc], pl.pexp[kc], evp, pl.pexp[kv], [r for r in ch if r != c],
+                                          t.b[3], t.tensor)
+
+        def snapshot(pl, n):
+            return [bits(x[:n].copy()) for x in (pl.darr, pl.dexp, pl.parr, pl.pexp)]
+
+        try:
+            for (label, ref, queries, edges, fix), small in [(c, s) for c in cases for s in (False, True)]:
+                with self.subTest(model=label, small_chunks=small):
+                    placer_mod.BLOCK_SITES = 7                              # several site blocks
+                    pl = new_placer(ref, core.read_fasta(queries), 3, fix_gamma_underflow=fix)
+                    placer_mod.TENSOR_BYTES = 3 * pl.nrates * pl.ns * pl.ns * 8 if small else saved[0]
+                    pl.cache()                                              # untiled: the engine
+                    n = len(pl.internal)
+                    engine = snapshot(pl, n)
+                    py_rebuild(pl, pl.root, set(pl.internal), True)        # the same arrays, in Python
+                    for a, b in zip(engine, snapshot(pl, n)):
+                        self.assertTrue(np.array_equal(a, b))
+                    tp = tiled_placer(pl, edges)
+                    self.assertGreater(len(tp.tiles), 2)
+                    tp.cache()                                              # boundary pass: the engine
+                    with tp._rebuild_threads():
+                        for ti in reversed(range(len(tp.tiles))):          # top-down, as the prefilter
+                            tile = tp.tiles[ti]
+                            n = len(tile['internal']) + len(tile['child_roots'])
+                            tp._materialise(ti, need_p=True)
+                            engine = snapshot(tp, n)
+                            py_rebuild(tp, tile['root'], set(tile['internal']), True)
+                            for a, b in zip(engine, snapshot(tp, n)):
+                                self.assertTrue(np.array_equal(a, b))
+                    tp.release()
+        finally:
+            placer_mod.TENSOR_BYTES, placer_mod.BLOCK_SITES = saved
+            shutil.rmtree(tmp)
+
     def test_benchmark_timings(self):
         """The benchmark's probe and work recording leave the placements identical; the time
         model grows with the number of queries and adds up its parts."""

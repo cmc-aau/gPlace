@@ -193,8 +193,9 @@ unchanged (with a larger ``--max_pitches``, each query keeps 4 x (max_pitches + 
 
    The ranked edges kept per query, and what happens when a query uses them all.
 
-Each pass rebuilds the tiles, so tiled placement is 1.7-2.5x slower than untiled placement on a
-tree that fits in memory; ``--max_memory`` therefore places untiled whenever it can.
+Each pass rebuilds the tiles, so tiled placement is slower than untiled placement on a tree that
+fits in memory (about 1.15x on GTDB R226 class-level tree 2, in 2 or 10 tiles); ``--max_memory``
+therefore places untiled whenever it can.
 
 How the engine runs on different CPUs, the rules that keep it exact, and what makes it fast are
 described in :ref:`advanced/engine`.

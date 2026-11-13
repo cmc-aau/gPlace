@@ -40,7 +40,6 @@ pplacer's algorithm then runs tile by tile, with the work reordered but not chan
 import gc
 import math
 import os
-import threading
 import time
 from collections import defaultdict, namedtuple
 from concurrent.futures import ThreadPoolExecutor
@@ -246,6 +245,7 @@ class TiledPlacer(Placer):
         self.stats = defaultdict(float)           # phase timings (seconds) and counts, for benchmark
         self.record_work = False                  # benchmark: keep every placement job, by tile
         self._threads = None                      # the tile rebuilds' threads during a pass (_rebuild_threads)
+        self._schedules = {}                      # tile -> its rebuild schedule (Placer._schedule)
         self.work_log = defaultdict(list)
 
     def memory_estimate(self, workers=None):
@@ -350,8 +350,8 @@ class TiledPlacer(Placer):
     # ------------------------------------------------------------------ tiles --
     def _materialise(self, ti, need_p=True):
         """Rebuild tile ti's distal (and proximal) vectors from the stored boundary vectors, with
-        the operations of Placer.cache; stores its root's distal and, with need_p, the proximal
-        vectors of the tile roots below it."""
+        the operations of Placer.cache (Placer._rebuild); stores its root's distal and, with need_p,
+        the proximal vectors of the tile roots below it."""
         tile = self.tiles[ti]
         slots = tile['internal'] + tile['child_roots']
         self.iidx = {v: k for k, v in enumerate(slots)}
@@ -359,71 +359,30 @@ class TiledPlacer(Placer):
         for c in tile['child_roots']:
             k = self.iidx[c]
             self.darr[k] = self.bD[c]; self.dexp[k] = self.bDe[c]
-        internal = set(tile['internal'])
-        n = len(tile['internal'])
-        lock = threading.Lock(); done = threading.Event(); errs = []; count = [0]
-        ex = self._threads or ThreadPoolExecutor(self.cpus)
-        pending = {v: sum(1 for c in self.children[v] if c in internal) for v in tile['internal']}
-
-        def distal_task(v):
-            try:
-                self._distal(v, self.tl())
-                p = self.parent[v]; ready = False
-                with lock:
-                    count[0] += 1; fin = count[0] == n
-                    if p in internal:
-                        pending[p] -= 1; ready = pending[p] == 0
-                if ready:
-                    ex.submit(distal_task, p)
-                if fin:
-                    done.set()
-            except BaseException as e:
-                errs.append(e); done.set()
-
-        try:
-            for v in [v for v in tile['internal'] if pending[v] == 0]:   # see Placer.cache
-                ex.submit(distal_task, v)
-            done.wait()
-            if errs:
-                raise errs[0]
-            r = tile['root']
-            kr = self.iidx[r]
-            # Stored once: later passes compute the same vectors, and replacing them would leave the
-            # old copies with the workers of a pass's pool (copy-on-write) until the pass ends.
-            if r not in self.bD:
-                self.bD[r] = self.darr[kr].copy(); self.bDe[r] = self.dexp[kr].copy()
-            if not need_p:
-                return
+        r = tile['root']; kr = self.iidx[r]
+        if need_p:                                  # read by the proximal chunks, never written
             if r == self.root:
                 self.parr[kr] = self.root_proximal(); self.pexp[kr] = 0
             else:
                 self.parr[kr] = self.bP[r]; self.pexp[kr] = self.bPe[r]
-            count[0] = 0; done.clear()
-
-            def prox_task(v):
-                try:
-                    kids = self._proximal(v, self.tl())      # also fills the child tile roots
-                    with lock:
-                        count[0] += 1; fin = count[0] == n
-                    for c in kids:
-                        if c in internal:
-                            ex.submit(prox_task, c)
-                    if fin:
-                        done.set()
-                except BaseException as e:
-                    errs.append(e); done.set()
-
-            ex.submit(prox_task, r)
-            done.wait()
-            if errs:
-                raise errs[0]
+        sch = self._schedules.get(ti)
+        if sch is None:
+            sch = self._schedules[ti] = self._schedule(r, set(tile['internal']))
+        ex = self._threads or ThreadPoolExecutor(self.cpus)
+        try:
+            self._rebuild(sch, need_p, ex)
+        finally:
+            if ex is not self._threads:
+                ex.shutdown()
+        # Stored once: later passes compute the same vectors, and replacing them would leave the
+        # old copies with the workers of a pass's pool (copy-on-write) until the pass ends.
+        if r not in self.bD:
+            self.bD[r] = self.darr[kr].copy(); self.bDe[r] = self.dexp[kr].copy()
+        if need_p:
             for c in tile['child_roots']:
                 k = self.iidx[c]
                 if c not in self.bP:
                     self.bP[c] = self.parr[k].copy(); self.bPe[c] = self.pexp[k].copy()
-        finally:
-            if ex is not self._threads:
-                ex.shutdown()
 
     def cache(self):
         """Allocate one tile's vectors; store the distal vector of every tile root (bottom-up)."""

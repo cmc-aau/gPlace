@@ -184,6 +184,9 @@ def lib(ns=NS):
     L.xp_edge_scores.argtypes = [V, ctypes.c_long, V, V, V, V, I, I, V, I, V]
     L.xp_edge_scores8.argtypes = [V, ctypes.c_long, ctypes.c_long, I, V, V, V, V, I, I, V, I]
     L.xp_edge_scores8.restype = I
+    L.xp_multi_exp_many.argtypes = [V, V, I, V, V, V, V, I, V, I]
+    L.xp_rebuild.argtypes = [V, V, V, V, I, I, I, I, I, V, V, I, I, I, I, V, V, V, V, V]
+    L.xp_rebuild.restype = I
     L.xp_tt_new.argtypes = [I, V, V, V, V, V, V, I, V]; L.xp_tt_new.restype = V
     L.xp_tt_set.argtypes = [V, V, V, V, V, V, D, D, D]
     L.xp_tt_optimize.argtypes = [V, D, D, I]; L.xp_tt_optimize.restype = I
