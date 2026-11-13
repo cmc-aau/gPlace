@@ -245,7 +245,9 @@ class TqdmStream(object):
     def write(cls, msg):
         tqdm.write(msg, end='')
 
-    # is this required?
-    # @classmethod
-    # def flush(_):
-    #   pass
+    @classmethod
+    def flush(cls):
+        """Called by logging.StreamHandler after each record: when stdout is a pipe or a file,
+        Python holds what is written in a block buffer, and without this the log only
+        arrives in blocks (or at the end of the run)."""
+        sys.stdout.flush()

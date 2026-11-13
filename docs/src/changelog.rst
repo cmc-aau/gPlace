@@ -20,6 +20,17 @@ Major Changes:
   "needs --max_memory" message, where a hard memory limit (a cgroup, container or job limit) used to
   kill the process first (GitHub issue 5).
 
+Minor Changes:
+
+* ``gplace --version`` (or ``-v``) prints the version as ``gPlace v0.1.1``, and the help screen
+  lists it.
+* The log reaches a pipe or a redirected file line by line, as on a terminal: the console log is
+  flushed after each line. Before, Python held it in its output buffer, so a program reading gPlace's
+  output through a pipe saw the log in blocks or only at the end of the run (unless it set
+  ``PYTHONUNBUFFERED=1``).
+* Placement without tiles logs its progress, ``Placed x/n queries.``, about every 5% of the
+  queries (tiled placement already logs ``x/n queries complete`` after each baseball round).
+
 Documentation:
 
 * The installation pages start with conda and pip: gPlace is on Bioconda and PyPI as ``gtdb-gplace``

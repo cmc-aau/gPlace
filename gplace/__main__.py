@@ -19,7 +19,7 @@ import logging
 import sys
 import traceback
 
-from gplace import __author__, __copyright__, __version__
+from gplace import __version__
 from gplace.biolib_lite.exceptions import BioLibError
 from gplace.biolib_lite.logger import logger_setup
 from gplace.cli import get_main_parser
@@ -49,6 +49,7 @@ def print_help():
     check_install -> Check the engine is installed and bit-exact.
 
   Use: gplace <command> -h for command specific help
+       gplace --version for the version
     ''' % __version__)
 
 
@@ -60,7 +61,7 @@ def main():
         print_help()
         sys.exit(0)
     elif sys.argv[1] in {'-v', '--v', '-version', '--version'}:
-        print(f"gplace: version {__version__} {__copyright__} {__author__}")
+        print(f"gPlace v{__version__}")
         sys.exit(0)
     elif sys.argv[1] in {'-h', '--h', '-help', '--help'}:
         print_help()

@@ -1034,9 +1034,10 @@ class Placer(object):
             free()
         return name, pl, bb.warns
 
-    def place_all(self, workers=None):
+    def place_all(self, workers=None, progress=True):
         """Place every query; returns [(name, placements, warnings)] in input order.
-        placements: [distal_length, edge_num, like_weight_ratio, likelihood, pendant_length]."""
+        placements: [distal_length, edge_num, like_weight_ratio, likelihood, pendant_length].
+        progress: log 'Placed x/n queries.' about every 5% (off for the benchmark's timings)."""
         global _PLACER
         workers = workers or self.workers or resources.heuristic_cpus(self.cpus)
         n = len(self.query_names)
@@ -1045,9 +1046,13 @@ class Placer(object):
         chunks = [range(i, min(n, i + 4)) for i in range(0, n, 4)]
         try:
             with _fork_pool(workers) as pool:
+                done_q, step = 0, max(1, n // 20)
                 for out in pool.imap_unordered(_place_chunk, chunks):
                     for qi, nm, pl, w in out:
                         results[qi] = (nm, pl, w)
+                    if progress and ((done_q + len(out)) // step != done_q // step or done_q + len(out) == n):
+                        self.logger.info(f'Placed {done_q + len(out):,}/{n:,} queries.')
+                    done_q += len(out)
         finally:
             _PLACER = None
             gc.unfreeze()
