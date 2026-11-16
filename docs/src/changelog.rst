@@ -27,8 +27,8 @@ Major Changes:
 
 Minor Changes:
 
-* ``gplace --version`` (or ``-v``) prints the version as ``gPlace v0.1.1``, and the help screen
-  lists it.
+* ``gplace --version`` (or ``-v``) prints ``gplace: version 0.1.1 Copyright 2026`` (without the
+  author's name), and the help screen lists it.
 * The log reaches a pipe or a redirected file line by line, as on a terminal: the console log is
   flushed after each line. Before, Python held it in its output buffer, so a program reading gPlace's
   output through a pipe saw the log in blocks or only at the end of the run (unless it set

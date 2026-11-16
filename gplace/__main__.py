@@ -19,7 +19,7 @@ import logging
 import sys
 import traceback
 
-from gplace import __version__
+from gplace import __copyright__, __version__
 from gplace.biolib_lite.exceptions import BioLibError
 from gplace.biolib_lite.logger import logger_setup
 from gplace.cli import get_main_parser
@@ -61,7 +61,7 @@ def main():
         print_help()
         sys.exit(0)
     elif sys.argv[1] in {'-v', '--v', '-version', '--version'}:
-        print(f"gPlace v{__version__}")
+        print(f"gplace: version {__version__} {__copyright__}")
         sys.exit(0)
     elif sys.argv[1] in {'-h', '--h', '-help', '--help'}:
         print_help()
