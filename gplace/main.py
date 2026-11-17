@@ -468,7 +468,7 @@ class OptionsParser(object):
         t_pref_full = max(t1 - per_q * n1, 0.0) + per_q * q_full
         rows = []
         for c in cands:
-            t0 = time.time(); placer.place_all(workers=c); dt = time.time() - t0
+            t0 = time.time(); placer.place_all(workers=c, progress=False); dt = time.time() - t0
             rows.append((c, dt, len(sample) / dt))
             self.logger.info(f'  {c:>4} workers: {dt:7.1f} s  ({len(sample) / dt:6.2f} queries/s)')
         placer.release()

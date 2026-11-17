@@ -394,6 +394,136 @@ void xp_pull_exponent(double *a, int64_t *e, int nsites, int min_twoexp)
   }
 }
 
+/* ----------------------------------------------------------------- rebuild -- */
+
+/* tensors[i] = xp_multi_exp at bls[i], for n branch lengths (the edges of a rebuild chunk). per_cat:
+ * x, l, xit hold one eigen-system per rate category (a mixture: nrates x NS x NS, nrates x NS,
+ * nrates x NS x NS), each category's matrix computed with its own, as xp_multi_exp does it per category. */
+void xp_multi_exp_many(double *tensors, const double *bls, int n, const double *x, const double *l,
+                       const double *xit, const double *rates, int nrates, const uint8_t *mask, int per_cat)
+{
+  const size_t ts = (size_t)nrates * NS * NS;
+  for (int i = 0; i < n; i++) {
+    if (!per_cat) { xp_multi_exp(tensors + i * ts, x, l, xit, rates, nrates, mask, bls[i]); continue; }
+    for (int r = 0; r < nrates; r++)
+      xp_multi_exp(tensors + i * ts + (size_t)r * NS * NS, x + (size_t)r * NS * NS, l + (size_t)r * NS,
+                   xit + (size_t)r * NS * NS, rates + r, 1, mask + r, bls[i]);
+  }
+}
+
+/* dst = P * (distal vector of child c) for m sites from s0 (R vectors of NS per site: the site under
+ * each of its R rate categories, cat[] giving each one's matrix); returns its exponents. c >= 0: row c
+ * of darr; c < 0: the leaf in row -1-c of refA (lut[code] under every category, exponent 0). */
+static const int64_t *rb_evolve(double *dst, int32_t c, const double *P, const double *darr,
+                                const int64_t *dexp, int S, int R, int s0, int m, const int32_t *cat,
+                                const uint8_t *refA, const double *lut, const int64_t *zero)
+{
+  if (c >= 0) {
+    xp_evolve(dst, darr + ((size_t)c * S + s0) * R * NS, m * R, cat, P);
+    return dexp + (size_t)c * S + s0;
+  }
+  const uint8_t *codes = refA + (size_t)(-1 - c) * S + s0;
+  for (int s = 0; s < m; s++)
+    for (int r = 0; r < R; r++)
+      evolve_site(dst + ((size_t)s * R + r) * NS, lut + (size_t)codes[s] * NS,
+                  P + (size_t)cat[(size_t)s * R + r] * NS * NS);
+  return zero;
+}
+
+void xp_g_pull_exponent(double *a, int64_t *e, int nsites, int R, int min_twoexp);
+
+/* Gcat / Gmix pairwise product (xp_pairwise, xp_g_pairwise: the same loop over R x NS per site). */
+static void rb_pairwise(double *dst, int64_t *de, const double *x, const int64_t *xe, const double *y,
+                        const int64_t *ye, int m, int R)
+{
+  size_t n = (size_t)m * R * NS;
+  for (size_t i = 0; i < n; i++) dst[i] = x[i] * y[i];
+  for (int s = 0; s < m; s++) de[s] = xe[s] + ye[s];
+}
+
+/* The distal (proximal = 0) or proximal (proximal = 1) vectors of internal nodes i0..i1-1 for sites
+ * [s0, s1): the operations of the Python cache build it replaces (pplacer's
+ * Like_stree.calc_distal_and_proximal) in the same order. Every site is computed on its own, so threads
+ * that split the sites get the same values as one thread (one call per thread, no lock, no Python).
+ * R = rate categories per site (1: CAT; gamma: R, the vectors are sites x R x NS with one exponent per
+ * site); gamma = 1: Gmix's exponent pull (xp_g_pull_exponent), else Gcat's. cat: the matrix of every
+ * site (CAT) or site x category (gamma), from site 0. Nodes children first: slot[i] = the node's row
+ * in darr/dexp/parr/pexp; its children ch[ptr[i]..ptr[i+1]) in tree order, each a row (an internal
+ * node, or the root of a tile below) or a leaf (-1 - its row in refA). tensors: the transition
+ * matrices (tsize doubles each) of the children's edges ptr[i0]..ptr[i1]-1, then, for the proximal, of
+ * the nodes' own edges i0..i1-1. The distal goes up (i0 first), the proximal down; the caller sets
+ * the top node's proximal and the distal vectors of the rows below that are not rebuilt. Returns -1
+ * if out of memory, else 0. */
+int xp_rebuild(double *darr, int64_t *dexp, double *parr, int64_t *pexp, int S, int R, int gamma,
+               int s0, int s1, const int32_t *cat, const double *tensors, int tsize, int proximal, int i0,
+               int i1, const int32_t *slot, const int64_t *ptr, const int32_t *ch, const uint8_t *refA,
+               const double *lut)
+{
+  const int m = s1 - s0;
+  if (m <= 0 || i1 <= i0) return 0;
+  const size_t w = (size_t)R * NS;                      /* doubles per site */
+  double *tA = malloc(sizeof(double) * (size_t)m * w * 3);
+  int64_t *zero = calloc((size_t)m, sizeof(int64_t));
+  if (!tA || !zero) { free(tA); free(zero); return -1; }
+  double *tB = tA + (size_t)m * w, *tmp = tB + (size_t)m * w;
+  const int32_t *ct = cat + (size_t)s0 * R;
+  const int64_t j0 = ptr[i0], n_ch = ptr[i1] - ptr[i0];
+  const size_t vb = sizeof(double) * (size_t)m * w, eb = sizeof(int64_t) * (size_t)m;
+#define XP_TP(j) (tensors + (size_t)((j) - j0) * tsize)
+#define XP_EV(dst, j) rb_evolve(dst, ch[j], XP_TP(j), darr, dexp, S, R, s0, m, ct, refA, lut, zero)
+#define XP_PULL(v, e) (gamma ? xp_g_pull_exponent(v, e, m, R, -50) : xp_pull_exponent(v, e, m, -50))
+  if (!proximal) {
+    for (int i = i0; i < i1; i++) {                  /* a node's distal vector */
+      const int64_t a = ptr[i], b = ptr[i + 1];
+      double *dv = darr + ((size_t)slot[i] * S + s0) * w;
+      int64_t *de = dexp + (size_t)slot[i] * S + s0;
+      const int64_t *e0 = XP_EV(tA, a);
+      if (b - a == 1) {
+        memcpy(dv, tA, vb); memcpy(de, e0, eb);
+      } else {
+        const int64_t *e1 = XP_EV(tB, a + 1);
+        rb_pairwise(dv, de, tA, e0, tB, e1, m, R);
+        for (int64_t j = a + 2; j < b; j++) {
+          const int64_t *e2 = XP_EV(tA, j);
+          rb_pairwise(dv, de, dv, de, tA, e2, m, R);
+        }
+      }
+      XP_PULL(dv, de);
+    }
+  } else {
+    double *evp = tB;
+    for (int i = i1 - 1; i >= i0; i--) {             /* its internal children's proximal vectors */
+      const int64_t a = ptr[i], b = ptr[i + 1];
+      const double *pv = parr + ((size_t)slot[i] * S + s0) * w;
+      const int64_t *evpe = pexp + (size_t)slot[i] * S + s0;
+      xp_evolve(evp, pv, m * R, ct, tensors + (size_t)(n_ch + i - i0) * tsize);
+      for (int64_t j = a; j < b; j++) {
+        if (ch[j] < 0) continue;                     /* leaf proximal: rebuilt on demand (get_p) */
+        double *dst = parr + ((size_t)ch[j] * S + s0) * w;
+        int64_t *dse = pexp + (size_t)ch[j] * S + s0;
+        if (b - a == 1) {
+          memcpy(dst, evp, vb); memcpy(dse, evpe, eb);
+        } else {
+          int first = 1;
+          for (int64_t r = a; r < b; r++) {
+            if (r == j) continue;
+            const int64_t *e = XP_EV(tmp, r);
+            if (first) rb_pairwise(dst, dse, evp, evpe, tmp, e, m, R);
+            else rb_pairwise(dst, dse, dst, dse, tmp, e, m, R);
+            first = 0;
+          }
+        }
+        XP_PULL(dst, dse);
+      }
+    }
+  }
+#undef XP_PULL
+#undef XP_EV
+#undef XP_TP
+  free(tA); free(zero);
+  return 0;
+}
+
 double xp_total_twoexp(const int64_t *e, int nsites)
 {
   double tot = 0.;

@@ -10,7 +10,8 @@ By default gPlace holds the likelihood vectors of the whole reference tree in me
 the fastest way to place. For trees whose vectors do not fit, such as the full GTDB bacterial
 tree (about 490 GiB untiled for 127,343 genomes), gPlace can place **tile by tile**: the tree is
 cut into connected tiles and only one tile is held in memory at a time. The results are
-identical to untiled placement (see :ref:`how_it_works`); tiled runs take about 1.7-2.5x longer.
+identical to untiled placement (see :ref:`how_it_works`); tiled runs take longer (about 1.15x on
+GTDB R226 class-level tree 2).
 
 Give at most one of:
 

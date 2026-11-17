@@ -12,6 +12,11 @@ Major Changes:
   64 CPUs) take 25 minutes instead of 2 h 49 min, with identical results. Before each fork, freed
   memory goes back to the system (``malloc_trim`` on Linux, ``malloc_zone_pressure_relief`` on macOS),
   which keeps the longer-lived workers within the planned memory.
+* The likelihood vectors are rebuilt in the C engine, on threads over blocks of sites, instead of in
+  Python, for every model (CAT, gamma, mixtures) and for both the untiled cache and each tile:
+  10,000 genomes on the full GTDB R226 bacterial tree (``--max_memory 16G``, 27 tiles, 40 CPUs) take
+  10 minutes instead of 20, and tiled gamma runs are 1.3-1.4x faster, with identical results. The
+  idea of rebuilding the tiles in C comes from KGerhardt's pull request (GitHub PR 4).
 * Reference alignments are read straight into one byte matrix, without holding their sequences as
   Python strings and copies of them: on the GTDB R232 bacterial tree (189,801 sequences) loading takes
   1.3 GiB instead of 4.8 GiB and 14 s instead of 38 s, and placing 38 genomes on tiles of 1,000 edges
@@ -19,6 +24,17 @@ Major Changes:
   the reference alignment is read: a limit too small even for reading it now stops with the usual
   "needs --max_memory" message, where a hard memory limit (a cgroup, container or job limit) used to
   kill the process first (GitHub issue 5).
+
+Minor Changes:
+
+* ``gplace --version`` (or ``-v``) prints ``gplace: version 0.1.1 Copyright 2026`` (without the
+  author's name), and the help screen lists it.
+* The log reaches a pipe or a redirected file line by line, as on a terminal: the console log is
+  flushed after each line. Before, Python held it in its output buffer, so a program reading gPlace's
+  output through a pipe saw the log in blocks or only at the end of the run (unless it set
+  ``PYTHONUNBUFFERED=1``).
+* Placement without tiles logs its progress, ``Placed x/n queries.``, about every 5% of the
+  queries (tiled placement already logs ``x/n queries complete`` after each baseball round).
 
 Documentation:
 
