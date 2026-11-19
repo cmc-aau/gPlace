@@ -64,7 +64,14 @@ Technical questions
   ``GPLACE_ENGINE_VARIANT=portable``.
 
 **Which IQ-TREE and RAxML-NG models can gPlace use?**
-  By default, the part of the fit pplacer reads (substitution matrix, gamma model, GTR's rates).
-  With ``--full_model``, the fit's complete model, including IQ-TREE's and RAxML-NG's other
-  matrices, ``+I``, ``+R`` and protein mixtures; the placements then differ from pplacer's. The
-  full lists, and what is not supported yet, are in :ref:`advanced/own_trees`.
+  When IQ-TREE or RAxML-NG infers a tree, it also fits a substitution model to the alignment,
+  such as ``LG+F+I+G4``. By default, gPlace does what pplacer does: it uses only the substitution
+  matrix, the gamma rate model and, for GTR, the fitted rates, and ignores the rest of the model
+  (for example ``+I`` and ``+R``). The placements are then identical to pplacer's.
+
+  With ``--full_model``, gPlace uses the complete fitted model. This includes IQ-TREE's and
+  RAxML-NG's other matrices, ``+I``, ``+R`` and protein mixture models. The placements then
+  differ from pplacer's.
+
+  :ref:`advanced/own_trees` lists the supported models in full, and the ones that are not
+  supported yet.
