@@ -1,15 +1,9 @@
 FAQ
 ===
 
-**Is gPlace ready to replace pplacer in my work?**
-  Not without checking. gPlace is still being tested: it reproduces pplacer's placements on the
-  data sets in :ref:`validation`, but it has not been used widely beyond them. Compare its output
-  with pplacer's on some of your own genomes (``gplace compare``) before relying on it, and
-  report problems on the GitHub issue tracker.
-
 **Are the results really identical to pplacer's?**
-  Yes. On 127,343 genomes placed on the 8 GTDB R226 class-level trees, and 10,000 genomes on the
-  full GTDB R226 bacterial tree, every placement matched pplacer v1.1.alpha19's output: the same
+  Yes. On 127,343 genomes placed on the 8 GTDB R09-RS226 class-level trees, and 10,000 genomes on the
+  full GTDB R09-RS226 bacterial tree, every placement matched pplacer v1.1.alpha19's output: the same
   edges, likelihoods, weights and branch lengths, down to the last printed digit. The same holds
   for every other model and option pplacer supports (see :ref:`validation`). ``gplace test``
   repeats this check on bundled data.
@@ -25,16 +19,10 @@ FAQ
   can differ, which programs that read jplace files ignore.
 
 **How much memory do I need?**
-  It depends on the tree: at most 44 GiB for the GTDB class-level trees (up to 21,566 reference
-  genomes). For larger trees, such as the full GTDB bacterial tree, tell gPlace how much it
-  may use, e.g. ``--max_memory 64G``, and it stays within it. To get an
-  estimate for your data before running, use
+  It depends on the tree. For larger trees, such as the full GTDB bacterial tree, tell gPlace how 
+  much it may use, e.g. ``--max_memory 64G``, and it stays within it. To get an estimate for your
+  data before running, use
   ``gplace benchmark --refpkg <refpkg> --queries <number of genomes>``. See :ref:`advanced/memory`.
-
-**Can gPlace place on the full GTDB bacterial tree?**
-  Yes, with ``--max_memory``. pplacer would need about 615 GiB for the R226 bacterial tree; with
-  ``--max_memory 64G`` gPlace placed all 127,343 GlobDB genomes in 2 h 19 min, and 10,000 genomes in
-  14 minutes on the same server where pplacer took 17 hours.
 
 **How many CPUs should I use?**
   Use ``--cpus auto``, or run ``gplace benchmark`` once on each type of machine. More is not
