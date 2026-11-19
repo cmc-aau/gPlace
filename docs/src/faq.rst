@@ -8,15 +8,15 @@ FAQ
   for every other model and option pplacer supports (see :ref:`validation`). ``gplace test``
   repeats this check on bundled data.
 
+**Does the output file look exactly like pplacer's?**
+  Every value and the tree are identical. However, the spacing and the order of the genomes in the 
+  jplace file can differ.
+
 **Can I use my pplacer command lines?**
   Yes: replace ``pplacer`` with ``gplace place``. gPlace accepts pplacer's options (``-c``, ``-o``,
   ``-j``, ``--out-dir``, ``-t``/``-r``/``-s``, ``-p``, ``--keep-at-most``, ...) and query files, and
   names its jplace files as pplacer does. A few rarely used pplacer options are not implemented and
   stop the run with a message (see :ref:`advanced/pplacer_options`).
-
-**Does the output file look exactly like pplacer's?**
-  Every value and the tree are identical. The spacing and the order of the genomes in the file
-  can differ, which programs that read jplace files ignore.
 
 **How much memory do I need?**
   It depends on the tree. For larger trees, such as the full GTDB bacterial tree, tell gPlace how 
