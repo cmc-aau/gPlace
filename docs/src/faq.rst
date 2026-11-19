@@ -53,10 +53,15 @@ Technical questions
   last bits, which is enough to change some secondary placements.
 
 **Which CPU features are used?**
-  x86-64 CPUs with AVX2 and FMA use AVX2 kernels, ARM64 CPUs (including Apple Silicon) NEON
-  kernels, and other x86-64 CPUs a portable engine with scalar kernels. All perform the same
-  operations in the same order, so the results are identical. ``GPLACE_ENGINE_VARIANT=portable``
-  forces the portable engine (e.g. to check it).
+  gPlace picks an engine to suit the CPU:
+
+  - x86-64 CPUs with AVX2 and FMA use the AVX2 engine.
+  - ARM64 CPUs, including Apple Silicon, use the NEON engine.
+  - Other x86-64 CPUs use the portable engine, which has scalar kernels.
+
+  All three engines perform the same operations in the same order, so their results are
+  identical. To force the portable engine (for example, to compare its results), set
+  ``GPLACE_ENGINE_VARIANT=portable``.
 
 **Which IQ-TREE and RAxML-NG models can gPlace use?**
   By default, the part of the fit pplacer reads (substitution matrix, gamma model, GTR's rates).
