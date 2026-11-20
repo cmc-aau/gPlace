@@ -15,18 +15,18 @@
 #                                                                             #
 ###############################################################################
 
-__author__ = 'Pierre-Alain Chaumeil'
+__author__ = 'Pierre-Alain Chaumeil and Donovan Parks'
 __author_email__ = 'pch@bio.aau.dk'
 __copyright__ = 'Copyright 2026'
-__credits__ = ['Pierre-Alain Chaumeil']
+__credits__ = ['Pierre-Alain Chaumeil', 'Donovan Parks']
 __description__ = 'Exact, memory-bounded replacement for pplacer: the same phylogenetic placements with a fraction of the memory and time.'
 __email__ = 'pch@bio.aau.dk'
 __license__ = 'GPL3'
-__maintainer__ = 'Pierre-Alain Chaumeil'
+__maintainer__ = 'Pierre-Alain Chaumeil and Donovan Parks'
 __maintainer_email__ = 'pch@bio.aau.dk'
 __name__ = 'gplace'
 __python_requires__ = '>=3.12'
-__status__ = 'Beta'
+__status__ = 'Production'
 __title__ = 'gPlace'
 __url__ = 'https://github.com/cmc-aau/gPlace'
-__version__ = '0.1.1'
+__version__ = '0.1.2'
