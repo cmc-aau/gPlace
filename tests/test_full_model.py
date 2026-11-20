@@ -68,11 +68,17 @@ class TestFullModel(unittest.TestCase):
         self.assertFalse(iqtree.read_fit(*fit_files('prot_Q_pfam_G4'))['median'])
 
     def test_gamma_rates(self):
-        """IQ-TREE's discrete gamma (Yang's algorithm, RateGamma::computeRates): bit-identical to its C++ code."""
+        """IQ-TREE's discrete gamma (Yang's algorithm, RateGamma::computeRates): the same bits on every machine
+        (gplace_gamma: gPlace's own rates, computed with the engine's correctly rounded exp, log and pow), and
+        IQ-TREE's rates to within its libm (iqtree_gamma, from its C++ code)."""
         from gplace.engine import yang_gamma
-        for n, median, p, alpha, rates in read_json(os.path.join(FITS, 'full_model_expected.json'))['iqtree_gamma']:
+        expected = read_json(os.path.join(FITS, 'full_model_expected.json'))
+        for (n, median, p, alpha, rates), program in zip(expected['gplace_gamma'], expected['iqtree_gamma']):
             with self.subTest(n=n, median=median, p_invar=p, alpha=alpha):
-                self.assertEqual(yang_gamma.iqtree_rates(n, alpha, median, 1.0 / (1.0 - p) if p else 1.0), rates)
+                self.assertEqual([n, median, p, alpha], program[:4])
+                got = yang_gamma.iqtree_rates(n, alpha, median, 1.0 / (1.0 - p) if p else 1.0)
+                self.assertEqual(got, rates)
+                assert_rates_close(self, got, program[4])
 
     def test_not_supported_yet(self):
         """Fits gPlace cannot place with yet stop with a message instead of being read in part."""
@@ -111,6 +117,14 @@ class TestFullModel(unittest.TestCase):
                     self.assertEqual(edge, e['edge_num'])
                     self.assertAlmostEqual(like, e['likelihood'], delta=1e-6 * max(1.0, abs(like)) + 1e-6)
                     self.assertAlmostEqual(like, e['iqtree_likelihood'], delta=1e-5)
+
+
+def assert_rates_close(test, got, program, rel=1e-12):
+    """Rates equal to a fitting program's own to within its libm: the programs' exp, log and pow differ between
+    C libraries in the last bit of rare arguments, which Yang's iterations turn into about 1e-14 relative."""
+    test.assertEqual(len(got), len(program))
+    for g, r in zip(got, program):
+        test.assertAlmostEqual(g, r, delta=rel * abs(r))
 
 
 RX_CASES = {'dna_HKY_FC_I_G4': DNA, 'dna_GTR_I_R3': DNA, 'prot_LG4X': PROT, 'prot_LG_G4a': PROT, 'prot_WAG_FC_IC_G4': PROT}
@@ -156,10 +170,16 @@ class TestFullModelRAxMLNG(unittest.TestCase):
         self.assertEqual((f['matrices'][0][0][0][2], f['matrices'][0][0][1][3], f['matrices'][0][0][0][1]), (3.5, 7.0, 1.0))
 
     def test_gamma_rates(self):
-        """RAxML-NG's discrete gamma (Yang's algorithm, coraxlib): bit-identical to its C code."""
-        for n, median, alpha, rates in read_json(os.path.join(FITS, 'rx_full_expected.json'))['gamma']:
+        """RAxML-NG's discrete gamma (Yang's algorithm, coraxlib): the same bits on every machine (gplace_gamma:
+        gPlace's own rates, computed with the engine's correctly rounded exp, log and pow), and RAxML-NG's rates
+        to within its libm (gamma, from its C code)."""
+        expected = read_json(os.path.join(FITS, 'rx_full_expected.json'))
+        for (n, median, alpha, rates), program in zip(expected['gplace_gamma'], expected['gamma']):
             with self.subTest(n=n, median=median, alpha=alpha):
-                self.assertEqual(raxmlng.gamma_rates(n, alpha, median), rates)
+                self.assertEqual([n, median, alpha], program[:3])
+                got = raxmlng.gamma_rates(n, alpha, median)
+                self.assertEqual(got, rates)
+                assert_rates_close(self, got, program[3])
 
     def test_counted_frequencies(self):
         """+FC / +IC: counted in the reference alignment as RAxML-NG counts them (its log, 6 decimals)."""

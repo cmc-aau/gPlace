@@ -21,13 +21,31 @@ IQ-TREE (model/rategamma.cpp) and RAxML-NG (coraxlib, model/gamma.c) both use th
 (tools.c): the percentage points of the chi-square distribution and the incomplete gamma ratio, to their own
 accuracy (1e-8). Their category rates differ from GSL's (pplacer's, models.discrete_gamma) by 1e-8 to 1e-7
 relative, and much more at small alpha, where GSL's lowest rates underflow to 0. The functions here are
-computed step by step as there (bit-identical results); the two programs then differ only in how they
-rescale the rates (raxmlng_rates, iqtree_rates).
+computed step by step as there; the two programs then differ only in how they rescale the rates
+(raxmlng_rates, iqtree_rates).
+
+exp, log and pow are the engine's correctly rounded ones (CORE-MATH), not the system libm's, so the rates are
+the same on every machine. The fitting programs call their own libm, whose results differ between C libraries
+in the last bit of rare arguments; the algorithm (iterations to 1e-8) can turn that into about 1e-14 relative
+in a rate. gPlace's rates therefore equal a program's to within that program's libm, not always bit for bit.
 """
 
 import math
 
+from gplace.engine import core
 from gplace.exceptions import RefpkgMalformed
+
+
+def _exp(x):
+    return core.lib().xp_exp(x)
+
+
+def _log(x):
+    return core.lib().xp_log(x)
+
+
+def _pow(x, y):
+    return core.lib().xp_pow(x, y)
 
 
 def ln_gamma(alpha):
@@ -41,9 +59,9 @@ def ln_gamma(alpha):
                 break
             f *= z
         x = z
-        f = -math.log(f)
+        f = -_log(f)
     z = 1 / (x * x)
-    return (f + (x - 0.5) * math.log(x) - x + .918938533204673
+    return (f + (x - 0.5) * _log(x) - x + .918938533204673
             + (((-.000595238095238 * z + .000793650793651) * z - .002777777777778) * z + .083333333333333) / x)
 
 
@@ -55,7 +73,7 @@ def incomplete_gamma(x, alpha, ln_gamma_alpha):
         return 0.0
     if x < 0 or p <= 0:
         return -1.0
-    factor = math.exp(p * math.log(x) - x - g)
+    factor = _exp(p * _log(x) - x - g)
     if not (x > 1 and x >= p):                          # series expansion
         gin, term, rn = 1.0, 1.0, p
         while True:
@@ -100,7 +118,7 @@ def point_normal(prob):
     p1 = p if p < 0.5 else 1 - p
     if p1 < 1e-20:
         return -9999.0
-    y = math.sqrt(math.log(1 / (p1 * p1)))
+    y = math.sqrt(_log(1 / (p1 * p1)))
     z = y + ((((y * a4 + a3) * y + a2) * y + a1) * y + a0) / ((((y * b4 + b3) * y + b2) * y + b1) * y + b0)
     return -z if p < 0.5 else z
 
@@ -113,27 +131,27 @@ def point_chi2(prob, v):
     g = ln_gamma(v / 2)
     xx = v / 2
     c = xx - 1
-    if v < -1.24 * math.log(p):
-        ch = math.pow(p * xx * math.exp(g + xx * aa), 1 / xx)
+    if v < -1.24 * _log(p):
+        ch = _pow(p * xx * _exp(g + xx * aa), 1 / xx)
         if ch - e < 0:
             return ch
     elif v <= .32:
         ch = 0.4
-        a = math.log(1 - p)
+        a = _log(1 - p)
         while True:
             q = ch
             p1 = 1 + ch * (4.67 + ch)
             p2 = ch * (6.73 + ch * (6.66 + ch))
             t = -0.5 + (4.67 + 2 * ch) / p1 - (6.73 + ch * (13.32 + 3 * ch)) / p2
-            ch -= (1 - math.exp(a + g + .5 * ch + c * aa) * p2 / p1) / t
+            ch -= (1 - _exp(a + g + .5 * ch + c * aa) * p2 / p1) / t
             if abs(q / ch - 1) - .01 <= 0:
                 break
     else:
         x = point_normal(p)
         p1 = 0.222222 / v
-        ch = v * math.pow(x * math.sqrt(p1) + 1 - p1, 3.0)
+        ch = v * _pow(x * math.sqrt(p1) + 1 - p1, 3.0)
         if ch > 2.2 * v + 6:
-            ch = -2 * (math.log(1 - p) - c * math.log(.5 * ch) + g)
+            ch = -2 * (_log(1 - p) - c * _log(.5 * ch) + g)
     while True:
         q = ch
         p1 = .5 * ch
@@ -141,7 +159,7 @@ def point_chi2(prob, v):
         if t < 0.0:
             return -1.0
         p2 = p - t
-        t = p2 * math.exp(xx * aa + g + p1 - c * math.log(ch))
+        t = p2 * _exp(xx * aa + g + p1 - c * _log(ch))
         b = t / ch
         a = 0.5 * t - b * c
         s1 = (210 + a * (140 + a * (105 + a * (84 + a * (70 + 60 * a))))) / 420

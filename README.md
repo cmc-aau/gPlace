@@ -18,7 +18,7 @@
 > [!WARNING]
 > **Work in progress.** gPlace is still being tested. Before relying on its results, compare them with pplacer's on some of your own data (`gplace compare`), and please report problems on the [issue tracker](https://github.com/cmc-aau/gPlace/issues).
 
-**gPlace** is a replacement for [pplacer](https://github.com/matsen/pplacer): it places aligned sequences on a fixed reference tree and gives exactly pplacer's results, bit for bit, using a fraction of its memory and time. It takes pplacer's command line: replace `pplacer` with `gplace place`.
+**gPlace** is a drop-in replacement for [pplacer](https://github.com/matsen/pplacer). It places aligned sequences on a fixed reference tree and gives identical results to pplacer (v1.1-alpha19) using a fraction of its memory and time. It replicates pplacer's command line interface so simply replace `pplacer` with `gplace place`.
 
 ## Documentation
 
