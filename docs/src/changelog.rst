@@ -14,6 +14,12 @@ Minor Changes:
   13.6 or 14.2 GiB in 0.1.1, and 6.4 to 7.8 GiB with ``--max_memory 8G``. The buffers now come from
   ``malloc`` and are aligned by hand: the same runs peak at 13.6 GiB, and at 5.7 GiB with
   ``--max_memory 8G``, with identical results.
+* ``place --full_model`` computes the gamma rates of IQ-TREE and RAxML-NG fits with the engine's
+  correctly rounded ``exp``, ``log`` and ``pow`` instead of the system's maths library, so the rates,
+  and the placements made with them, are the same on every machine. Before, a rate could differ
+  between C libraries in its last digits (seen for one shape: 16 categories, alpha 1.7, 4e-15
+  relative between glibc 2.28 and the glibc of Ubuntu 24.04). The rates equal the fitting program's
+  own to within that program's maths library.
 
 0.1.1
 -----
