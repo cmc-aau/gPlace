@@ -1,6 +1,20 @@
 Change log
 ==========
 
+Unreleased
+----------
+
+Minor Changes:
+
+* Peak memory is the same from run to run. The prefilter kernel allocated its scratch buffers with
+  ``aligned_alloc``, and on glibc a freed buffer could then not be reused until up to seven of them
+  were held by each worker process; how many depended on the state of the parent's allocator when
+  the workers were forked. Identical runs therefore peaked on levels one buffer per worker apart:
+  with CheckM's reference tree (10,483 nodes, 6,979 sites) and 64 CPUs, 14.3 to 18.4 GiB in 0.1.0,
+  13.6 or 14.2 GiB in 0.1.1, and 6.4 to 7.8 GiB with ``--max_memory 8G``. The buffers now come from
+  ``malloc`` and are aligned by hand: the same runs peak at 13.6 GiB, and at 5.7 GiB with
+  ``--max_memory 8G``, with identical results.
+
 0.1.1
 -----
 

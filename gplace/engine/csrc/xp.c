@@ -627,6 +627,19 @@ static void es8_scalar(double *out, long ldo, long col0, int ne, const double *W
     }
 }
 
+/* 64-byte-aligned scratch without aligned_alloc: glibc's memalign splits off a small trailing
+ * fragment that lands in the tcache and stops the freed block from merging with the heap top, so
+ * every call strands one block until the tcache bin fills. Over-allocate and keep the raw pointer. */
+static void *xp_al64(size_t n)
+{
+  void *raw = malloc(n + 64);
+  if (!raw) return NULL;
+  void *p = (void *)(((uintptr_t)raw + 64) & ~(uintptr_t)63);
+  ((void **)p)[-1] = raw;
+  return p;
+}
+static void xp_free64(void *p) { if (p) free(((void **)p)[-1]); }
+
 int xp_edge_scores8(double *out, long ldo, long col0, int ne,
                     const double *sn8, const int64_t *se8,
                     const double *qevtab, const int32_t *cat, int nsites, int ncode,
@@ -634,11 +647,11 @@ int xp_edge_scores8(double *out, long ldo, long col0, int ne,
 {
   if (ne < 1 || ne > XP_EB || ncode < 1 || ncode > 254) return -1;
   const int NC = ncode + 1;
-  double *W = (double *)aligned_alloc(64, sizeof(double) * (size_t)nsites * NC * XP_EB);
-  int32_t *SE = (int32_t *)aligned_alloc(64, sizeof(int32_t) * (size_t)nsites * 2 * XP_EB);
-  double *accD = (double *)aligned_alloc(64, sizeof(double) * ((size_t)nq * XP_EB + 8));
-  int64_t *accE = (int64_t *)aligned_alloc(64, sizeof(int64_t) * ((size_t)nq * XP_EB + 8));
-  if (!W || !SE || !accD || !accE) { free(W); free(SE); free(accD); free(accE); return -1; }
+  double *W = (double *)xp_al64(sizeof(double) * (size_t)nsites * NC * XP_EB);
+  int32_t *SE = (int32_t *)xp_al64(sizeof(int32_t) * (size_t)nsites * 2 * XP_EB);
+  double *accD = (double *)xp_al64(sizeof(double) * ((size_t)nq * XP_EB + 8));
+  int64_t *accE = (int64_t *)xp_al64(sizeof(int64_t) * ((size_t)nq * XP_EB + 8));
+  if (!W || !SE || !accD || !accE) { xp_free64(W); xp_free64(SE); xp_free64(accD); xp_free64(accE); return -1; }
   int small = 1;       /* int32 sums over one 128-site block cannot overflow (|se| <= 2^23) */
   for (int s = 0; s < nsites; s++) {
     const double *qt = qevtab + (size_t)cat[s] * ncode * NS;
@@ -664,7 +677,7 @@ int xp_edge_scores8(double *out, long ldo, long col0, int ne,
   }
   if (!small || !(XP_AVX2 || XP_NEON)) {   /* exact scalar form: portable engine, or |se| > 2^23 */
     es8_scalar(out, ldo, col0, ne, W, se8, nsites, ncode, codes, nq);
-    free(W); free(SE); free(accD); free(accE); return 0;
+    xp_free64(W); xp_free64(SE); xp_free64(accD); xp_free64(accE); return 0;
   }
 #if XP_AVX2
   memset(accD, 0, sizeof(double) * (size_t)nq * XP_EB);      /* +0.0 */
@@ -777,7 +790,7 @@ int xp_edge_scores8(double *out, long ldo, long col0, int ne,
       out[(size_t)q * ldo + col0 + lane] =
         accD[(size_t)q * XP_EB + lane] + (M_LN2 * (0. + (double)accE[(size_t)q * XP_EB + lane]));
 #endif
-  free(W); free(SE); free(accD); free(accE);
+  xp_free64(W); xp_free64(SE); xp_free64(accD); xp_free64(accE);
   return 0;
 }
 
