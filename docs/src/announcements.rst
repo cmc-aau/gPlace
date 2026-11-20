@@ -1,10 +1,20 @@
 Announcements
 =============
 
+gPlace 0.1.2
+------------
+
+*November, 2026*
+
+* Peak memory is the same from run to run. Before, identical runs could peak at different levels
+  (for example 13.6 or 14.2 GiB on CheckM's reference tree with 64 CPUs).
+* ``place --full_model`` gives the same gamma rates, and so the same placements, on every machine.
+* Placements with pplacer's models are unchanged.
+
 gPlace 0.1.1
 ------------
 
-*In progress*
+*November, 2026*
 
 * gPlace is on Bioconda and PyPI as ``gtdb-gplace``:
   ``conda create -n gplace -c conda-forge -c bioconda gtdb-gplace`` or
